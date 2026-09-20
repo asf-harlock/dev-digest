@@ -23,6 +23,18 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-09-20** — `container.buildLlm`'s "throw `ConfigError` if the secret key
+  is missing" guard is a cloud-provider-only rule. For a keyless, local,
+  OpenAI-compatible provider (added for Ollama/LM Studio), the right shape is:
+  read a base-URL "secret" through the same `SecretsProvider` chokepoint, fall
+  back to a hardcoded `localhost` default when unset, and construct the
+  adapter unconditionally — no `ConfigError`, no reachability preflight.
+  Every caller already catches and degrades (`agents/service.ts listModels` →
+  `[]`, `settings/routes.ts test-connection` → `{ ok: false }`), so an
+  unreachable local server surfaces naturally on the first real call instead
+  of needing a second check. `server/src/platform/container.ts` (`buildLlm`),
+  `server/src/adapters/llm/local-openai-compatible.ts`.
+
 - **2026-09-19** — Two "enabled" flags on the skills feature have OPPOSITE
   version-bump behavior and are easy to conflate. Toggling `skills.enabled`
   (the skill's own global kill-switch) bumps nothing on the skill itself
@@ -152,6 +164,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-09-20** — Added local LLM provider support (Ollama + LM Studio):
+  new `LocalOpenAICompatibleProvider` adapter, `container.buildLlm` branch,
+  `Provider`/`ConnTestProvider`/`SecretsStatus` widened in both vendor copies,
+  `agents.provider` schema enum widened (no migration needed), Settings API
+  Keys panel gained URL-mode rows, client `PROVIDER_OPTIONS` updated in two
+  places. See Codebase Patterns and root `INSIGHTS.md` for the reusable parts.
 
 - **2026-09-19** — Built the full Skills feature (`specs/02-skills.md`): the
   `skills` module (CRUD/versions/import/stats), `agent_skills.enabled`

@@ -75,6 +75,28 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Tool & Library Notes
 
+- **2026-09-20** — Widening a `Provider`-shaped enum touches ~9 spots across
+  both packages, and `pnpm --filter server exec tsc --noEmit` right after
+  editing the FIRST one (`Provider` in `contracts/knowledge.ts`) finds the rest
+  for free — every downstream site becomes a compile error, which is more
+  reliable than grepping for the string `openai`. The full list, from adding
+  `ollama`/`lmstudio`: `Provider` (both `knowledge.ts` copies),
+  `ModelInfo.provider` + `LLMProvider.id` (`adapters.ts`, server copy only —
+  the client copy of `LLMProvider.id` is a deliberate lag, see
+  `client/CLAUDE.md`), `ConnTestProvider` + `SecretsStatus` (both
+  `platform.ts` copies), `SECRET_KEY_BY_PROVIDER` (a `Record<ConnTestProvider,
+  SecretKey>` total map in `server/src/modules/settings/constants.ts` — `tsc`
+  refuses to compile it until every new enum member has an entry), the
+  `agents.provider` DB column literal (`server/src/db/schema/agents.ts` — no
+  migration SQL is generated since it is a `text` column with an app-level
+  enum, not a Postgres `CHECK`/native enum), and two client `PROVIDER_OPTIONS`
+  arrays (`CreateAgentModal/constants.ts`, `AgentEditor/.../ConfigTab/constants.ts`).
+  One thing `tsc` will NOT catch: a Fastify route with no `schema.response`
+  (see the `contracts/trace.ts` entry above) can return a payload whose shape
+  changed without a compile error — a test asserting the exact object via
+  `toEqual` only fails at test-run time. `server/test/settings-models.it.test.ts`
+  had exactly this for `GET /settings/secrets-status`.
+
 - **2026-09-18** — Vitest 2's `--exclude` does **not** replace the built-in
   excludes, contrary to a claim that surfaces when reading its docs. Verified:
   `cd server && pnpm exec vitest list --exclude '**/*.it.test.ts'` lists 105

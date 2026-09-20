@@ -218,7 +218,9 @@ export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
 // custom baseURL) — used by the CI runner for cheap models (DeepSeek/GLM/MiniMax).
-export const Provider = z.enum(['openai', 'anthropic', 'openrouter']);
+// 'ollama'/'lmstudio' are local, OpenAI-compatible, keyless providers — same
+// mechanism, pointed at a localhost baseURL instead (LocalOpenAICompatibleProvider).
+export const Provider = z.enum(['openai', 'anthropic', 'openrouter', 'ollama', 'lmstudio']);
 export type Provider = z.infer<typeof Provider>;
 
 // Review execution strategy (matches @devdigest/reviewer-core's ReviewStrategy):

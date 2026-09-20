@@ -7,17 +7,24 @@ import { useTestConnection, useSecretsStatus } from "../../../../../../../lib/ho
 import { ApiError } from "../../../../../../../lib/api";
 import type { ConnTestProvider } from "../../../../../../../lib/types";
 import { SectionTitle } from "../SectionTitle";
-import { KEY_ROWS } from "./constants";
+import { KEY_ROWS, type KeyRowSpec } from "./constants";
 import { s } from "./styles";
 
 /** "Configured / Not set" pill driven by GET /settings/secrets-status. */
-function StatusBadge({ configured }: { configured: boolean | undefined }) {
+function StatusBadge({
+  configured,
+  mode,
+}: {
+  configured: boolean | undefined;
+  mode: KeyRowSpec["mode"];
+}) {
   const t = useTranslations("settings");
   if (configured === undefined) return null; // status still loading
+  const notSetLabel = mode === "url" ? t("apiKeys.usingDefault") : t("apiKeys.notSet");
   return (
     <span style={s.badge(configured)}>
       <span style={s.badgeDot(configured)} />
-      {configured ? t("apiKeys.configured") : t("apiKeys.notSet")}
+      {configured ? t("apiKeys.configured") : notSetLabel}
     </span>
   );
 }
@@ -27,17 +34,22 @@ function KeyRow({
   provider,
   hint,
   configured,
+  mode = "secret",
+  defaultUrl,
 }: {
   label: string;
   provider: ConnTestProvider;
   hint: string;
   configured: boolean | undefined;
+  mode?: KeyRowSpec["mode"];
+  defaultUrl?: string;
 }) {
   const t = useTranslations("settings");
   const [val, setVal] = React.useState("");
   const [reveal, setReveal] = React.useState(false);
   const test = useTestConnection();
   const [res, setRes] = React.useState<{ ok: boolean; message: string } | null>(null);
+  const isUrl = mode === "url";
 
   const run = async () => {
     setRes(null);
@@ -50,17 +62,19 @@ function KeyRow({
   };
 
   return (
-    <FormField label={label} hint={hint} right={<StatusBadge configured={configured} />}>
+    <FormField label={label} hint={hint} right={<StatusBadge configured={configured} mode={mode} />}>
       <div style={s.keyRow}>
         <div style={s.keyInput}>
           <TextInput
             value={val}
             onChange={setVal}
             mono
-            type={reveal ? "text" : "password"}
-            placeholder={t("apiKeys.placeholder")}
+            type={isUrl ? "text" : reveal ? "text" : "password"}
+            placeholder={isUrl ? defaultUrl : t("apiKeys.placeholder")}
             suffix={
-              <Icon.EyeOff size={14} style={s.revealIcon} onClick={() => setReveal((r) => !r)} />
+              isUrl ? undefined : (
+                <Icon.EyeOff size={14} style={s.revealIcon} onClick={() => setReveal((r) => !r)} />
+              )
             }
           />
         </div>
@@ -91,6 +105,8 @@ export function SettingsApiKeys() {
           provider={row.provider}
           hint={t(row.hintKey)}
           configured={status?.[row.provider]}
+          mode={row.mode}
+          defaultUrl={row.defaultUrl}
         />
       ))}
     </div>

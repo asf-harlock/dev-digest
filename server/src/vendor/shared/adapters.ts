@@ -15,7 +15,7 @@ import type {
 // ---------- LLM ----------
 export const ModelInfo = z.object({
   id: z.string(),
-  provider: z.enum(['openai', 'anthropic', 'openrouter']),
+  provider: z.enum(['openai', 'anthropic', 'openrouter', 'ollama', 'lmstudio']),
   label: z.string().nullish(),
   created: z.number().int().nullish(),
   /** Pricing in USD per 1M tokens (when the provider exposes it, e.g. OpenRouter). */
@@ -80,7 +80,7 @@ export interface StructuredResult<T> {
 }
 
 export interface LLMProvider {
-  readonly id: 'openai' | 'anthropic' | 'openrouter';
+  readonly id: 'openai' | 'anthropic' | 'openrouter' | 'ollama' | 'lmstudio';
   listModels(): Promise<ModelInfo[]>;
   complete(req: CompletionRequest): Promise<CompletionResult>;
   completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>>;
@@ -276,6 +276,8 @@ export type SecretKey =
   | 'ANTHROPIC_API_KEY'
   | 'GITHUB_TOKEN'
   | 'DATABASE_URL'
+  | 'OLLAMA_BASE_URL'
+  | 'LMSTUDIO_BASE_URL'
   | (string & {});
 
 export interface SecretsProvider {
