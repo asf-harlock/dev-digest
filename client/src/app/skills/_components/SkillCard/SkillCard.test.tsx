@@ -26,6 +26,8 @@ const SKILL: SkillSummary = {
   enabled: true,
   version: 2,
   token_estimate: 42,
+  injection_flagged: false,
+  injection_patterns: [],
   used_by: 3,
 };
 
@@ -59,5 +61,13 @@ describe("SkillCard (smoke)", () => {
     renderWithIntl(<SkillCard skill={SKILL} onClick={onClick} />);
     fireEvent.click(screen.getByText("test-coverage-nudge"));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it("a flagged skill shows the injection badge and its switch cannot be re-enabled", () => {
+    const flagged: SkillSummary = { ...SKILL, enabled: false, injection_flagged: true, injection_patterns: ["instruction-override"] };
+    renderWithIntl(<SkillCard skill={flagged} />);
+    expect(screen.getByText("Injection detected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch"));
+    expect(mutate).not.toHaveBeenCalled();
   });
 });

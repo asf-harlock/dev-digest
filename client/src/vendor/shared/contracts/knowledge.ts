@@ -140,6 +140,12 @@ export const Skill = z.object({
   // Real token cost of `body`, from the server's tokenizer — the Config tab
   // shows this instead of a client-side `chars / 4` guess.
   token_estimate: z.number().int(),
+  // Computed live from `body` on every read (never stored) — true when a
+  // known prompt-injection pattern was detected. A flagged skill's `enabled`
+  // is server-forced to false on every create/update; this field is what the
+  // UI uses to explain why and to block re-enabling.
+  injection_flagged: z.boolean(),
+  injection_patterns: z.array(z.string()),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -205,7 +211,7 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Agents ----
-export const Provider = z.enum(['openai', 'anthropic', 'openrouter']);
+export const Provider = z.enum(['openai', 'anthropic', 'openrouter', 'ollama', 'lmstudio']);
 export type Provider = z.infer<typeof Provider>;
 
 // ---- Conventions ----

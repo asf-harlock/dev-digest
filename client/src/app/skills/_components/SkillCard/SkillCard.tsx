@@ -37,10 +37,15 @@ export function SkillCard({
         <span className="mono" style={s.name}>
           {skill.name}
         </span>
-        <div onClick={(e) => e.stopPropagation()}>
+        <div onClick={(e) => e.stopPropagation()} title={skill.injection_flagged ? t("editor.injectionBadge") : undefined}>
           <Toggle
             on={skill.enabled}
-            onChange={(v) => update.mutate({ id: skill.id, patch: { enabled: v } })}
+            onChange={(v) => {
+              // A flagged skill's `enabled` is server-forced back to false on
+              // every save — don't even issue the request.
+              if (skill.injection_flagged) return;
+              update.mutate({ id: skill.id, patch: { enabled: v } });
+            }}
             size={14}
           />
         </div>
@@ -66,9 +71,14 @@ export function SkillCard({
         <Badge color="var(--text-secondary)" icon="Users">
           {t("card.usedBy", { count: skill.used_by })}
         </Badge>
-        {vetting && !skill.enabled && (
+        {vetting && !skill.enabled && !skill.injection_flagged && (
           <Badge icon="AlertTriangle" color="var(--warn)" bg="var(--warn-bg)">
             <span title={t("listItem.vettingTitle")}>{t("listItem.needsVetting")}</span>
+          </Badge>
+        )}
+        {skill.injection_flagged && (
+          <Badge icon="Shield" color="var(--crit)" bg="var(--crit-bg)">
+            {t("editor.injectionBadge")}
           </Badge>
         )}
       </div>

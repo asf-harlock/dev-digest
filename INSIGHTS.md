@@ -97,6 +97,16 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `toEqual` only fails at test-run time. `server/test/settings-models.it.test.ts`
   had exactly this for `GET /settings/secrets-status`.
 
+- **2026-09-20** — The shared vendor contract file `contracts/knowledge.ts`
+  (both `server/` and `client/` copies) declares its symbols top-to-bottom as
+  plain `const`s evaluated at module load. Referencing one (e.g. `Provider`,
+  declared near the bottom under "Agents") from a `z.object()` built earlier
+  in the file throws at import time (temporal dead zone) — `tsc` does not
+  catch this for a same-file `const`-to-`const` reference. A new schema that
+  needs `Provider`/`SkillType`/etc. must be placed textually AFTER that
+  symbol's own declaration, regardless of which thematic section it
+  "belongs" to.
+
 - **2026-09-18** — Vitest 2's `--exclude` does **not** replace the built-in
   excludes, contrary to a claim that surfaces when reading its docs. Verified:
   `cd server && pnpm exec vitest list --exclude '**/*.it.test.ts'` lists 105

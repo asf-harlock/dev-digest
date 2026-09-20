@@ -23,15 +23,32 @@ export function SkillEditor({ skill, tab, onTab }: { skill: Skill; tab: string; 
 
   return (
     <div style={s.wrap}>
+      {skill.injection_flagged && (
+        <div style={s.injectionBanner} role="alert">
+          <Icon.Shield size={16} style={{ color: "var(--crit)", flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <span style={s.injectionBannerTitle}>{t("editor.injectionBanner.title")}</span>
+            <span style={s.injectionBannerBody}>{t("editor.injectionBanner.body")}</span>
+          </div>
+        </div>
+      )}
       <div style={s.header}>
         <Icon.Sparkles size={18} style={{ color: "var(--accent)" }} />
         <h1 style={s.h1} className="mono">
           {skill.name}
         </h1>
+        <Badge icon="GitCommit" mono>
+          {t("preview.version", { version: skill.version })}
+        </Badge>
         <Badge color="var(--text-secondary)">{t(`listItem.type.${skill.type}`)}</Badge>
         {skill.source !== "manual" && (
           <Badge icon="Upload" color="var(--text-secondary)">
             {t(`listItem.source.${skill.source}`)}
+          </Badge>
+        )}
+        {skill.injection_flagged && (
+          <Badge icon="Shield" color="var(--crit)" bg="var(--crit-bg)">
+            {t("editor.injectionBadge")}
           </Badge>
         )}
         {!skill.enabled && <Badge color="var(--text-muted)">{t("editor.disabled")}</Badge>}

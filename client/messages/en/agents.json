@@ -98,7 +98,8 @@
     "empty": "No skills match this filter.",
     "loadError": "Could not load this agent's skills.",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "injectionBadge": "Injection detected"
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

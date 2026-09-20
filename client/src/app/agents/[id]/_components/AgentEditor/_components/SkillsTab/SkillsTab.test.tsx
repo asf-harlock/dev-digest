@@ -37,6 +37,8 @@ const SKILLS: AgentSkillDetail[] = [
     enabled: true,
     version: 1,
     token_estimate: 40,
+    injection_flagged: false,
+    injection_patterns: [],
     order: 0,
     link_enabled: true,
   },
@@ -50,6 +52,8 @@ const SKILLS: AgentSkillDetail[] = [
     enabled: true,
     version: 1,
     token_estimate: 55,
+    injection_flagged: false,
+    injection_patterns: [],
     order: 1,
     link_enabled: false,
   },
@@ -60,13 +64,38 @@ interface Call {
   body: unknown;
 }
 
-/** Stubs `fetch` for the module's API base and records every call's method + body. */
+/** Stubs `fetch` for the module's API base and records every call's method + body.
+ *  Every request (agent-linked skills, the full workspace list, and the POST)
+ *  resolves to the same `list` — fine as long as the fixture already contains
+ *  every skill the test cares about. */
 function mockFetch(list: AgentSkillDetail[]): Call[] {
   const calls: Call[] = [];
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     calls.push({ method, body });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => list,
+    } as Response;
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return calls;
+}
+
+/** Like `mockFetch`, but GET `/agents/:id/skills` and GET `/skills` answer with
+ *  DIFFERENT lists — for exercising a skill that exists in the workspace but
+ *  isn't linked to this agent yet. */
+function mockFetchRouted(linked: AgentSkillDetail[], allSkills: unknown[]): Call[] {
+  const calls: Call[] = [];
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+    calls.push({ method, body });
+    const url = String(input);
+    const isWorkspaceSkills = method === "GET" && url.endsWith("/skills") && !url.includes("/agents/");
+    const list = isWorkspaceSkills ? allSkills : linked;
     return {
       ok: true,
       status: 200,
@@ -122,6 +151,70 @@ describe("SkillsTab", () => {
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]!); // the globally-disabled skill
     expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("shows the injection badge for a flagged linked skill", async () => {
+    mockFetch([
+      { ...SKILLS[0]!, enabled: false, injection_flagged: true, injection_patterns: ["instruction-override"] },
+      SKILLS[1]!,
+    ]);
+    renderTab();
+    expect(await screen.findByText("Injection detected")).toBeInTheDocument();
+  });
+
+  it("shows a workspace skill the agent has never linked, unchecked, alongside its linked skills", async () => {
+    const unlinked = {
+      id: "sk3",
+      name: "async-await-house-rule",
+      description: "No dangling promises",
+      type: "convention",
+      source: "manual",
+      body: "…",
+      enabled: true,
+      version: 1,
+      token_estimate: 20,
+      injection_flagged: false,
+      injection_patterns: [],
+    };
+    mockFetchRouted(SKILLS, [...SKILLS, unlinked]);
+    renderTab();
+
+    expect(await screen.findByText("async-await-house-rule")).toBeInTheDocument();
+    expect(screen.getByText("1 of 3 enabled")).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes[2]).not.toBeChecked();
+  });
+
+  it("checking an unlinked skill attaches it — POSTs the full set with it enabled", async () => {
+    const unlinked = {
+      id: "sk3",
+      name: "async-await-house-rule",
+      description: "No dangling promises",
+      type: "convention",
+      source: "manual",
+      body: "…",
+      enabled: true,
+      version: 1,
+      token_estimate: 20,
+      injection_flagged: false,
+      injection_patterns: [],
+    };
+    const calls = mockFetchRouted(SKILLS, [...SKILLS, unlinked]);
+    renderTab();
+    await screen.findByText("async-await-house-rule");
+
+    fireEvent.click(screen.getAllByRole("checkbox")[2]!); // the never-linked skill
+
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.body).toEqual({
+      skills: [
+        { skill_id: "sk1", enabled: true },
+        { skill_id: "sk2", enabled: false },
+        { skill_id: "sk3", enabled: true },
+      ],
+    });
   });
 
   it("↑/↓ reorder issues one ordered POST", async () => {

@@ -36,6 +36,8 @@ const SKILL: Skill = {
   enabled: true,
   version: 2,
   token_estimate: 10,
+  injection_flagged: false,
+  injection_patterns: [],
 };
 
 function renderWithIntl(ui: React.ReactElement) {

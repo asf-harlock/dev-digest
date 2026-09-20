@@ -3,6 +3,7 @@ import type { Skill, SkillImportPreview, SkillSource, SkillSummary, SkillType, S
 import { SkillType as SkillTypeSchema } from '@devdigest/shared';
 import { ValidationError } from '../../platform/errors.js';
 import type { SkillRow, SkillVersionRow } from '../../db/rows.js';
+import { detectInjectionPatterns } from '../_shared/injection-detection.js';
 import {
   EXECUTABLE_EXTENSIONS,
   MAX_IMPORT_DESCRIPTION_LENGTH,
@@ -24,6 +25,7 @@ import {
 
 /** Map a persisted skill row + its real token cost to the public `Skill` DTO. */
 export function toSkillDto(row: SkillRow, tokenEstimate: number): Skill {
+  const injection = detectInjectionPatterns(row.body);
   return {
     id: row.id,
     name: row.name,
@@ -35,6 +37,8 @@ export function toSkillDto(row: SkillRow, tokenEstimate: number): Skill {
     version: row.version,
     evidence_files: row.evidenceFiles ?? undefined,
     token_estimate: tokenEstimate,
+    injection_flagged: injection.detected,
+    injection_patterns: injection.patterns,
   };
 }
 

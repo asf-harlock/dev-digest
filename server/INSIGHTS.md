@@ -17,7 +17,30 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Decisions
 
-## What Works
+### 2026-09-20 — Injection detection is computed live from `body`, never stored
+
+**What:** `Skill.injection_flagged`/`injection_patterns` are NOT columns —
+`detectInjectionPatterns(body)` (`modules/_shared/injection-detection.ts`) runs
+on every read (`toSkillDto`, `toAgentSkillDetail`) and on every
+create/update, where a flagged body forces `enabled: false` server-side
+regardless of what the caller asked for (`SkillsService.create`/`update`).
+
+**Why:** the same reasoning as `token_estimate` (also computed live, never
+stored): a stored flag can go stale relative to the body it describes — edit
+the body to remove the injected text and a stored `true` would linger; edit it
+to add some and a stored `false` would miss it. Computing it live makes both
+directions self-correcting with no migration, no backfill, and no separate
+"re-scan" action. Enforcement piggybacks on the EXISTING
+`agent_skills.enabled AND skills.enabled` gate in
+`enabledSkillsForPrompt` (`modules/agents/repository.ts`) — forcing
+`skills.enabled = false` is sufficient on its own to keep a flagged skill out
+of every agent's prompt, so no `agents` module changes were needed for
+enforcement, only for the DTO field parity noted below.
+
+**Rejected:** a persisted `injection_flagged` column set once at import time —
+would need a migration, a backfill for skills that already exist, and an
+explicit re-check action for every future body edit; the live-compute version
+needed none of those and cannot drift.
 
 ## What Doesn't Work
 
@@ -68,6 +91,18 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `ConventionsRepository` does the same for `settings` — it re-reads
   `feature_models` + `FeatureModelChoice.safeParse` itself rather than
   importing the helper. `server/src/modules/conventions/repository.ts`
+
+- **2026-09-20** — Same `no-cross-module-import` rule, other escape hatch: when
+  the thing two modules need is a PURE FUNCTION over data both already hold
+  (not a query), re-querying isn't an option and duplicating the function is
+  worse (it can drift, like the `@devdigest/shared` vendor copies). Move it to
+  `modules/_shared/` instead — `skills` (computing `Skill.injection_flagged`)
+  and `agents` (`toAgentSkillDetail`, which maps `AgentSkillDetail extends
+  Skill`) both needed the identical prompt-injection detector over a skill
+  body; it now lives in `modules/_shared/injection-detection.ts` and both
+  import it. `_shared` already held two things in this shape (`context.ts`,
+  `schemas.ts`) before this — check there before reaching for either the query
+  duplication pattern above or a straight cross-module import.
 
 - **2026-09-19** — Two "enabled" flags on the skills feature have OPPOSITE
   version-bump behavior and are easy to conflate. Toggling `skills.enabled`
