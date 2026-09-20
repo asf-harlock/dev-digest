@@ -34,6 +34,11 @@ export {
 // Map-reduce helpers (reduce partials, slice a file's diff).
 export { reduceReviews, sliceDiff } from './review/reduce.js';
 
+// Secret redaction — strips secret-shaped strings from model-authored free
+// text (title/rationale/suggestion/summary) regardless of why they got
+// there (an adversarial skill body, or the model confabulating).
+export { redactSecrets, redactReview, type RedactResult } from './review/redact.js';
+
 // The engine entry point: given (diff + resolved agent inputs + LLM) → grounded Review.
 export {
   reviewPullRequest,

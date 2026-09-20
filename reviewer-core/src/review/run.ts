@@ -9,7 +9,8 @@ import type {
 import { Review as ReviewSchema } from '@devdigest/shared';
 import { assemblePrompt } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
-import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
+import { reduceReviews, scoreFromFindings, verdictFromFindings, sliceDiff } from './reduce.js';
+import { redactReview } from './redact.js';
 
 /**
  * reviewPullRequest — the review engine entry point.
@@ -201,11 +202,33 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   }
   emit('result', `Citation grounding: ${grounding}`);
 
-  // Score is derived from the findings that SURVIVED grounding (not the model's
-  // self-reported number, and not the pre-grounding set) so the score, the
-  // findings list, and the deterministic event always agree.
+  // Score AND verdict are derived from the findings that SURVIVED grounding
+  // (not the model's self-reported values, and not the pre-grounding set) so
+  // the score, the verdict, and the findings list always agree — and so an
+  // unreliable model or an adversarial/imported skill body cannot talk the
+  // model into self-reporting "approve" over its own CRITICAL findings.
+  const verdict = verdictFromFindings(ground.kept);
+  if (verdict !== merged.verdict) {
+    emit(
+      'info',
+      `model-reported verdict "${merged.verdict}" overridden to deterministic "${verdict}" from ${ground.kept.length} grounded finding(s) — verdict is never trusted from the model`,
+    );
+  }
+
+  // Redact secret-shaped strings from every free-text field. Grounding only
+  // proves a finding's LOCATION is real; it says nothing about what the model
+  // wrote in its text, which an injected skill can steer toward copying a
+  // real secret out of its own context (see reviewer-core/src/review/redact.ts).
+  const redacted = redactReview({ ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept), verdict });
+  if (redacted.kinds.length) {
+    emit(
+      'info',
+      `redacted ${redacted.kinds.length} secret-shaped string(s) from model output: ${[...new Set(redacted.kinds)].join(', ')}`,
+    );
+  }
+
   return {
-    review: { ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept) },
+    review: redacted.review,
     grounding,
     dropped: ground.dropped,
     mode,
