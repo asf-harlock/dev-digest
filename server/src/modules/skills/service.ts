@@ -27,6 +27,7 @@ export interface CreateSkillInput {
   body: string;
   source?: SkillSource;
   enabled?: boolean;
+  evidence_files?: string[];
 }
 
 export interface UpdateSkillInput {
@@ -35,6 +36,7 @@ export interface UpdateSkillInput {
   type?: SkillType;
   body?: string;
   enabled?: boolean;
+  evidence_files?: string[];
   /** Author's optional note on the new version (≤200 chars; NULL when blank). */
   version_message?: string;
   /**
@@ -77,6 +79,7 @@ export class SkillsService {
       source: input.source ?? 'manual',
       body: input.body,
       enabled: input.enabled ?? true,
+      evidenceFiles: input.evidence_files,
     });
     return this.toDto(row);
   }
@@ -107,6 +110,7 @@ export class SkillsService {
         ...(patch.type !== undefined ? { type: patch.type } : {}),
         ...(body !== undefined ? { body } : {}),
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+        ...(patch.evidence_files !== undefined ? { evidenceFiles: patch.evidence_files } : {}),
       },
       { versionMessage, forceBump },
     );

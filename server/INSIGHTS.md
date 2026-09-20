@@ -35,6 +35,40 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   of needing a second check. `server/src/platform/container.ts` (`buildLlm`),
   `server/src/adapters/llm/local-openai-compatible.ts`.
 
+- **2026-09-20** — `server/CLAUDE.md`'s "Declare `schema.body`/`schema.params`
+  — do not hand-roll `Schema.parse(req.body)`" has an established, deliberate
+  exception: a POST route whose body must tolerate being entirely absent (no
+  Content-Type, no payload). `reviews/routes.ts`'s `POST /pulls/:id/review`
+  does NOT put `body` in the Fastify route schema at all — it parses manually
+  inside the handler, `RunRequest.parse(req.body ?? {})`, with a comment
+  explaining why ("both fields optional; empty body is OK"). Fastify's own
+  body-schema validation rejects a genuinely empty POST body before the
+  handler ever runs, which the manual-parse-with-default pattern avoids.
+  Reused verbatim for `POST /repos/:id/conventions/extract`'s new optional
+  `{ mode }` body (`modules/conventions/routes.ts`). Any new POST route that
+  needs to work with zero body should follow this shape, not put an
+  `.optional()` object in `schema.body`.
+
+- **2026-09-20** — `skills.evidenceFiles` (jsonb) sat in the DB schema and was
+  read by the DTO helper, but was never accepted by `CreateSkillBody`/
+  `UpdateSkillBody`, carried by `InsertSkill`/`UpdateSkillPatch`, or written by
+  `repository.ts`'s `insert`/`update` — a column that looks wired end-to-end
+  because the DTO layer touches it while the write path never did. Found while
+  wiring the Conventions feature's skill-drafting flow, which needed
+  `evidence_files` to actually persist. Check all three layers
+  (routes/service/repository) before assuming a schema column is live, not
+  just the schema file. `server/src/modules/skills/{routes,service,repository}.ts`
+
+- **2026-09-20** — `pnpm arch` blocks a module's service/repository from
+  importing another module's non-`_shared` file, even for a small, obviously-
+  safe read — importing `settings/feature-models.ts`'s
+  `getFeatureModelOverride` from `conventions/repository.ts` was flagged. The
+  established escape hatch is a repository querying another module's table
+  directly (`SkillsRepository` already does this for `agents`/`findings`);
+  `ConventionsRepository` does the same for `settings` — it re-reads
+  `feature_models` + `FeatureModelChoice.safeParse` itself rather than
+  importing the helper. `server/src/modules/conventions/repository.ts`
+
 - **2026-09-19** — Two "enabled" flags on the skills feature have OPPOSITE
   version-bump behavior and are easy to conflate. Toggling `skills.enabled`
   (the skill's own global kill-switch) bumps nothing on the skill itself
@@ -171,6 +205,22 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `agents.provider` schema enum widened (no migration needed), Settings API
   Keys panel gained URL-mode rows, client `PROVIDER_OPTIONS` updated in two
   places. See Codebase Patterns and root `INSIGHTS.md` for the reusable parts.
+
+- **2026-09-20** — Added extraction-mode support (`local`/`ai`/`both`) to the
+  conventions module: `mode` column + nullable `provider`/`model` on
+  `repo_convention_scans` (migration `0014`), `extractLocalCandidates`
+  (config-file rule parsing, no model call) in `conventions/helpers.ts`, and
+  `POST /repos/:id/conventions/extract` now takes an optional `{ mode }` body.
+  Follow-up fix same session: `findConfigFiles` originally probed
+  `CONFIG_FILENAMES` only at the clone's true root, so `local` mode found
+  nothing on this repo itself — `tsconfig.json`/`eslint.config.*` live inside
+  `server/`/`client/`/etc., never at the repo root, since this is a
+  multi-package repo with no root `package.json` (root `CLAUDE.md`). Fixed by
+  also probing one level into every top-level directory
+  (`CONFIG_SEARCH_SKIP_DIRS` in `conventions/constants.ts`). Any future
+  root-only file probe in this codebase should ask whether the target repo
+  shape (single-package vs. this repo's four-standalone-packages layout)
+  actually has what it's looking for at the root.
 
 - **2026-09-19** — Built the full Skills feature (`specs/02-skills.md`): the
   `skills` module (CRUD/versions/import/stats), `agent_skills.enabled`
