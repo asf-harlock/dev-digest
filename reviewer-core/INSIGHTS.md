@@ -47,6 +47,8 @@ secure it. The fix has to be "the pipeline never reads back the thing an
 injected instruction can control" (verdict, secret-shaped output text), not
 "the pipeline refuses to receive instructions at all".
 
+## What Works
+
 ## What Doesn't Work
 
 ## Codebase Patterns

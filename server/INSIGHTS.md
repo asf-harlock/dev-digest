@@ -42,6 +42,8 @@ would need a migration, a backfill for skills that already exist, and an
 explicit re-check action for every future body edit; the live-compute version
 needed none of those and cannot drift.
 
+## What Works
+
 ## What Doesn't Work
 
 ## Codebase Patterns
