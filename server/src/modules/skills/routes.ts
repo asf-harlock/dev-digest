@@ -17,7 +17,7 @@ import { DEFAULT_STATS_WINDOW_DAYS, MAX_VERSION_MESSAGE_LENGTH, SKILL_NAME_PATTE
  *   DELETE /skills/:id                   → hard delete (cascades)
  *   GET    /skills/:id/versions          → version history, newest first
  *   GET    /skills/:id/versions/:version → one version snapshot
- *   GET    /skills/:id/stats?days=30     → run-level stats (§7.2)
+ *   GET    /skills/:id/statistics?days=30 → run-level stats (§7.2)
  *   GET    /skills/:id/agents            → agents linking this skill (delete confirmation)
  *   POST   /skills/import                → parse a .md/.zip upload — writes nothing
  *
@@ -124,7 +124,7 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
   );
 
   app.get(
-    '/skills/:id/stats',
+    '/skills/:id/statistics',
     { schema: { params: IdParams, querystring: StatsQuery } },
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
