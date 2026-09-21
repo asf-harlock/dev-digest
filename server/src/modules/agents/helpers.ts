@@ -11,6 +11,7 @@ import type {
 import { AgentVersionConfig } from '@devdigest/shared';
 import type { AgentRow, AgentVersionRow } from './repository.js';
 import type { SkillRow } from '../../db/rows.js';
+import { detectInjectionPatterns } from '../_shared/injection-detection.js';
 
 /**
  * Pure helpers for the agents module — DB row ⇄ DTO mapping and the
@@ -61,6 +62,7 @@ export function toAgentSkillDetail(
   link: { skill: SkillRow; order: number; enabled: boolean },
   tokenEstimate: number,
 ): AgentSkillDetail {
+  const injection = detectInjectionPatterns(link.skill.body);
   return {
     id: link.skill.id,
     name: link.skill.name,
@@ -72,6 +74,8 @@ export function toAgentSkillDetail(
     version: link.skill.version,
     evidence_files: link.skill.evidenceFiles,
     token_estimate: tokenEstimate,
+    injection_flagged: injection.detected,
+    injection_patterns: injection.patterns,
     order: link.order,
     link_enabled: link.enabled,
   };

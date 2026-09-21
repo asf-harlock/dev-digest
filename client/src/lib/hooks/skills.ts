@@ -30,6 +30,7 @@ export interface CreateSkillInput {
   body: string;
   source?: SkillSource;
   enabled?: boolean;
+  evidence_files?: string[];
 }
 
 export function useCreateSkill() {

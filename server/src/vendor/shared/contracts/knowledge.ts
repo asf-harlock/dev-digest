@@ -140,6 +140,12 @@ export const Skill = z.object({
   // Real token cost of `body`, from the server's tokenizer — the Config tab
   // shows this instead of a client-side `chars / 4` guess.
   token_estimate: z.number().int(),
+  // Computed live from `body` on every read (never stored) — true when a
+  // known prompt-injection pattern was detected. A flagged skill's `enabled`
+  // is server-forced to false on every create/update; this field is what the
+  // UI uses to explain why and to block re-enabling.
+  injection_flagged: z.boolean(),
+  injection_patterns: z.array(z.string()),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -204,22 +210,96 @@ export const CommunitySkill = z.object({
 });
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
-// ---- Conventions ----
-export const ConventionCandidate = z.object({
-  id: z.string(),
-  rule: z.string(),
-  evidence_path: z.string(),
-  evidence_snippet: z.string(),
-  confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
-});
-export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
-
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
 // custom baseURL) — used by the CI runner for cheap models (DeepSeek/GLM/MiniMax).
-export const Provider = z.enum(['openai', 'anthropic', 'openrouter']);
+// 'ollama'/'lmstudio' are local, OpenAI-compatible, keyless providers — same
+// mechanism, pointed at a localhost baseURL instead (LocalOpenAICompatibleProvider).
+export const Provider = z.enum(['openai', 'anthropic', 'openrouter', 'ollama', 'lmstudio']);
 export type Provider = z.infer<typeof Provider>;
+
+// ---- Conventions ----
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'error_handling',
+  'testing',
+  'imports',
+  'style',
+  'other',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+export const ConventionEvidence = z.object({
+  path: z.string(),
+  start_line: z.number().int().positive(),
+  end_line: z.number().int().positive(),
+  snippet: z.string(),
+});
+export type ConventionEvidence = z.infer<typeof ConventionEvidence>;
+
+export const ConventionCandidate = z.object({
+  id: z.string(),
+  scan_id: z.string(),
+  category: ConventionCategory,
+  rule: z.string(),
+  evidence: ConventionEvidence,
+  confidence: z.number().min(0).max(1),
+  status: ConventionStatus,
+  created_at: z.string(),
+});
+export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/**
+ * How a scan sourced its candidates: `local` parses known config files
+ * (eslint/prettier/tsconfig) into rules deterministically, no model call;
+ * `ai` samples source files and asks a model to extract rules; `both` runs
+ * each independently and merges the survivors.
+ */
+export const ConventionExtractionMode = z.enum(['local', 'ai', 'both']);
+export type ConventionExtractionMode = z.infer<typeof ConventionExtractionMode>;
+
+/** Per-scan metadata ("Detected from 84 files · last scan 1h ago"). */
+export const ConventionScan = z.object({
+  id: z.string(),
+  repo_id: z.string(),
+  sample_file_count: z.number().int(),
+  config_file_count: z.number().int(),
+  candidate_count: z.number().int(),
+  mode: ConventionExtractionMode,
+  // null when `mode: 'local'` — no model call was made.
+  provider: Provider.nullable(),
+  model: z.string().nullable(),
+  created_at: z.string(),
+});
+export type ConventionScan = z.infer<typeof ConventionScan>;
+
+/** Response shape shared by `POST .../extract` and `GET /repos/:id/conventions`. */
+export const ConventionsSnapshot = z.object({
+  scan: ConventionScan.nullable(),
+  candidates: z.array(ConventionCandidate),
+});
+export type ConventionsSnapshot = z.infer<typeof ConventionsSnapshot>;
+
+/** Grouping strategy for `POST /repos/:id/conventions/draft-skills`. */
+export const ConventionDraftGrouping = z.enum(['merge', 'per_candidate', 'per_category']);
+export type ConventionDraftGrouping = z.infer<typeof ConventionDraftGrouping>;
+
+/**
+ * One entry returned by draft-skills — pre-fills the existing create-skill form.
+ * Not persisted by that endpoint; the client saves each draft via `POST /skills`.
+ */
+export const SkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  evidence_files: z.array(z.string()),
+});
+export type SkillDraft = z.infer<typeof SkillDraft>;
 
 // Review execution strategy (matches @devdigest/reviewer-core's ReviewStrategy):
 //  - single-pass: send the WHOLE diff in ONE model call (default)

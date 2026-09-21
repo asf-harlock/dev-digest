@@ -49,6 +49,8 @@ const SKILL: Skill = {
   enabled: true,
   version: 2,
   token_estimate: 42,
+  injection_flagged: false,
+  injection_patterns: [],
 };
 
 function renderWithIntl(ui: React.ReactElement) {
@@ -86,6 +88,15 @@ describe("ConfigTab", () => {
 
     expect(mutate).toHaveBeenCalledWith({ id: "sk1", patch: { enabled: false } });
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a flagged skill cannot be re-enabled from the toggle", () => {
+    const flagged: Skill = { ...SKILL, enabled: false, injection_flagged: true, injection_patterns: ["instruction-override"] };
+    renderWithIntl(<ConfigTab skill={flagged} />);
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it("marks the body as required and shows the current version beside the heading", () => {

@@ -11,6 +11,10 @@
     "anthropicHint": "Used for Claude-backed agents.",
     "openrouterLabel": "OpenRouter API key",
     "openrouterHint": "One key, many cheap models (DeepSeek/GLM/MiniMax). Used by CI reviewers + openrouter agents.",
+    "ollamaLabel": "Ollama base URL",
+    "ollamaHint": "No API key needed. Leave blank to use the default localhost:11434 — set a custom URL for a different port or a LAN host.",
+    "lmstudioLabel": "LM Studio base URL",
+    "lmstudioHint": "No API key needed. Leave blank to use the default localhost:1234 — set a custom URL for a different port or a LAN host.",
     "githubLabel": "GitHub PAT (fine-grained)",
     "githubHint": "Contents (read), Pull requests (read+write), Metadata (read), Actions (read).",
     "placeholder": "•••• stored via SecretsProvider (.env)",
@@ -18,7 +22,8 @@
     "testing": "Testing…",
     "testFailed": "Test failed",
     "configured": "Configured",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "usingDefault": "Using default"
   },
   "models": {
     "title": "Feature Models",

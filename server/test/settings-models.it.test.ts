@@ -68,9 +68,50 @@ d('Settings: feature models + secrets status (Testcontainers pg)', () => {
     const res = await app.inject({ method: 'GET', url: '/settings/secrets-status' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toEqual({ openai: false, anthropic: false, openrouter: true, github: false });
+    expect(body).toEqual({
+      openai: false,
+      anthropic: false,
+      openrouter: true,
+      ollama: false,
+      lmstudio: false,
+      github: false,
+    });
     // The actual secret must never appear in the response.
     expect(res.payload).not.toContain('sk-or-secret-value');
+
+    await app.close();
+  });
+
+  it('POST /settings/test-connection for a local provider persists a base URL, no key required', async () => {
+    const store = new Map<string, string>();
+    const secrets: SecretsProvider = {
+      get: async (k) => store.get(k),
+      set: async (k, v) => {
+        store.set(k, v);
+      },
+    };
+    const app = await buildApp({ config: config(), db: pg.handle.db, overrides: { secrets } });
+
+    // No key/URL supplied — falls back to the tool's own localhost default and
+    // the real HTTP call fails (nothing is running there in CI), which is the
+    // expected degrade-gracefully outcome, not a config error.
+    const noUrl = await app.inject({
+      method: 'POST',
+      url: '/settings/test-connection',
+      payload: { provider: 'ollama' },
+    });
+    expect(noUrl.statusCode).toBe(200);
+    expect(noUrl.json().ok).toBe(false);
+    expect(store.has('OLLAMA_BASE_URL')).toBe(false);
+
+    // A custom URL is persisted as OLLAMA_BASE_URL, not treated as a secret.
+    const withUrl = await app.inject({
+      method: 'POST',
+      url: '/settings/test-connection',
+      payload: { provider: 'ollama', key: 'http://localhost:11500/v1' },
+    });
+    expect(withUrl.statusCode).toBe(200);
+    expect(store.get('OLLAMA_BASE_URL')).toBe('http://localhost:11500/v1');
 
     await app.close();
   });

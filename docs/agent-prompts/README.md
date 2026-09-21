@@ -113,18 +113,30 @@ numbers and gates from what the model returns:
 - **Findings are citation-grounded**: a finding whose line range doesn't intersect a
   real diff hunk is dropped (`grounding.ts`). Cite real `file:line` from the diff or
   the finding disappears.
-- **`verdict` is currently passed through from the model** (`run.ts:208`). That is
-  why a wrong verdict reaches the UI unchanged — and why the verdict convention
-  above is load-bearing until/unless the verdict is also derived deterministically.
+- **`verdict` is also recomputed**, never trusted from the model:
+  `verdictFromFindings(grounded)` (`reduce.ts`). No findings ⇒ `approve`; any
+  CRITICAL ⇒ `request_changes`; otherwise `comment` — exactly the mapping the
+  convention above documents. A self-reported "approve" over a real CRITICAL
+  finding (from an unreliable model, or a skill body that instructs the model
+  to ignore its own findings) is overridden, and a run-log line records the
+  override when it happens. Writing the convention into the prompt still
+  matters — it shapes what the model FINDS and how it explains itself — but
+  nothing downstream depends on the model actually obeying it.
+- **Free-text fields are redacted for secret shapes** before a Review leaves
+  the engine (`redactReview`, `redact.ts`). Grounding only proves a finding's
+  `file:line` is real; it says nothing about what the model wrote in
+  `rationale`/`suggestion`/`summary`. A known token/key shape (AWS, GitHub,
+  Stripe, OpenRouter/OpenAI/Anthropic, Slack, a PEM block, a JWT, a `Bearer`
+  header) is replaced with `[REDACTED:<kind>]` regardless of how it got there.
 
 ## Severity / verdict / gate at a glance
 
 | Model returns | Engine does |
 |---|---|
-| `findings[].severity` | recompute `score`; count CRITICAL as blockers |
+| `findings[].severity` | recompute `score` and `verdict`; count CRITICAL as blockers |
 | `score` | **ignored** — recomputed from findings |
-| `verdict` | passed through to the review record (shown in the UI) |
-| `findings[]` | citation-grounded; ungrounded ones dropped |
+| `verdict` | **ignored** — recomputed from findings (`verdictFromFindings`) |
+| `findings[]` | citation-grounded; ungrounded ones dropped; free text redacted for secret shapes |
 
 The per-agent merge gate (`agents.ciFailOn`, default `critical`) decides when a CI
 review **blocks**: it is deterministic from finding severities, independent of the

@@ -1,4 +1,4 @@
-import type { AgentSkillDetail, SkillType } from "@devdigest/shared";
+import type { AgentSkillDetail, SkillSummary, SkillType } from "@devdigest/shared";
 
 /** A stable accent colour per skill type, for the row's type badge. */
 export function typeColor(type: SkillType): string {
@@ -29,6 +29,38 @@ export function typeBg(type: SkillType): string {
     default:
       return "var(--bg-hover)";
   }
+}
+
+/** Every workspace skill, not just the ones already linked to this agent (spec
+ *  02-skills.md D2: "the mockup lists all six workspace skills … that is only
+ *  coherent if a row can be present-but-off"). Linked skills keep their real
+ *  `order`/`link_enabled`; every other workspace skill is appended, unlinked,
+ *  in the position it will take if the user attaches it. */
+export function mergeSkillsForAgent(
+  all: SkillSummary[],
+  linked: AgentSkillDetail[],
+): AgentSkillDetail[] {
+  const linkedIds = new Set(linked.map((sk) => sk.id));
+  const ordered = linked.slice().sort((a, b) => a.order - b.order);
+  const unlinked: AgentSkillDetail[] = all
+    .filter((sk) => !linkedIds.has(sk.id))
+    .map((sk, i) => ({
+      id: sk.id,
+      name: sk.name,
+      description: sk.description,
+      type: sk.type,
+      source: sk.source,
+      body: sk.body,
+      enabled: sk.enabled,
+      version: sk.version,
+      evidence_files: sk.evidence_files,
+      token_estimate: sk.token_estimate,
+      injection_flagged: sk.injection_flagged,
+      injection_patterns: sk.injection_patterns,
+      order: ordered.length + i,
+      link_enabled: false,
+    }));
+  return [...ordered, ...unlinked];
 }
 
 /** Case-insensitive filter over a skill's name + type. Order is untouched —

@@ -15,7 +15,7 @@ import type {
 // ---------- LLM ----------
 export const ModelInfo = z.object({
   id: z.string(),
-  provider: z.enum(['openai', 'anthropic', 'openrouter']),
+  provider: z.enum(['openai', 'anthropic', 'openrouter', 'ollama', 'lmstudio']),
   label: z.string().nullish(),
   created: z.number().int().nullish(),
   /** Pricing in USD per 1M tokens (when the provider exposes it, e.g. OpenRouter). */

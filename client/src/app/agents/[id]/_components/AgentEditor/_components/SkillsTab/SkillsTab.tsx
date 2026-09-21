@@ -5,22 +5,33 @@ import { useTranslations } from "next-intl";
 import { Badge, Checkbox, Chip, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import type { Agent, AgentSkillDetail } from "@devdigest/shared";
 import { useAgentSkills, useSetAgentSkills } from "../../../../../../../lib/hooks/agents";
-import { filterSkills, moveSkill, reorderByDrag, typeBg, typeColor } from "./helpers";
+import { useSkills } from "../../../../../../../lib/hooks/skills";
+import { filterSkills, mergeSkillsForAgent, moveSkill, reorderByDrag, typeBg, typeColor } from "./helpers";
 import { s } from "./styles";
 
 /** Agent editor's Skills tab — link, per-agent enable and reorder (spec §8).
- *  The checkbox is a per-link kill switch (D2): the row stays put, it never
- *  unlinks. A skill whose GLOBAL `enabled` is false renders struck-through and
- *  cannot be switched on from here — the skill-level kill-switch outranks the
- *  per-agent link. */
+ *  Lists every workspace skill, not just the ones already linked (D2): a row
+ *  the agent has never linked renders unchecked, and checking it attaches it.
+ *  The checkbox is otherwise a per-link kill switch: once a row IS linked, the
+ *  row stays put and toggling never unlinks it. A skill whose GLOBAL `enabled`
+ *  is false renders struck-through and cannot be switched on from here — the
+ *  skill-level kill-switch outranks the per-agent link. */
 export function SkillsTab({ agent }: { agent: Agent }) {
   const t = useTranslations("agents");
-  const { data, isLoading, isError, refetch } = useAgentSkills(agent.id);
+  const linkedQuery = useAgentSkills(agent.id);
+  const allSkillsQuery = useSkills();
   const setSkills = useSetAgentSkills();
   const [query, setQuery] = React.useState("");
   const draggedId = React.useRef<string | null>(null);
 
-  const skills = data ?? [];
+  const isLoading = linkedQuery.isLoading || allSkillsQuery.isLoading;
+  const isError = linkedQuery.isError || allSkillsQuery.isError;
+  const refetch = () => {
+    linkedQuery.refetch();
+    allSkillsQuery.refetch();
+  };
+
+  const skills = mergeSkillsForAgent(allSkillsQuery.data ?? [], linkedQuery.data ?? []);
   const enabledCount = skills.filter((sk) => sk.link_enabled).length;
   const visible = filterSkills(skills, query);
 
@@ -110,6 +121,11 @@ export function SkillsTab({ agent }: { agent: Agent }) {
                 <Badge color={typeColor(skill.type)} bg={typeBg(skill.type)} mono>
                   {skill.type}
                 </Badge>
+                {skill.injection_flagged && (
+                  <Badge icon="Shield" color="var(--crit)" bg="var(--crit-bg)">
+                    {t("skills.injectionBadge")}
+                  </Badge>
+                )}
                 <div style={s.reorder}>
                   <button
                     type="button"

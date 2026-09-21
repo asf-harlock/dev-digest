@@ -36,6 +36,7 @@ const CreateSkillBody = z.object({
   body: z.string().min(1),
   source: SkillSource.optional(),
   enabled: z.boolean().optional(),
+  evidence_files: z.array(z.string()).optional(),
 });
 
 /**
@@ -50,6 +51,7 @@ const UpdateSkillBody = z.object({
   type: SkillType.optional(),
   body: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
+  evidence_files: z.array(z.string()).optional(),
   version_message: z.string().max(MAX_VERSION_MESSAGE_LENGTH).optional(),
   restore_from_version: z.coerce.number().int().positive().optional(),
 });

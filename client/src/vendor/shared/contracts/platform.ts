@@ -103,12 +103,23 @@ export const SettingsUpdate = Settings.partial();
 export type SettingsUpdate = z.infer<typeof SettingsUpdate>;
 
 // ---- Connection test ----
-export const ConnTestProvider = z.enum(['openai', 'anthropic', 'openrouter', 'github']);
+export const ConnTestProvider = z.enum([
+  'openai',
+  'anthropic',
+  'openrouter',
+  'ollama',
+  'lmstudio',
+  'github',
+]);
 export type ConnTestProvider = z.infer<typeof ConnTestProvider>;
 
 export const ConnTestRequest = z.object({
   provider: ConnTestProvider,
-  /** Optional API key/PAT to persist and then test (BYO key from the UI). */
+  /**
+   * Optional value to persist and then test (BYO key from the UI). For the
+   * cloud providers + github this is an API key/PAT; for the local, keyless
+   * providers ('ollama'/'lmstudio') this is a base URL instead.
+   */
   key: z.string().min(1).optional(),
 });
 export type ConnTestRequest = z.infer<typeof ConnTestRequest>;
@@ -122,11 +133,18 @@ export const ConnTestResult = z.object({
 export type ConnTestResult = z.infer<typeof ConnTestResult>;
 
 // ---- Secrets status (which provider keys are configured; never the values) ----
-/** Boolean per provider: true ⇒ a key/PAT is stored. The value is never exposed. */
+/**
+ * Boolean per provider. For cloud providers + github: true ⇒ a key/PAT is
+ * stored. For the local providers ('ollama'/'lmstudio'), which need no key:
+ * true ⇒ a custom base URL is stored, false ⇒ using the localhost default.
+ * The value itself is never exposed either way.
+ */
 export const SecretsStatus = z.object({
   openai: z.boolean(),
   anthropic: z.boolean(),
   openrouter: z.boolean(),
+  ollama: z.boolean(),
+  lmstudio: z.boolean(),
   github: z.boolean(),
 });
 export type SecretsStatus = z.infer<typeof SecretsStatus>;

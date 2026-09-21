@@ -2,6 +2,7 @@ import type { Container } from '../../platform/container.js';
 import type { Skill, SkillImportPreview, SkillSource, SkillStats, SkillSummary, SkillType, SkillVersion } from '@devdigest/shared';
 import { NotFoundError } from '../../platform/errors.js';
 import { SkillsRepository, type SkillRow } from './repository.js';
+import { detectInjectionPatterns } from '../_shared/injection-detection.js';
 import {
   aggregateFindingRows,
   decodeBase64Capped,
@@ -27,6 +28,7 @@ export interface CreateSkillInput {
   body: string;
   source?: SkillSource;
   enabled?: boolean;
+  evidence_files?: string[];
 }
 
 export interface UpdateSkillInput {
@@ -35,6 +37,7 @@ export interface UpdateSkillInput {
   type?: SkillType;
   body?: string;
   enabled?: boolean;
+  evidence_files?: string[];
   /** Author's optional note on the new version (≤200 chars; NULL when blank). */
   version_message?: string;
   /**
@@ -69,6 +72,10 @@ export class SkillsService {
   }
 
   async create(workspaceId: string, input: CreateSkillInput): Promise<Skill> {
+    // A skill body with a detected injection pattern is never created enabled,
+    // regardless of what the caller asked for — "automatically blocked", not
+    // "blocked once someone notices" (specs/02-skills.md §10).
+    const flagged = detectInjectionPatterns(input.body).detected;
     const row = await this.repo.insert({
       workspaceId,
       name: input.name,
@@ -76,7 +83,8 @@ export class SkillsService {
       type: input.type,
       source: input.source ?? 'manual',
       body: input.body,
-      enabled: input.enabled ?? true,
+      enabled: flagged ? false : (input.enabled ?? true),
+      evidenceFiles: input.evidence_files,
     });
     return this.toDto(row);
   }
@@ -98,6 +106,17 @@ export class SkillsService {
       forceBump = true;
     }
 
+    // Detect against the body this update actually PERSISTS (the patched/
+    // restored one, or the unchanged existing one) — an edit that introduces
+    // an injection pattern auto-disables a skill that was already enabled,
+    // not just future attempts to enable it (specs/02-skills.md §10).
+    const flagged = detectInjectionPatterns(body ?? existing.body).detected;
+    const enabledPatch = flagged
+      ? { enabled: false }
+      : patch.enabled !== undefined
+        ? { enabled: patch.enabled }
+        : {};
+
     const row = await this.repo.update(
       workspaceId,
       id,
@@ -106,7 +125,8 @@ export class SkillsService {
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.type !== undefined ? { type: patch.type } : {}),
         ...(body !== undefined ? { body } : {}),
-        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+        ...enabledPatch,
+        ...(patch.evidence_files !== undefined ? { evidenceFiles: patch.evidence_files } : {}),
       },
       { versionMessage, forceBump },
     );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Badge, Button, FormField, Icon, Modal, SelectInput, TextInput, Toggle } from "@devdigest/ui";
 import type { Skill, SkillType } from "@devdigest/shared";
+import { MarkdownBodyEditor } from "../../../../../../components/markdown-body-editor";
 import { useDeleteSkill, useSkillAgents, useUpdateSkill } from "../../../../../../lib/hooks/skills";
 import { useToast } from "../../../../../../lib/toast";
 import { SKILL_TYPE_VALUES } from "../../../../constants";
@@ -37,9 +38,6 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   // rail's delete flow does (§5.4).
   const { data: linkedAgents } = useSkillAgents(confirmingDelete ? skill.id : undefined);
 
-  const taRef = React.useRef<HTMLTextAreaElement>(null);
-  const gutterRef = React.useRef<HTMLDivElement>(null);
-
   // Reset local form when switching skills.
   React.useEffect(() => {
     setName(skill.name);
@@ -54,13 +52,11 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   const dirty =
     name !== skill.name || description !== skill.description || type !== skill.type || body !== skill.body;
   const typeOptions = SKILL_TYPE_VALUES.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
-  const lines = body.split("\n");
-
-  const syncScroll = () => {
-    if (gutterRef.current && taRef.current) gutterRef.current.scrollTop = taRef.current.scrollTop;
-  };
 
   const onToggleEnabled = (v: boolean) => {
+    // A flagged skill's `enabled` is server-forced back to false on every
+    // save — don't even issue the request (specs/02-skills.md §10).
+    if (v && skill.injection_flagged) return;
     setEnabled(v);
     update.mutate({ id: skill.id, patch: { enabled: v } });
   };
@@ -141,25 +137,7 @@ export function ConfigTab({ skill }: { skill: Skill }) {
           </div>
         }
       >
-        <div style={s.editorRow}>
-          <div ref={gutterRef} style={s.gutter}>
-            {lines.map((_, i) => (
-              <div key={i} style={s.lineNo}>
-                {i + 1}
-              </div>
-            ))}
-          </div>
-          <textarea
-            ref={taRef}
-            className="mono"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onScroll={syncScroll}
-            spellCheck={false}
-            rows={Math.max(lines.length, 10)}
-            style={s.textarea}
-          />
-        </div>
+        <MarkdownBodyEditor value={body} onChange={setBody} minRows={10} />
       </FormField>
 
       <FormField label={t("config.versionMessage")} hint={t("config.versionMessageHint")}>

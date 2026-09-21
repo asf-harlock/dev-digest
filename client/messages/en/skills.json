@@ -35,6 +35,11 @@
   "editor": {
     "loadErrorTitle": "Couldn’t load this skill",
     "disabled": "disabled",
+    "injectionBadge": "Injection detected",
+    "injectionBanner": {
+      "title": "INJECTION DETECTED — DO NOT ENABLE",
+      "body": "This skill contains prompt injection patterns. It has been automatically blocked."
+    },
     "tabs": {
       "config": "Config",
       "preview": "Preview",

@@ -21,6 +21,23 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-09-20** — The Agent editor's Skills tab (`SkillsTab.tsx`) rendered
+  "0 of 0" with no way to attach a skill whenever an agent had zero links,
+  even though the workspace had skills — it only called `useAgentSkills`
+  (`GET /agents/:id/skills`), which (per `server/INSIGHTS.md`) returns ONLY
+  already-linked rows, never the workspace catalog. The catalog was one hook
+  call away the whole time (`useSkills()` in `lib/hooks/skills.ts`, `GET
+  /skills`) and the backend already supported attaching (`linkSkill`/
+  `setSkills`) — this was a client-only gap. Confirmed against
+  `specs/02-skills.md` D2 ("the mockup lists all six workspace skills") and
+  the i18n copy `agents.json` `skills.orderHint` ("Toggle to **attach**") that
+  the tab is supposed to show every workspace skill, not just linked ones.
+  Fixed by merging both queries client-side
+  (`SkillsTab/helpers.ts:mergeSkillsForAgent`). Any future tab that reads a
+  `useAgent*` per-entity hook should check whether the entity is meant to
+  show the FULL catalog (merge in the matching top-level `use<Thing>()` hook)
+  before assuming the per-entity endpoint is already complete.
+
 - **2026-09-18** — ESLint cannot enforce this module's folder boundaries on its
   own. `import/no-restricted-paths` matches the RESOLVED path, so it needs an
   import resolver to follow the `@/*` alias — and `eslint-import-resolver-typescript`
@@ -40,7 +57,40 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-09-20** — This codebase's "run with a choice of modes" UI pattern is
+  `Dropdown` (`vendor/ui/kit/Dropdown.tsx`) wrapping the ENTIRE trigger
+  `Button` — clicking the button always opens the menu, there is no true
+  split-button with separate click regions for "run the default" vs "open the
+  menu". `RunReviewDropdown`
+  (`app/repos/[repoId]/pulls/[number]/_components/RunReviewDropdown/`) is the
+  reference implementation: `Button` with `iconRight="ChevronDown"` as
+  `Dropdown`'s `trigger`, `DropdownItemDef[]` items with `icon`/`hint`/
+  `divider`. Its own component folder skips `helpers.ts` (no pure logic to
+  extract) but keeps `constants.ts`/`styles.ts` (empty style map) for
+  convention parity. Followed the same shape for the Conventions page's
+  Re-scan button (`RunExtractionDropdown`, local/AI/both extraction modes).
+
+- **2026-09-20** — `client/src/vendor/ui/nav.ts` lives under the "vendor,
+  read-only" directory but is plain static data meant to be extended
+  per-lesson, not a vendored component. Confirmed before editing it for the
+  Conventions page: `client/src/components/app-shell/helpers.ts`'s
+  `activeKeyFor` already had `if (pathname.includes("/conventions")) return
+  "conventions";` waiting for a nav entry that didn't exist yet — check
+  `activeKeyFor` for a dead case matching a new page before assuming a
+  `nav.ts` edit is out of bounds.
+
 ## Tool & Library Notes
+
+- **2026-09-20** — A `useMutation`'s `mutationFn` given a JS default parameter
+  (e.g. `(mode: ConventionExtractionMode = "both") => …`) does NOT make the
+  resulting `mutate()` callable with zero arguments. `UseMutationResult.mutate`
+  requires `variables` per the DECLARED parameter type, not JS default-param
+  optionality — TanStack Query's generic inference doesn't unwrap it, so
+  `mutate()` fails to typecheck ("Expected 1-2 arguments, but got 0"). Fix:
+  drop the default from the function signature and pass the argument
+  explicitly at every call site (`lib/hooks/conventions.ts`'s
+  `useExtractConventions`, called as `extract.mutate("both")` from the empty
+  state's CTA).
 
 - **2026-09-18** — Two flat-config traps when touching
   `client/eslint.config.mjs`. (1) `eslint-plugin-react-hooks` is on v7, which
@@ -58,7 +108,35 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Recurring Errors & Fixes
 
+- **2026-09-20** — An RTL test that does `fireEvent.change(select, …)` then
+  immediately `fireEvent.click(actionButton)` in the next line can silently
+  no-op the click if the button's `disabled` depends on a query that becomes
+  `enabled` as a RESULT of that change (e.g. `useQuery(id, { enabled: !!id })`
+  gated behind a picker). The change event synchronously flips the query to
+  `isFetching: true` before the mock fetch's microtask resolves, so the button
+  is still genuinely `disabled` at the moment of the very next `fireEvent`,
+  and jsdom drops clicks on a disabled native element with no error. Fix:
+  `await waitFor(() => expect(button).not.toBeDisabled())` between the two
+  fireEvents. `LinkToAgentPanel.test.tsx` (agent picker → `useAgentSkills`).
+
 ## Session Notes
+
+- **2026-09-20** — Added `LinkToAgentPanel` to `CreateSkillFromConventionsModal`
+  (Conventions → Create skill flow): once every draft is saved, pick an agent
+  and attach the new skill(s) via the same full-set-replace mechanism as the
+  Agent editor's Skills tab (`useSetAgentSkills`) — previously the modal only
+  called `POST /skills` and never linked the result to anything. Duplicated a
+  small `appendSkillsToAgent` merge helper locally rather than importing
+  `SkillsTab/helpers.ts`'s `mergeSkillsForAgent` (private `_components/`,
+  cross-route import banned by `pnpm arch` — same tradeoff already documented
+  in this modal's own `constants.ts` for `SKILL_NAME_PATTERN`).
+
+- **2026-09-20** — Added `RunExtractionDropdown` to the Conventions page:
+  local/AI/both mode picker for `POST /repos/:id/conventions/extract`,
+  wired through `useExtractConventions`.
+
+- **2026-09-20** — Fixed the Agent editor's Skills tab showing an empty,
+  unattachable list for an agent with no linked skills; see What Doesn't Work.
 
 - **2026-09-18** — Added `eslint.config.mjs`, `.dependency-cruiser.cjs` and the
   `lint`/`arch` scripts, wired both into `client.yml`. Both were green on the

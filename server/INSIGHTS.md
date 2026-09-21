@@ -17,11 +17,94 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Decisions
 
+### 2026-09-20 — Injection detection is computed live from `body`, never stored
+
+**What:** `Skill.injection_flagged`/`injection_patterns` are NOT columns —
+`detectInjectionPatterns(body)` (`modules/_shared/injection-detection.ts`) runs
+on every read (`toSkillDto`, `toAgentSkillDetail`) and on every
+create/update, where a flagged body forces `enabled: false` server-side
+regardless of what the caller asked for (`SkillsService.create`/`update`).
+
+**Why:** the same reasoning as `token_estimate` (also computed live, never
+stored): a stored flag can go stale relative to the body it describes — edit
+the body to remove the injected text and a stored `true` would linger; edit it
+to add some and a stored `false` would miss it. Computing it live makes both
+directions self-correcting with no migration, no backfill, and no separate
+"re-scan" action. Enforcement piggybacks on the EXISTING
+`agent_skills.enabled AND skills.enabled` gate in
+`enabledSkillsForPrompt` (`modules/agents/repository.ts`) — forcing
+`skills.enabled = false` is sufficient on its own to keep a flagged skill out
+of every agent's prompt, so no `agents` module changes were needed for
+enforcement, only for the DTO field parity noted below.
+
+**Rejected:** a persisted `injection_flagged` column set once at import time —
+would need a migration, a backfill for skills that already exist, and an
+explicit re-check action for every future body edit; the live-compute version
+needed none of those and cannot drift.
+
 ## What Works
 
 ## What Doesn't Work
 
 ## Codebase Patterns
+
+- **2026-09-20** — `container.buildLlm`'s "throw `ConfigError` if the secret key
+  is missing" guard is a cloud-provider-only rule. For a keyless, local,
+  OpenAI-compatible provider (added for Ollama/LM Studio), the right shape is:
+  read a base-URL "secret" through the same `SecretsProvider` chokepoint, fall
+  back to a hardcoded `localhost` default when unset, and construct the
+  adapter unconditionally — no `ConfigError`, no reachability preflight.
+  Every caller already catches and degrades (`agents/service.ts listModels` →
+  `[]`, `settings/routes.ts test-connection` → `{ ok: false }`), so an
+  unreachable local server surfaces naturally on the first real call instead
+  of needing a second check. `server/src/platform/container.ts` (`buildLlm`),
+  `server/src/adapters/llm/local-openai-compatible.ts`.
+
+- **2026-09-20** — `server/CLAUDE.md`'s "Declare `schema.body`/`schema.params`
+  — do not hand-roll `Schema.parse(req.body)`" has an established, deliberate
+  exception: a POST route whose body must tolerate being entirely absent (no
+  Content-Type, no payload). `reviews/routes.ts`'s `POST /pulls/:id/review`
+  does NOT put `body` in the Fastify route schema at all — it parses manually
+  inside the handler, `RunRequest.parse(req.body ?? {})`, with a comment
+  explaining why ("both fields optional; empty body is OK"). Fastify's own
+  body-schema validation rejects a genuinely empty POST body before the
+  handler ever runs, which the manual-parse-with-default pattern avoids.
+  Reused verbatim for `POST /repos/:id/conventions/extract`'s new optional
+  `{ mode }` body (`modules/conventions/routes.ts`). Any new POST route that
+  needs to work with zero body should follow this shape, not put an
+  `.optional()` object in `schema.body`.
+
+- **2026-09-20** — `skills.evidenceFiles` (jsonb) sat in the DB schema and was
+  read by the DTO helper, but was never accepted by `CreateSkillBody`/
+  `UpdateSkillBody`, carried by `InsertSkill`/`UpdateSkillPatch`, or written by
+  `repository.ts`'s `insert`/`update` — a column that looks wired end-to-end
+  because the DTO layer touches it while the write path never did. Found while
+  wiring the Conventions feature's skill-drafting flow, which needed
+  `evidence_files` to actually persist. Check all three layers
+  (routes/service/repository) before assuming a schema column is live, not
+  just the schema file. `server/src/modules/skills/{routes,service,repository}.ts`
+
+- **2026-09-20** — `pnpm arch` blocks a module's service/repository from
+  importing another module's non-`_shared` file, even for a small, obviously-
+  safe read — importing `settings/feature-models.ts`'s
+  `getFeatureModelOverride` from `conventions/repository.ts` was flagged. The
+  established escape hatch is a repository querying another module's table
+  directly (`SkillsRepository` already does this for `agents`/`findings`);
+  `ConventionsRepository` does the same for `settings` — it re-reads
+  `feature_models` + `FeatureModelChoice.safeParse` itself rather than
+  importing the helper. `server/src/modules/conventions/repository.ts`
+
+- **2026-09-20** — Same `no-cross-module-import` rule, other escape hatch: when
+  the thing two modules need is a PURE FUNCTION over data both already hold
+  (not a query), re-querying isn't an option and duplicating the function is
+  worse (it can drift, like the `@devdigest/shared` vendor copies). Move it to
+  `modules/_shared/` instead — `skills` (computing `Skill.injection_flagged`)
+  and `agents` (`toAgentSkillDetail`, which maps `AgentSkillDetail extends
+  Skill`) both needed the identical prompt-injection detector over a skill
+  body; it now lives in `modules/_shared/injection-detection.ts` and both
+  import it. `_shared` already held two things in this shape (`context.ts`,
+  `schemas.ts`) before this — check there before reaching for either the query
+  duplication pattern above or a straight cross-module import.
 
 - **2026-09-19** — Two "enabled" flags on the skills feature have OPPOSITE
   version-bump behavior and are easy to conflate. Toggling `skills.enabled`
@@ -152,6 +235,29 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-09-20** — Added local LLM provider support (Ollama + LM Studio):
+  new `LocalOpenAICompatibleProvider` adapter, `container.buildLlm` branch,
+  `Provider`/`ConnTestProvider`/`SecretsStatus` widened in both vendor copies,
+  `agents.provider` schema enum widened (no migration needed), Settings API
+  Keys panel gained URL-mode rows, client `PROVIDER_OPTIONS` updated in two
+  places. See Codebase Patterns and root `INSIGHTS.md` for the reusable parts.
+
+- **2026-09-20** — Added extraction-mode support (`local`/`ai`/`both`) to the
+  conventions module: `mode` column + nullable `provider`/`model` on
+  `repo_convention_scans` (migration `0014`), `extractLocalCandidates`
+  (config-file rule parsing, no model call) in `conventions/helpers.ts`, and
+  `POST /repos/:id/conventions/extract` now takes an optional `{ mode }` body.
+  Follow-up fix same session: `findConfigFiles` originally probed
+  `CONFIG_FILENAMES` only at the clone's true root, so `local` mode found
+  nothing on this repo itself — `tsconfig.json`/`eslint.config.*` live inside
+  `server/`/`client/`/etc., never at the repo root, since this is a
+  multi-package repo with no root `package.json` (root `CLAUDE.md`). Fixed by
+  also probing one level into every top-level directory
+  (`CONFIG_SEARCH_SKIP_DIRS` in `conventions/constants.ts`). Any future
+  root-only file probe in this codebase should ask whether the target repo
+  shape (single-package vs. this repo's four-standalone-packages layout)
+  actually has what it's looking for at the root.
 
 - **2026-09-19** — Built the full Skills feature (`specs/02-skills.md`): the
   `skills` module (CRUD/versions/import/stats), `agent_skills.enabled`

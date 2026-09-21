@@ -23,6 +23,7 @@ export interface InsertSkill {
   source: SkillSource;
   body: string;
   enabled?: boolean;
+  evidenceFiles?: string[];
 }
 
 export interface UpdateSkillPatch {
@@ -31,6 +32,7 @@ export interface UpdateSkillPatch {
   type?: SkillType;
   body?: string;
   enabled?: boolean;
+  evidenceFiles?: string[];
 }
 
 export interface UpdateSkillOptions {
@@ -108,6 +110,7 @@ export class SkillsRepository {
           source: values.source,
           body: values.body,
           enabled: values.enabled ?? true,
+          evidenceFiles: values.evidenceFiles,
         })
         .returning();
       await this.db.insert(t.skillVersions).values({
@@ -151,6 +154,7 @@ export class SkillsRepository {
           ...(patch.type !== undefined ? { type: patch.type } : {}),
           ...(patch.body !== undefined ? { body: patch.body } : {}),
           ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+          ...(patch.evidenceFiles !== undefined ? { evidenceFiles: patch.evidenceFiles } : {}),
           ...(configChanged ? { version: nextVersion } : {}),
         })
         .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))

@@ -18,6 +18,11 @@ import { SimpleGitClient } from '../adapters/git/simple-git.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
 import { AnthropicProvider } from '../adapters/llm/anthropic.js';
+import {
+  LocalOpenAICompatibleProvider,
+  OLLAMA_DEFAULT_BASE_URL,
+  LMSTUDIO_DEFAULT_BASE_URL,
+} from '../adapters/llm/local-openai-compatible.js';
 import { OpenAIEmbedder } from '../adapters/embedder/openai.js';
 import { OpenRouterProvider } from '@devdigest/reviewer-core';
 import { estimateCost } from '../adapters/llm/pricing.js';
@@ -45,7 +50,7 @@ export interface ContainerOverrides {
   codeIndex?: CodeIndex;
   embedder?: Embedder;
   /** Pre-built providers by id (skip key lookup). */
-  llm?: Partial<Record<'openai' | 'anthropic' | 'openrouter', LLMProvider>>;
+  llm?: Partial<Record<'openai' | 'anthropic' | 'openrouter' | 'ollama' | 'lmstudio', LLMProvider>>;
   /** repo-intel facade (T1.1+) — tests inject mock RepoIntel implementations. */
   repoIntel?: RepoIntel;
   /** repo-intel T3 adapters — only the indexer pipeline reads these. */
@@ -160,7 +165,7 @@ export class Container {
   }
 
   /** Resolve an LLM provider by id; constructs from the secret key, cached. */
-  async llm(id: 'openai' | 'anthropic' | 'openrouter'): Promise<LLMProvider> {
+  async llm(id: 'openai' | 'anthropic' | 'openrouter' | 'ollama' | 'lmstudio'): Promise<LLMProvider> {
     const injected = this.overrides.llm?.[id];
     if (injected) return injected;
     const cached = this.llmCache.get(id);
@@ -170,7 +175,9 @@ export class Container {
     return provider;
   }
 
-  private async buildLlm(id: 'openai' | 'anthropic' | 'openrouter'): Promise<LLMProvider> {
+  private async buildLlm(
+    id: 'openai' | 'anthropic' | 'openrouter' | 'ollama' | 'lmstudio',
+  ): Promise<LLMProvider> {
     if (id === 'openai') {
       const key = await this.secrets.get('OPENAI_API_KEY');
       if (!key) throw new ConfigError('OPENAI_API_KEY is not configured');
@@ -186,6 +193,14 @@ export class Container {
         estimateCost: (model, tokensIn, tokensOut) =>
           this.priceBook.estimate(model, tokensIn, tokensOut),
       });
+    }
+    if (id === 'ollama' || id === 'lmstudio') {
+      // No key required — a saved value here is a custom base URL, falling
+      // back to the tool's own localhost default when unset.
+      const secretKey = id === 'ollama' ? 'OLLAMA_BASE_URL' : 'LMSTUDIO_BASE_URL';
+      const fallback = id === 'ollama' ? OLLAMA_DEFAULT_BASE_URL : LMSTUDIO_DEFAULT_BASE_URL;
+      const baseURL = (await this.secrets.get(secretKey)) || fallback;
+      return new LocalOpenAICompatibleProvider({ id, baseURL });
     }
     const key = await this.secrets.get('ANTHROPIC_API_KEY');
     if (!key) throw new ConfigError('ANTHROPIC_API_KEY is not configured');
