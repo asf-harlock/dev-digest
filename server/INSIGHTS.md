@@ -226,7 +226,9 @@ needed none of those and cannot drift.
   implementation (`src/modules/reviews/repository/run.repo.ts:142`). Adding a
   field to only one of them compiles at the call site and fails at the facade.
   Expect the same shape for other repository methods re-exported through that
-  facade. **2026-09-23** — the facade's `upsertIntent`/`getIntent` (extended for
+  facade.
+
+  **2026-09-23** — the facade's `upsertIntent`/`getIntent` (extended for
   Intent Layer) sidestepped this by using direct pass-through delegation
   (`return pullRepo.upsertIntent(this.db, prId, intent, meta)`) instead of
   re-typing the object literal — adding a field to `pull.repo.ts`'s signature
