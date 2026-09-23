@@ -10,6 +10,7 @@ import { ReviewService } from './service.js';
 /**
  * reviews module.
  *   POST   /pulls/:id/review  {agentId} | {all:true}  → run review(s); returns runs
+ *   POST   /pulls/:id/intent                           → classify PR intent (fire-and-forget)
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
@@ -42,6 +43,18 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     );
     return { pr_id: req.params.id, runs, reviews };
   });
+
+  // ---- Classify PR intent (manual trigger, D5) -----------------------------
+  // Fire-and-forget, same pattern as POST /pulls/:id/review. Looser rate limit
+  // than review's 10/min — one cheap call, not a fan-out of expensive LLM runs.
+  app.post(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.runIntentClassification(workspaceId, req.params.id, req.log);
+    },
+  );
 
   // ---- SSE: live run events (replay buffer first, then live; ends on done) -
   // No rate limit: SSE is one long-lived connection, not burst traffic.

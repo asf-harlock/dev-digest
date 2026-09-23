@@ -33,6 +33,18 @@ export function wrapUntrusted(label: string, content: string): string {
   return `<untrusted source="${label}">\n${safe}\n</untrusted>`;
 }
 
+/** Render the declared-intent slot as plain text before it's untrusted-wrapped. */
+function formatIntent(intent: { summary: string; inScope: string[]; outOfScope: string[] }): string {
+  const lines = [intent.summary.trim()];
+  if (intent.inScope.length > 0) {
+    lines.push('In scope:', ...intent.inScope.map((s) => `- ${s}`));
+  }
+  if (intent.outOfScope.length > 0) {
+    lines.push('Out of scope:', ...intent.outOfScope.map((s) => `- ${s}`));
+  }
+  return lines.join('\n');
+}
+
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
@@ -66,6 +78,16 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Declared intent & scope (Intent Layer) — a separate, cheap classification
+   * of what this PR claims to do, derived from title/description/linked-issue/
+   * hunk-headers. Untrusted (LLM-derived from author-controlled input) —
+   * delimiter-wrapped like `prDescription`. Rendered near `## PR description`
+   * (both describe "what this PR claims to do"). Empty/undefined → section
+   * omitted (no behavior change) — INJECTION_GUARD already names "derived
+   * intent/scope" as untrusted even before this slot existed.
+   */
+  intent?: { summary: string; inScope: string[]; outOfScope: string[] };
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
@@ -101,10 +123,18 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       ? parts.prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS)
       : undefined;
 
+  const intentText =
+    parts.intent && parts.intent.summary.trim().length > 0
+      ? formatIntent(parts.intent)
+      : undefined;
+
   const userSections: string[] = [];
   if (parts.task) userSections.push(parts.task);
   if (prDescription) {
     userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
+  }
+  if (intentText) {
+    userSections.push(`## Declared intent & scope\n${wrapUntrusted('intent', intentText)}`);
   }
   if (skillsBlock) userSections.push(`## Skills / rules\n${skillsBlock}`);
   if (memoryBlock) userSections.push(`## Relevant memory\n${memoryBlock}`);
@@ -134,6 +164,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentText ?? null,
     user,
   };
 

@@ -64,3 +64,45 @@ describe('assemblePrompt — ## PR description', () => {
     expect((assembly.pr_description as string).length).toBe(4000);
   });
 });
+
+describe('assemblePrompt — ## Declared intent & scope', () => {
+  it('renders the section (untrusted-wrapped) near the PR description, before the diff, when present', () => {
+    const { messages, assembly } = assemblePrompt({
+      system: 'sys',
+      diff: 'DIFF',
+      prDescription: 'Adds rate limiting to the public /api endpoints.',
+      intent: {
+        summary: 'Adds rate limiting middleware to the public API.',
+        inScope: ['server/src/middleware/rate-limit.ts'],
+        outOfScope: ['unrelated lint fixes in server/src/db/schema.ts'],
+      },
+    });
+    const user = messages[1]!.content;
+    expect(user).toContain('## Declared intent & scope');
+    expect(user).toContain('<untrusted source="intent">');
+    expect(user).toContain('Adds rate limiting middleware to the public API.');
+    expect(user).toContain('server/src/middleware/rate-limit.ts');
+    expect(user).toContain('unrelated lint fixes in server/src/db/schema.ts');
+    expect(user.indexOf('## PR description')).toBeLessThan(user.indexOf('## Declared intent & scope'));
+    expect(user.indexOf('## Declared intent & scope')).toBeLessThan(user.indexOf('## Diff to review'));
+    expect(assembly.intent).toContain('Adds rate limiting middleware');
+  });
+
+  it('omits the section entirely when intent is undefined (byte-identical to the pre-feature prompt)', () => {
+    const withoutIntent = assemblePrompt({ system: 'sys', diff: 'DIFF' });
+    const withUndefinedIntent = assemblePrompt({ system: 'sys', diff: 'DIFF', intent: undefined });
+    expect(withoutIntent.messages).toEqual(withUndefinedIntent.messages);
+    expect(withoutIntent.assembly).toEqual(withUndefinedIntent.assembly);
+    expect(withoutIntent.messages[1]!.content).not.toContain('## Declared intent & scope');
+    expect(withoutIntent.assembly.intent ?? null).toBeNull();
+  });
+
+  it('omits the section when intent.summary is blank', () => {
+    const user = userOf({
+      system: 'sys',
+      diff: 'DIFF',
+      intent: { summary: '   ', inScope: [], outOfScope: [] },
+    });
+    expect(user).not.toContain('## Declared intent & scope');
+  });
+});

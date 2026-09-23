@@ -6,7 +6,7 @@ import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
-import { taskLine } from './helpers.js';
+import { applyScopeFilter, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -105,6 +105,21 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Intent Layer (specs/03-intent-layer.md §7.3): loaded once per
+    // executeRuns call, not per-agent — a PR with no classified intent (the
+    // common case today) gets `undefined` and every prompt/scope-filter step
+    // below is a no-op, so behavior is unchanged from before this feature.
+    // Best-effort: a read failure here must not fail every queued run the way
+    // a diff-load failure does.
+    let intent: Awaited<ReturnType<ReviewRepository['getIntent']>>;
+    try {
+      intent = await this.repo.getIntent(pull.id);
+      if (intent) runLog.info(`Declared intent found (confidence=${intent.confidence})`);
+    } catch (err) {
+      runLog.info(`Failed to load PR intent — continuing without it: ${(err as Error).message}`);
+      intent = undefined;
+    }
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -112,7 +127,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent);
         logger?.info(
           {
             runId,
@@ -144,6 +159,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intent: Awaited<ReturnType<ReviewRepository['getIntent']>>,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -214,6 +230,19 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Intent Layer (specs/03-intent-layer.md §7.3) — the PR's declared
+        // intent & scope, when one has been classified. Omitted when the PR
+        // has no persisted intent, so a PR with none produces a byte-identical
+        // prompt to before this feature.
+        ...(intent
+          ? {
+              intent: {
+                summary: intent.intent,
+                inScope: intent.in_scope,
+                outOfScope: intent.out_of_scope,
+              },
+            }
+          : {}),
         // D5 — linked, enabled skill bodies, `### name`-prefixed. Omitted when
         // empty so assemblePrompt's `## Skills / rules` section stays absent.
         ...(blocks.length ? { skills: blocks } : {}),
@@ -226,7 +255,19 @@ export class ReviewRunExecutor {
       });
       const { tokensIn, tokensOut, costUsd, grounding } = outcome;
 
-      const keptFindings = outcome.review.findings;
+      const groundedFindings = outcome.review.findings;
+
+      // Intent Layer (D7, specs/03-intent-layer.md §7.4/§8.2) — the
+      // deterministic out-of-scope filter, AFTER grounding, BEFORE
+      // persistence. No-op when the PR has no classified intent: `intent` is
+      // `undefined` for the common case today, and `applyScopeFilter` returns
+      // `groundedFindings` unchanged in that case.
+      const keptFindings = applyScopeFilter(groundedFindings, intent, agent.ciFailOn);
+      if (keptFindings.length !== groundedFindings.length) {
+        runLog.info(
+          `scope filter: dropped ${groundedFindings.length - keptFindings.length} out-of-scope finding(s) below the ${agent.ciFailOn} gate`,
+        );
+      }
 
       // ---- Persist review + findings ----------------------------------------
       const review = await this.repo.insertReview({

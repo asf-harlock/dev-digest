@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
+import type { IntentSource } from '@devdigest/shared';
 import { now } from './_shared';
 import { workspaces } from './core';
 import { pullRequests } from './pulls';
@@ -49,6 +50,11 @@ export const findings = pgTable('findings', {
   trifectaComponents: jsonb('trifecta_components').$type<string[]>(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  // Set by the deterministic out-of-scope filter (run-executor.ts) when a
+  // finding matched the PR's declared out-of-scope but was kept because it met
+  // the agent's ciFailOn gate. Null = in scope / not evaluated — dropped
+  // out-of-scope findings never reach this table at all.
+  scope: text('scope'),
 }, (t) => ({
   // Findings are always fetched per review — inArray(review_id, ids).
   reviewIdx: index('findings_review_idx').on(t.reviewId),
@@ -61,6 +67,13 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  confidence: text('confidence').notNull().default('high'),
+  sources: jsonb('sources').$type<IntentSource[]>().notNull().default(sql`'[]'::jsonb`),
+  // When this PR was last classified, and the head SHA it was classified
+  // against (staleness derivation: compare to pull_requests.head_sha). Both
+  // null until the PR's first POST /pulls/:id/intent.
+  classifiedAt: timestamp('classified_at', { withTimezone: true }),
+  classifiedForSha: text('classified_for_sha'),
 });
 
 export const prBrief = pgTable('pr_brief', {

@@ -56,8 +56,14 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+/** Intent persisted for a PR (the Intent plus the pr_id it scopes). Includes the
+ *  head SHA it was classified for so the client can detect staleness (specs/
+ *  03-intent-layer.md §9) — null until a real classify call sets them. */
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  classified_at: z.string().nullish(),
+  classified_for_sha: z.string().nullish(),
+});
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
 /** Smart-diff response for a PR (the SmartDiff). */

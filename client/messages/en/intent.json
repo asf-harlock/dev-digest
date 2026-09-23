@@ -1,0 +1,30 @@
+{
+  "title": "Declared intent & scope",
+  "confidence": {
+    "label": "Confidence",
+    "high": "High confidence",
+    "medium": "Medium confidence",
+    "low": "Low confidence"
+  },
+  "inScope": "In scope",
+  "outOfScope": "Out of scope",
+  "sourceWarning": {
+    "missing": "{source} was not provided — the classification may be incomplete.",
+    "unreachable": "{source} could not be reached — the classification may be incomplete."
+  },
+  "source": {
+    "title": "the PR title",
+    "description": "the PR description",
+    "linked_issue": "the linked issue",
+    "spec": "a linked spec",
+    "hunk_headers": "the changed-file list"
+  },
+  "rerun": "Run classification",
+  "rerunning": "Classifying…",
+  "stale": "PR updated since this was classified",
+  "empty": {
+    "title": "Intent not classified yet",
+    "body": "Run a cheap, separate model call to derive what this PR is for, so review findings can stay anchored to its actual scope.",
+    "cta": "Classify intent"
+  }
+}
