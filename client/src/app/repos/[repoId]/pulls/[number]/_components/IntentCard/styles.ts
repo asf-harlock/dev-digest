@@ -1,68 +1,109 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for IntentCard — follows VerdictBanner/FindingCard's
- *  dark "PR Brief" card idiom (elevated bg, 1px border, 10px radius). */
+/** Co-located styles for IntentCard — matches the PR Brief design's "Intent"
+ *  card: label inside the card, italic quoted intent, ✓/✕ scope columns with
+ *  dot bullets, and a divider before Risk areas / source notes. */
 export const s = {
-  wrap: { marginBottom: 4 } satisfies CSSProperties,
-  headerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  } satisfies CSSProperties,
+  wrap: { marginBottom: 20 } satisfies CSSProperties,
   card: {
-    padding: 18,
-    borderRadius: 10,
+    padding: 24,
+    borderRadius: 12,
     border: "1px solid var(--border)",
     background: "var(--bg-elevated)",
   } satisfies CSSProperties,
-  summaryRow: { display: "flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
-  summary: {
-    fontSize: 14,
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  } satisfies CSSProperties,
+  headerIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  label: {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  headerActions: {
+    marginLeft: "auto",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  } satisfies CSSProperties,
+  quote: {
+    margin: 0,
+    fontSize: 17,
     lineHeight: 1.55,
+    fontStyle: "italic",
     color: "var(--text-primary)",
-    marginTop: 10,
   } satisfies CSSProperties,
   lists: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 20,
-    marginTop: 16,
+    gap: 24,
+    marginTop: 20,
   } satisfies CSSProperties,
   listCol: { minWidth: 0 } satisfies CSSProperties,
-  listLabel: {
-    fontSize: 11,
+  listLabel: (color: string): CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
     fontWeight: 700,
-    letterSpacing: "0.06em",
+    letterSpacing: "0.07em",
     textTransform: "uppercase",
-    color: "var(--text-muted)",
-    marginBottom: 6,
-  } satisfies CSSProperties,
+    color,
+    marginBottom: 10,
+  }),
   list: {
     margin: 0,
-    paddingLeft: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  } satisfies CSSProperties,
-  listItem: {
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: "var(--text-secondary)",
-  } satisfies CSSProperties,
-  warnings: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTop: "1px solid var(--border)",
+    padding: 0,
+    listStyle: "none",
     display: "flex",
     flexDirection: "column",
     gap: 8,
   } satisfies CSSProperties,
-  warningRow: {
+  listItem: (color: string): CSSProperties => ({
+    display: "flex",
+    alignItems: "baseline",
+    gap: 10,
+    fontSize: 14,
+    lineHeight: 1.5,
+    color,
+  }),
+  bullet: (color: string): CSSProperties => ({
+    width: 4,
+    height: 4,
+    borderRadius: "50%",
+    background: color,
+    flexShrink: 0,
+    transform: "translateY(-3px)",
+  }),
+  divider: {
+    marginTop: 20,
+    paddingTop: 18,
+    borderTop: "1px solid var(--border)",
+  } satisfies CSSProperties,
+  chips: { display: "flex", flexWrap: "wrap", gap: 8 } satisfies CSSProperties,
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 12px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    fontSize: 13.5,
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  notes: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
+  noteRow: {
     display: "flex",
     alignItems: "flex-start",
     gap: 8,
-    fontSize: 13,
+    fontSize: 12.5,
+    lineHeight: 1.45,
     color: "var(--warn)",
   } satisfies CSSProperties,
-  warningIcon: { flexShrink: 0, marginTop: 2 } satisfies CSSProperties,
+  noteIcon: { flexShrink: 0, marginTop: 2 } satisfies CSSProperties,
 } as const;
