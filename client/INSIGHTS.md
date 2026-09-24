@@ -152,6 +152,12 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Session Notes
 
+- **2026-09-24** — Smart Diff (L03) and Intent card fixes. The diff-viewer's
+  new-side finding anchoring (Codebase Patterns) came from the Smart Diff
+  review. The `isPending` (What Doesn't Work), global-toast (Codebase Patterns)
+  and sticky-error (Tool & Library Notes) entries came from making "Classify
+  intent" show progress until `classified_at` changes. PR #10.
+
 - **2026-09-20** — Added `LinkToAgentPanel` to `CreateSkillFromConventionsModal`
   (Conventions → Create skill flow): once every draft is saved, pick an agent
   and attach the new skill(s) via the same full-set-replace mechanism as the
