@@ -21,6 +21,22 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-09-24** — On a fire-and-forget endpoint (`POST /pulls/:id/intent`,
+  which returns `{status:"running"}` at once), `useMutation().isPending` is not
+  a loading state: it flips back within milliseconds while the real work runs
+  for seconds, so the button looks dead and stays clickable. Track the job
+  until its result lands instead: capture a baseline such as `classified_at`
+  at click time, poll the query, and stop on a change or a timeout (see
+  `useIntentClassification`). Two traps:
+  1. **Don't toast errors in the component.** `lib/providers.tsx`'s global
+     `MutationCache`/`QueryCache` `onError` already toasts every failed mutation
+     and every 5xx/network refetch, so a component toast doubles it, and
+     polling through an outage raises one toast per tick.
+  2. **A query can sit in `status:"error"` from an earlier blip.** Only treat
+     `errorUpdatedAt >= startedAt` as a failure of this run.
+
+  `client/src/lib/hooks/intent.ts`
+
 - **2026-09-20** — The Agent editor's Skills tab (`SkillsTab.tsx`) rendered
   "0 of 0" with no way to attach a skill whenever an agent had zero links,
   even though the workspace had skills — it only called `useAgentSkills`
