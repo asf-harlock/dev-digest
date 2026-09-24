@@ -13,7 +13,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, EmptyState, Icon } from "@devdigest/ui";
 import type { PrIntentRecord, Risk } from "@devdigest/shared";
-import { useClassifyIntent } from "../../../../../../../lib/hooks/intent";
+import { useIntentClassification } from "../../../../../../../lib/hooks/intent";
+import { notify } from "../../../../../../../lib/toast";
 import { CONFIDENCE_META, RISK_META, SCOPE_META } from "./constants";
 import { isIntentStale, unresolvedSources } from "./helpers";
 import { s } from "./styles";
@@ -31,7 +32,14 @@ export function IntentCard({
   risks?: Risk[];
 }) {
   const t = useTranslations("intent");
-  const classify = useClassifyIntent(prId);
+  // Tracks the background job until the new classification lands (the POST
+  // alone returns in milliseconds), and reports progress as toasts.
+  const { start, isClassifying } = useIntentClassification(prId, intent?.classified_at, {
+    onStarted: () => notify.info(t("classifying.started")),
+    onDone: () => notify.success(t("classifying.done")),
+    onTimeout: () => notify.info(t("classifying.timeout")),
+    onError: (err) => notify.error(t("classifying.error", { message: err.message })),
+  });
 
   if (!intent) {
     return (
@@ -39,10 +47,10 @@ export function IntentCard({
         <EmptyState
           icon="Target"
           title={t("empty.title")}
-          body={t("empty.body")}
+          body={isClassifying ? t("classifying.status") : t("empty.body")}
           cta={t("empty.cta")}
-          onCta={() => classify.mutate()}
-          ctaLoading={classify.isPending}
+          onCta={start}
+          ctaLoading={isClassifying}
         />
       </section>
     );
@@ -72,13 +80,20 @@ export function IntentCard({
               kind="tertiary"
               size="sm"
               icon="RefreshCw"
-              loading={classify.isPending}
-              onClick={() => classify.mutate()}
-              aria-label={classify.isPending ? t("rerunning") : t("rerun")}
+              loading={isClassifying}
+              onClick={start}
+              aria-label={isClassifying ? t("rerunning") : t("rerun")}
               title={t("rerun")}
             />
           </div>
         </div>
+
+        {isClassifying && (
+          <div style={s.statusRow} role="status" aria-live="polite">
+            <Icon.RefreshCw size={13} style={s.statusIcon} />
+            {t("classifying.status")}
+          </div>
+        )}
 
         <p style={s.quote}>{t("quote", { intent: intent.intent })}</p>
 

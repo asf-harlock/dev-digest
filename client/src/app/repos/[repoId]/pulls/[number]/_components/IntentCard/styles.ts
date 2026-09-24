@@ -33,6 +33,22 @@ export const s = {
     alignItems: "center",
     gap: 8,
   } satisfies CSSProperties,
+  statusRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+    padding: "8px 12px",
+    borderRadius: 8,
+    background: "var(--bg-hover)",
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  statusIcon: {
+    color: "var(--accent)",
+    flexShrink: 0,
+    animation: "ddspin 1s linear infinite",
+  } satisfies CSSProperties,
   quote: {
     margin: 0,
     fontSize: 17,

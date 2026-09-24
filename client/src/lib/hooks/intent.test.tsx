@@ -7,7 +7,12 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderHook, cleanup, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useClassifyIntent } from "./intent";
+import {
+  useClassifyIntent,
+  useIntentClassification,
+  CLASSIFY_POLL_MS,
+  CLASSIFY_TIMEOUT_MS,
+} from "./intent";
 
 afterEach(() => {
   cleanup();
@@ -76,5 +81,76 @@ describe("useClassifyIntent", () => {
     await act(() => result.current.mutateAsync());
 
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("useIntentClassification", () => {
+  it("stays 'classifying' after the POST returns, until classified_at changes, then reports done", async () => {
+    const calls = mockFetch();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onStarted = vi.fn();
+    const onDone = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ at }: { at: string | null }) => useIntentClassification("pr1", at, { onStarted, onDone }),
+      { wrapper: wrapper(qc), initialProps: { at: "2026-09-20T00:00:00.000Z" } },
+    );
+    expect(result.current.isClassifying).toBe(false);
+
+    await act(async () => {
+      result.current.start();
+    });
+    await vi.waitFor(() => expect(onStarted).toHaveBeenCalled());
+    expect(calls.some((c) => c.method === "POST" && /\/pulls\/pr1\/intent$/.test(c.url))).toBe(true);
+    // The POST has resolved, but the background job hasn't landed yet.
+    expect(result.current.isClassifying).toBe(true);
+    expect(onDone).not.toHaveBeenCalled();
+
+    rerender({ at: "2026-09-24T12:00:00.000Z" });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(result.current.isClassifying).toBe(false);
+  });
+
+  it("polls the pull query while waiting and gives up with onTimeout after CLASSIFY_TIMEOUT_MS", async () => {
+    vi.useFakeTimers();
+    mockFetch();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const onTimeout = vi.fn();
+
+    const { result } = renderHook(() => useIntentClassification("pr1", null, { onTimeout }), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.start();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.isClassifying).toBe(true);
+
+    const before = invalidateSpy.mock.calls.length;
+    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 2));
+    expect(invalidateSpy.mock.calls.length).toBeGreaterThan(before);
+
+    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_TIMEOUT_MS));
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(result.current.isClassifying).toBe(false);
+  });
+
+  it("reports a failed POST through onError and does not stay 'classifying'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ error: { message: "boom" } }) }) as Response),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const onError = vi.fn();
+
+    const { result } = renderHook(() => useIntentClassification("pr1", null, { onError }), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.start();
+    });
+    await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(result.current.isClassifying).toBe(false);
   });
 });

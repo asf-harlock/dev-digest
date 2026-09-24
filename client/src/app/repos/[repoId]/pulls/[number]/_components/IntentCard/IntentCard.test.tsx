@@ -5,13 +5,17 @@ import messages from "../../../../../../../../messages/en/intent.json";
 import type { PrIntentRecord } from "@devdigest/shared";
 
 const mutate = vi.fn();
+const hookState = { isClassifying: false };
 vi.mock("../../../../../../../lib/hooks/intent", () => ({
-  useClassifyIntent: () => ({ mutate, isPending: false }),
+  useIntentClassification: () => ({ start: mutate, isClassifying: hookState.isClassifying }),
 }));
 
 import { IntentCard } from "./IntentCard";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  hookState.isClassifying = false;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -58,6 +62,18 @@ describe("IntentCard (smoke)", () => {
   it("shows a muted placeholder under an empty scope list", () => {
     renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, out_of_scope: [] }} headSha="abc123" />);
     expect(screen.getByText("None declared")).toBeInTheDocument();
+  });
+
+  it("while classifying, shows a status line and disables both the empty-state CTA and the re-run button", () => {
+    hookState.isClassifying = true;
+    renderWithIntl(<IntentCard prId="pr1" intent={null} headSha="abc123" />);
+    expect(screen.getByText(/Classifying intent/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /classify intent/i })).toBeDisabled();
+    cleanup();
+
+    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
+    expect(screen.getByRole("status")).toHaveTextContent(/Classifying intent/);
+    expect(screen.getByRole("button", { name: "Classifying…" })).toBeDisabled();
   });
 
   it("re-runs classification from the compact header button", () => {
