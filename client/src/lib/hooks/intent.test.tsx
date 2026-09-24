@@ -172,12 +172,38 @@ describe("useIntentClassification", () => {
     expect(result.current.isClassifying).toBe(true);
 
     // The pull query is now in an error state (e.g. the API went down).
-    vi.spyOn(qc, "getQueryState").mockReturnValue({ status: "error" } as ReturnType<QueryClient["getQueryState"]>);
+    vi.spyOn(qc, "getQueryState").mockReturnValue({
+      status: "error",
+      errorUpdatedAt: Date.now() + 1,
+    } as ReturnType<QueryClient["getQueryState"]>);
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
     await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 5));
 
     expect(onPollFailed).toHaveBeenCalledTimes(1);
     expect(result.current.isClassifying).toBe(false);
     expect(invalidateSpy.mock.calls.filter(([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: ["pull", "pr1"] })).length).toBeLessThanOrEqual(1);
+  });
+
+  it("ignores an error left on the pull query from before the run and keeps polling", async () => {
+    vi.useFakeTimers();
+    mockFetch();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onPollFailed = vi.fn();
+    vi.spyOn(qc, "getQueryState").mockReturnValue({
+      status: "error",
+      errorUpdatedAt: Date.now() - 60_000,
+    } as ReturnType<QueryClient["getQueryState"]>);
+
+    const { result } = renderHook(() => useIntentClassification("pr1", null, { onPollFailed }), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.start();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 3));
+
+    expect(onPollFailed).not.toHaveBeenCalled();
+    expect(result.current.isClassifying).toBe(true);
   });
 });

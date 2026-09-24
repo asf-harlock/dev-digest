@@ -76,7 +76,10 @@ export function useIntentClassification(
   const { mutate, isPending } = useClassifyIntent(prId);
   const [run, setRun] = React.useState<{ startedAt: number; baseline: string | null } | null>(null);
   const cb = React.useRef(callbacks);
-  cb.current = callbacks;
+  // Keep the latest callbacks without writing a ref during render.
+  React.useLayoutEffect(() => {
+    cb.current = callbacks;
+  });
 
   const start = React.useCallback(() => {
     if (run || isPending) return;
@@ -112,7 +115,10 @@ export function useIntentClassification(
       }
       // Stop instead of retrying into an outage: every failed refetch would
       // raise another global error toast (~45 over the timeout window).
-      if (qc.getQueryState(["pull", prId])?.status === "error") {
+      // Only a failure since this run started counts: a query can sit in
+      // "error" from an earlier, unrelated blip until a later fetch succeeds.
+      const state = qc.getQueryState(["pull", prId]);
+      if (state?.status === "error" && state.errorUpdatedAt >= run.startedAt) {
         clearInterval(id);
         setRun(null);
         cb.current.onPollFailed?.();
