@@ -21,21 +21,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
-- **2026-09-24** — On a fire-and-forget endpoint (`POST /pulls/:id/intent`,
-  which returns `{status:"running"}` at once), `useMutation().isPending` is not
-  a loading state: it flips back within milliseconds while the real work runs
-  for seconds, so the button looks dead and stays clickable. Track the job
-  until its result lands instead: capture a baseline such as `classified_at`
-  at click time, poll the query, and stop on a change or a timeout (see
-  `useIntentClassification`). Two traps:
-  1. **Don't toast errors in the component.** `lib/providers.tsx`'s global
-     `MutationCache`/`QueryCache` `onError` already toasts every failed mutation
-     and every 5xx/network refetch, so a component toast doubles it, and
-     polling through an outage raises one toast per tick.
-  2. **A query can sit in `status:"error"` from an earlier blip.** Only treat
-     `errorUpdatedAt >= startedAt` as a failure of this run.
-
-  `client/src/lib/hooks/intent.ts`
+- **2026-09-24** — On a fire-and-forget endpoint (`POST /pulls/:id/intent`
+  returns `{status:"running"}` at once), `useMutation().isPending` is not a
+  loading state. It flips back within milliseconds while the real work runs for
+  seconds, so the button looks dead and stays clickable. Track the job until
+  its result lands instead: capture a baseline such as `classified_at` at click
+  time, poll the query, and stop on a change or a timeout.
+  `client/src/lib/hooks/intent.ts:70` (`useIntentClassification`), `:86`
 
 - **2026-09-20** — The Agent editor's Skills tab (`SkillsTab.tsx`) rendered
   "0 of 0" with no way to attach a skill whenever an agent had zero links,
@@ -73,6 +65,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-09-24** — Every failed mutation, and every query failure with status 0
+  or 5xx, is already toasted globally, by `MutationCache.onError` and
+  `QueryCache.onError`. A component that toasts its own error shows the same
+  failure twice. Anything that polls a query through an outage raises one toast
+  per failed tick. Rely on the global toast and stop polling on the first
+  failure. `client/src/lib/providers.tsx:35-43`
+
 - **2026-09-24** — A finding's `start_line`/`end_line` are always **new-file
   (head)** line numbers. reviewer-core grounds them only against each hunk's
   `newLineNumbers`. So anchor a finding in the diff to `RIGHT:n`, trying each n
@@ -105,6 +104,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `nav.ts` edit is out of bounds.
 
 ## Tool & Library Notes
+
+- **2026-09-24** — TanStack Query v5 keeps a query in `status: "error"` after a
+  failed refetch (its data is kept) until a later fetch succeeds. `status ===
+  "error"` alone therefore can't tell "the fetch I just triggered failed" from
+  "this query failed at some point earlier". Compare
+  `getQueryState(key).errorUpdatedAt` with the time your operation started.
+  `client/src/lib/hooks/intent.ts:121`
 
 - **2026-09-20** — A `useMutation`'s `mutationFn` given a JS default parameter
   (e.g. `(mode: ConventionExtractionMode = "both") => …`) does NOT make the
