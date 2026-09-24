@@ -38,7 +38,8 @@ export function IntentCard({
     onStarted: () => notify.info(t("classifying.started")),
     onDone: () => notify.success(t("classifying.done")),
     onTimeout: () => notify.info(t("classifying.timeout")),
-    onError: (err) => notify.error(t("classifying.error", { message: err.message })),
+    // POST / refetch failures are already toasted by the global Query/Mutation
+    // cache handlers (lib/providers.tsx) — no second toast here.
   });
 
   if (!intent) {

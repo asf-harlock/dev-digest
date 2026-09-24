@@ -34,7 +34,6 @@
     "status": "Classifying intent… this usually takes a few seconds.",
     "started": "Intent classification started",
     "done": "Intent classified",
-    "timeout": "Classification is taking longer than expected — the result will appear here once it finishes.",
-    "error": "Couldn't start intent classification: {message}"
+    "timeout": "Classification is taking longer than expected — the result will appear here once it finishes."
   }
 }

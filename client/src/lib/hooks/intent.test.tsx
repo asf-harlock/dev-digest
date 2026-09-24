@@ -127,9 +127,11 @@ describe("useIntentClassification", () => {
     });
     expect(result.current.isClassifying).toBe(true);
 
+    // Over 10s the interval must fire ~5 times; useClassifyIntent's own one-off
+    // 4s follow-up refetch alone would add just 1, so this proves polling.
     const before = invalidateSpy.mock.calls.length;
-    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 2));
-    expect(invalidateSpy.mock.calls.length).toBeGreaterThan(before);
+    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 5));
+    expect(invalidateSpy.mock.calls.length - before).toBeGreaterThanOrEqual(5);
 
     await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_TIMEOUT_MS));
     expect(onTimeout).toHaveBeenCalledTimes(1);
@@ -152,5 +154,30 @@ describe("useIntentClassification", () => {
     });
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
     expect(result.current.isClassifying).toBe(false);
+  });
+
+  it("stops polling (once) when re-reading the PR fails, instead of retrying into an outage", async () => {
+    vi.useFakeTimers();
+    mockFetch();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onPollFailed = vi.fn();
+
+    const { result } = renderHook(() => useIntentClassification("pr1", null, { onPollFailed }), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.start();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.isClassifying).toBe(true);
+
+    // The pull query is now in an error state (e.g. the API went down).
+    vi.spyOn(qc, "getQueryState").mockReturnValue({ status: "error" } as ReturnType<QueryClient["getQueryState"]>);
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    await act(() => vi.advanceTimersByTimeAsync(CLASSIFY_POLL_MS * 5));
+
+    expect(onPollFailed).toHaveBeenCalledTimes(1);
+    expect(result.current.isClassifying).toBe(false);
+    expect(invalidateSpy.mock.calls.filter(([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: ["pull", "pr1"] })).length).toBeLessThanOrEqual(1);
   });
 });

@@ -48,8 +48,11 @@ export interface IntentClassificationCallbacks {
   onDone?: () => void;
   /** Nothing landed within CLASSIFY_TIMEOUT_MS. */
   onTimeout?: () => void;
-  /** The POST itself failed. */
+  /** The POST itself failed. (The global MutationCache already toasts it.) */
   onError?: (err: Error) => void;
+  /** Polling stopped because re-reading the PR failed. (The global
+   *  QueryCache already toasted that failure once.) */
+  onPollFailed?: () => void;
 }
 
 /**
@@ -70,22 +73,22 @@ export function useIntentClassification(
   callbacks: IntentClassificationCallbacks = {},
 ) {
   const qc = useQueryClient();
-  const classify = useClassifyIntent(prId);
+  const { mutate, isPending } = useClassifyIntent(prId);
   const [run, setRun] = React.useState<{ startedAt: number; baseline: string | null } | null>(null);
   const cb = React.useRef(callbacks);
   cb.current = callbacks;
 
   const start = React.useCallback(() => {
-    if (run || classify.isPending) return;
+    if (run || isPending) return;
     const baseline = classifiedAt ?? null;
-    classify.mutate(undefined, {
+    mutate(undefined, {
       onSuccess: () => {
         setRun({ startedAt: Date.now(), baseline });
         cb.current.onStarted?.();
       },
       onError: (err) => cb.current.onError?.(err as Error),
     });
-  }, [run, classify, classifiedAt]);
+  }, [run, isPending, mutate, classifiedAt]);
 
   // Done: the persisted classification changed since we started.
   React.useEffect(() => {
@@ -107,10 +110,18 @@ export function useIntentClassification(
         cb.current.onTimeout?.();
         return;
       }
+      // Stop instead of retrying into an outage: every failed refetch would
+      // raise another global error toast (~45 over the timeout window).
+      if (qc.getQueryState(["pull", prId])?.status === "error") {
+        clearInterval(id);
+        setRun(null);
+        cb.current.onPollFailed?.();
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["pull", prId] });
     }, CLASSIFY_POLL_MS);
     return () => clearInterval(id);
   }, [run, prId, qc]);
 
-  return { start, isClassifying: classify.isPending || run !== null };
+  return { start, isClassifying: isPending || run !== null };
 }
