@@ -57,6 +57,15 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-09-24** — A finding's `start_line`/`end_line` are always **new-file
+  (head)** line numbers. reviewer-core grounds them only against each hunk's
+  `newLineNumbers`. So anchor a finding in the diff to `RIGHT:n`, trying each n
+  in `[start_line, end_line]`, and never fall back to `LEFT:n`: after a hunk
+  shifts the numbering, a LEFT fallback pins the finding to an unrelated deleted
+  line. Anything that does not match goes to the file's "unanchored" block.
+  `client/src/components/diff-viewer/findings.ts` (`anchorFindings`),
+  `reviewer-core/src/grounding.ts` (`buildLineIndex`)
+
 - **2026-09-20** — This codebase's "run with a choice of modes" UI pattern is
   `Dropdown` (`vendor/ui/kit/Dropdown.tsx`) wrapping the ENTIRE trigger
   `Button` — clicking the button always opens the menu, there is no true

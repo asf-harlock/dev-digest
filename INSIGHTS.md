@@ -52,6 +52,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## What Doesn't Work
 
+- **2026-09-24** — A realistic-looking fake secret in a fixture breaks the push,
+  not the tests. `sk_live_51Hxxxx…` in a seed demo patch passed every gate and
+  `/pr-self-review`. Then GitHub push protection rejected `git push`, because it
+  scans **every pushed commit**, so a fix commit on top does not help. Rewriting
+  history (`git filter-branch`) is blocked by Claude Code auto mode ("Git
+  Destructive"), and a `!` run by the user silently did not apply. The way out
+  was a new branch from the base with the final tree as one squashed commit; the
+  old branch was renamed `backup/…`. Use the repo's short placeholders
+  (`sk_live_xxx`, `ghp_xxx`) in any fixture from the start, since only the
+  line's position matters. `server/src/db/seed.ts` (`src/config.ts` patch)
+
 ## Codebase Patterns
 
 - **2026-09-18** — All seven `<module>/docs/*.md` are deliberate 10-line stubs
@@ -141,6 +152,13 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   negation. `.gitignore:25-26`
 
 ## Session Notes
+
+- **2026-09-24** — Smart Diff (L03), built through the subagent pipeline:
+  researcher ×3 → planner → implementer ×2 in parallel → architecture-reviewer ∥
+  plan-verifier, then 4 `/pr-self-review` rounds down to 0 agent findings. The
+  L02 homework agent and skills were also seeded. Entries: What Doesn't Work
+  (fake secret vs push protection), `e2e/` Tool Notes (agent-browser), `client/`
+  Codebase Patterns (new-side finding anchoring). PR #10.
 
 - **2026-09-18** — `pr-self-review` skill: routes the open diff onto the repo's
   own skills, runs the matching gates, blocks `gh pr create` on any CRITICAL via
