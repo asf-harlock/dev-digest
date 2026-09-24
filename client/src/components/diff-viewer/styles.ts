@@ -19,15 +19,26 @@ export const s = {
     cursor: "pointer",
   } satisfies CSSProperties,
   fileIcon: { color: "var(--text-muted)" } satisfies CSSProperties,
+  /** Wraps the path text + the Smart Diff finding dot so the dot sits right
+   *  after the (possibly truncated) text, not at the far edge of the row. */
+  filePathWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  } satisfies CSSProperties,
   filePath: {
     fontSize: 13,
     fontWeight: 500,
-    flex: 1,
     minWidth: 0,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
+  /** The Smart Diff "has active findings" dot next to a file's path — a bare
+   *  dot (no pill background/padding), distinct from the GitHub comment count. */
+  findingDot: { padding: 0, background: "transparent", flexShrink: 0 } satisfies CSSProperties,
   fileStat: { fontSize: 12 } satisfies CSSProperties,
   addText: { color: "var(--code-add-text)" } satisfies CSSProperties,
   delText: { color: "var(--code-del-text)" } satisfies CSSProperties,
@@ -90,3 +101,47 @@ export function lineSignFor(kind: Line["kind"]): CSSProperties {
     flexShrink: 0,
   };
 }
+
+// ---- Smart Diff — injected findings (specs/lessons/L03) --------------------
+
+/** 3px left bar in the highest-severity colour, for a line carrying findings. */
+export function findingBarFor(color: string): CSSProperties {
+  return { boxShadow: `inset 3px 0 0 0 ${color}` };
+}
+
+export const findingS = {
+  /** Right-aligned severity label next to the line text (blocker/warning/suggestion),
+   *  icon before the text, per WCAG AA — never colour alone. */
+  lineLabel: (color: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: "auto",
+    paddingRight: 12,
+    fontSize: 11,
+    fontWeight: 600,
+    color,
+    flexShrink: 0,
+  }),
+  /** Card list for findings rendered under a code row, or in the unanchored block. */
+  findingsWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    margin: "4px 14px 8px 58px",
+  } satisfies CSSProperties,
+  unanchoredWrap: {
+    borderBottom: "1px solid var(--border)",
+    padding: "8px 14px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  } satisfies CSSProperties,
+  unanchoredTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+} as const;

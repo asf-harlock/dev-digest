@@ -7,9 +7,11 @@ Adapters (LLM, GitHub, git, ast-grep, …) sit behind a DI container so they can
 swapped for mocks in tests.
 
 > This is the **starter** module set. Later course lessons add their own modules
-> (skills, intent/smart-diff, blast, brief/context/onboarding, eval/ci/hooks,
-> memory, plugins, …) — each is a self-contained `modules/<name>/` plugin plus,
-> usually, a slot it starts feeding the reviewer prompt. The DB schema already
+> (skills, blast, brief/context/onboarding, eval/ci/hooks, memory, plugins, …) —
+> each is a self-contained `modules/<name>/` plugin plus, usually, a slot it
+> starts feeding the reviewer prompt. Intent and Smart Diff (L03) are the
+> exception: they live inside `reviews` (`POST /pulls/:id/intent`,
+> `GET /pulls/:id/smart-diff`, `modules/reviews/smart-diff/`). The DB schema already
 > contains **every** table; the unused ones simply sit empty until a lesson fills
 > them.
 
@@ -69,7 +71,7 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
-    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
+    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace) · /pulls/:id/smart-diff"]
   end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]

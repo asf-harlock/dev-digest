@@ -13,10 +13,8 @@ import type { Finding, FeatureModelChoice, FeatureModelId, Intent, RunSummary, R
  * composes them so its public API stays identical.
  */
 
-import type { FindingRow, PullRow } from '../../db/rows.js';
-export type { FindingRow, PullRow };
-
-export type ReviewRow = typeof t.reviews.$inferSelect;
+import type { FindingRow, PullRow, ReviewRow } from '../../db/rows.js';
+export type { FindingRow, PullRow, ReviewRow };
 
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';

@@ -7,7 +7,10 @@ import {
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
   TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { HOMEWORK_SKILLS, API_CONTRACT_REVIEWER_LINKS } from './seed-skills.js';
+import type { SkillRow } from './rows.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -24,6 +27,10 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * four built-in skills (test-coverage-nudge, corner-case-checklist,
  * mocking-smells, flake-signals), and a fourth agent — Test Quality Reviewer —
  * seeded DISABLED with all four skills linked in order (specs/02-skills.md §9).
+ * Plus the L02 homework: API Contract Reviewer (also seeded DISABLED, same
+ * reasoning as Test Quality Reviewer), its API-contract skills, the
+ * extracted `convention-*` skills and a disabled prompt-injection fixture skill
+ * (./seed-skills.ts).
  *
  * Course lessons populate the other tables (conventions, memory, eval, …) once
  * their features are built — they start empty here.
@@ -31,6 +38,53 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
 export const SYSTEM_USER_EMAIL = 'you@local';
+
+/**
+ * Insert a skill + its v1 `skill_versions` snapshot idempotently. Shared by
+ * the built-in (`seedSkills`) and homework (`HOMEWORK_SKILLS`) skill loops,
+ * which previously duplicated this two-statement insert.
+ *
+ * - **Atomic:** the skill row and its v1 snapshot are inserted together
+ *   inside one `db.transaction`, so a crash between the two statements can
+ *   never leave a skill with zero versions.
+ * - **Self-healing:** if the skill already exists (matched by name) but a
+ *   PRIOR half-seeded run left it with no `skill_versions` row at all, this
+ *   backfills v1 for it instead of silently skipping — re-running `pnpm
+ *   db:seed` repairs a half-seeded DB rather than leaving it broken forever.
+ * - **Idempotent:** a fully-seeded skill (row + v1 already present) is
+ *   returned as-is, with no writes.
+ *
+ * Mirrors `SkillsRepository.insert()`'s v1 snapshot, so Versions is never
+ * empty for a skill that has never been edited.
+ */
+async function seedSkillIfMissing(
+  db: Db,
+  workspaceId: string,
+  s: Omit<typeof t.skills.$inferInsert, 'workspaceId'>,
+): Promise<SkillRow> {
+  const [existing] = await db
+    .select()
+    .from(t.skills)
+    .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.name)));
+
+  if (!existing) {
+    return db.transaction(async (tx) => {
+      const [created] = await tx.insert(t.skills).values({ ...s, workspaceId }).returning();
+      await tx.insert(t.skillVersions).values({ skillId: created!.id, version: 1, body: created!.body });
+      return created!;
+    });
+  }
+
+  const [existingVersion] = await db
+    .select({ skillId: t.skillVersions.skillId })
+    .from(t.skillVersions)
+    .where(eq(t.skillVersions.skillId, existing.id))
+    .limit(1);
+  if (!existingVersion) {
+    await db.insert(t.skillVersions).values({ skillId: existing.id, version: 1, body: existing.body });
+  }
+  return existing;
+}
 
 export async function seed(db: Db): Promise<{ workspaceId: string; userId: string }> {
   // ---- workspace + user (no-auth defaults) ----
@@ -100,6 +154,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     .select()
     .from(t.pullRequests)
     .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 482)));
+  const prIsNew = !pr;
   if (!pr) {
     [pr] = await db
       .insert(t.pullRequests)
@@ -119,15 +174,143 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         body: 'Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.',
       })
       .returning();
+  }
 
-    // pr_files (subset)
-    await db.insert(t.prFiles).values([
+  // pr_files (subset). Roles below are per `smart-diff/classify-file.ts`:
+  // ratelimit.ts/webhooks.ts/users.ts → core, config.ts → wiring (it matches
+  // the `config.ts` wiring pattern), the four rows added for Smart Diff
+  // cover tests/docs/boilerplate so all five groups have at least one file.
+  // Upserted by path OUTSIDE the `prIsNew` guard, so a DB seeded before these
+  // rows existed picks them up on a plain `pnpm db:seed` — no volume wipe.
+  {
+    const prFileRows: Array<typeof t.prFiles.$inferInsert> = [
       { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
       { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
+      {
+        prId: pr!.id,
+        path: 'src/config.ts',
+        additions: 4,
+        deletions: 0,
+        // A real patch (unlike the other starter rows) so the seeded CRITICAL
+        // finding at line 12 (below) anchors to a rendered line in the Smart
+        // Diff / Files-changed view instead of falling into the "unanchored"
+        // block — this is the fixture the L03 Smart Diff e2e flow verifies.
+        patch:
+          '@@ -8,4 +8,8 @@\n' +
+          ' export const config = {\n' +
+          '   port: process.env.PORT || 3001,\n' +
+          '   env: process.env.NODE_ENV,\n' +
+          '+  rateLimitWindowMs: 60_000,\n' +
+          "+  stripeSecretKey: 'sk_live_xxx',\n" +
+          '+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,\n' +
+          '+  rateLimitMax: 100,\n' +
+          ' };',
+      },
       { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
-    ]);
+      // ---- Smart Diff fixtures (specs/lessons/L03) — one file per non-core role ----
+      {
+        prId: pr!.id,
+        path: 'package.json',
+        additions: 2,
+        deletions: 0,
+        patch:
+          '@@ -10,5 +10,7 @@\n' +
+          '   "scripts": {\n' +
+          '     "build": "tsc",\n' +
+          '     "test": "vitest run",\n' +
+          '+    "lint": "eslint .",\n' +
+          '+    "typecheck": "tsc --noEmit"\n' +
+          '   },\n' +
+          '   "dependencies": {',
+      },
+      {
+        prId: pr!.id,
+        path: 'package-lock.json',
+        additions: 1,
+        deletions: 1,
+        patch:
+          '@@ -1,6 +1,6 @@\n' +
+          ' {\n' +
+          '   "name": "payments-api",\n' +
+          '-  "version": "1.4.2",\n' +
+          '+  "version": "1.4.3",\n' +
+          '   "lockfileVersion": 3,\n' +
+          '   "requires": true,\n' +
+          '   "packages": {',
+      },
+      {
+        prId: pr!.id,
+        path: 'src/middleware/ratelimit.test.ts',
+        additions: 15,
+        deletions: 0,
+        patch:
+          '@@ -0,0 +1,15 @@\n' +
+          "+import { describe, it, expect } from 'vitest';\n" +
+          "+import { tokenBucket } from './ratelimit';\n" +
+          '+\n' +
+          "+describe('tokenBucket', () => {\n" +
+          "+  it('allows requests under the limit', () => {\n" +
+          '+    const bucket = tokenBucket({ capacity: 5, refillPerSec: 1 });\n' +
+          '+    expect(bucket.take()).toBe(true);\n' +
+          '+  });\n' +
+          '+\n' +
+          "+  it('rejects requests once the bucket is empty', () => {\n" +
+          '+    const bucket = tokenBucket({ capacity: 1, refillPerSec: 0 });\n' +
+          '+    bucket.take();\n' +
+          '+    expect(bucket.take()).toBe(false);\n' +
+          '+  });\n' +
+          '+});',
+      },
+      {
+        prId: pr!.id,
+        path: 'docs/rate-limiting.md',
+        additions: 9,
+        deletions: 0,
+        patch:
+          '@@ -0,0 +1,9 @@\n' +
+          '+# Rate limiting\n' +
+          '+\n' +
+          '+Public API endpoints are protected by a token-bucket limiter\n' +
+          '+(`src/middleware/ratelimit.ts`).\n' +
+          '+\n' +
+          '+- Window: 60s\n' +
+          '+- Max requests: 100 per IP\n' +
+          '+\n' +
+          '+Exceeding the limit returns `429 Too Many Requests`.',
+      },
+      {
+        prId: pr!.id,
+        path: 'src/api/public/index.ts',
+        additions: 2,
+        deletions: 0,
+        patch:
+          '@@ -1,4 +1,6 @@\n' +
+          "+import { rateLimitMiddleware } from '../../middleware/ratelimit';\n" +
+          " import { usersRouter } from '../users';\n" +
+          " import { webhooksRouter } from './webhooks';\n" +
+          ' \n' +
+          '+publicRouter.use(rateLimitMiddleware);\n' +
+          " publicRouter.use('/users', usersRouter);",
+      },
+    ];
+    const existingFiles = await db
+      .select({ id: t.prFiles.id, path: t.prFiles.path, patch: t.prFiles.patch })
+      .from(t.prFiles)
+      .where(eq(t.prFiles.prId, pr!.id));
+    const byPath = new Map(existingFiles.map((f) => [f.path, f]));
+    const missing = prFileRows.filter((r) => !byPath.has(r.path));
+    if (missing.length > 0) await db.insert(t.prFiles).values(missing);
+    // Backfill a patch onto a row seeded before it had one (src/config.ts),
+    // without overwriting a patch that is already there.
+    for (const r of prFileRows) {
+      const row = byPath.get(r.path);
+      if (row && !row.patch && r.patch) {
+        await db.update(t.prFiles).set({ patch: r.patch }).where(eq(t.prFiles.id, row.id));
+      }
+    }
+  }
 
+  if (prIsNew) {
     // pr_commits
     await db.insert(t.prCommits).values({
       prId: pr!.id,
@@ -375,18 +558,8 @@ treat it as CRITICAL.`,
 
   const seededSkillIds: string[] = [];
   for (const s of seedSkills) {
-    let [existing] = await db
-      .select()
-      .from(t.skills)
-      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.name)));
-    if (!existing) {
-      [existing] = await db.insert(t.skills).values(s).returning();
-      // Mirror SkillsRepository.insert()'s v1 snapshot: a skill created any
-      // other way (the API) always gets one, so Versions is never empty for
-      // a skill that has never been edited.
-      await db.insert(t.skillVersions).values({ skillId: existing!.id, version: 1, body: existing!.body });
-    }
-    seededSkillIds.push(existing!.id);
+    const skill = await seedSkillIfMissing(db, workspaceId, s);
+    seededSkillIds.push(skill.id);
   }
 
   // ---- built-in agent #4: Test Quality Reviewer (D7) — seeds DISABLED, and is
@@ -419,6 +592,53 @@ treat it as CRITICAL.`,
     await db
       .insert(t.agentSkills)
       .values({ agentId: testQualityAgent!.id, skillId, order, enabled: true })
+      .onConflictDoNothing();
+  }
+
+  // ---- L02 homework: API Contract Reviewer + its skills + extracted convention
+  // skills. Exported from the live DB (see ./seed-skills.ts); idempotent by name.
+  for (const s of HOMEWORK_SKILLS) {
+    await seedSkillIfMissing(db, workspaceId, s);
+  }
+
+  // Seeds DISABLED, same rationale as Test Quality Reviewer above: a fresh
+  // clone's "run all" reviews stay unchanged. The homework reviewer turns it
+  // on once ready.
+  let [apiContractAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'API Contract Reviewer')));
+  if (!apiContractAgent) {
+    [apiContractAgent] = await db
+      .insert(t.agents)
+      .values({
+        workspaceId,
+        name: 'API Contract Reviewer',
+        description: 'Finds API issues in PR',
+        provider: DEFAULT_PROVIDER,
+        model: DEFAULT_MODEL,
+        systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+        enabled: false,
+        version: 1,
+        createdBy: userId,
+      })
+      .returning();
+  }
+
+  // Links reference both the homework skills and the four Test Quality skills
+  // seeded above, so resolve names against every skill in the workspace.
+  const allSkills = await db
+    .select({ id: t.skills.id, name: t.skills.name })
+    .from(t.skills)
+    .where(eq(t.skills.workspaceId, workspaceId));
+  const skillIdByName = new Map<string, string>();
+  for (const s of allSkills) skillIdByName.set(s.name, s.id);
+  for (const link of API_CONTRACT_REVIEWER_LINKS) {
+    const skillId = skillIdByName.get(link.skill);
+    if (!skillId) continue;
+    await db
+      .insert(t.agentSkills)
+      .values({ agentId: apiContractAgent!.id, skillId, order: link.order, enabled: link.enabled })
       .onConflictDoNothing();
   }
 
