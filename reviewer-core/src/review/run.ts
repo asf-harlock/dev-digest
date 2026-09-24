@@ -72,6 +72,13 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /**
+   * Declared intent & scope (Intent Layer), when the PR has a persisted one.
+   * Untrusted; rendered near `## PR description`. Empty/undefined → section
+   * omitted (no behavior change) — a PR with no classified intent produces a
+   * byte-identical prompt to before this field existed.
+   */
+  intent?: { summary: string; inScope: string[]; outOfScope: string[] };
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -136,6 +143,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 

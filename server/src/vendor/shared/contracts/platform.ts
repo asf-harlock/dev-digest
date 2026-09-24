@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Provider } from './knowledge.js';
+import { PrIntentRecord } from './review-api.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -52,8 +53,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: 'review_intent',
     label: 'PR Review · Intent',
     description: 'Derives a PR’s intent and scope before review.',
-    defaultProvider: 'openai',
-    defaultModel: 'gpt-4.1',
+    // Cheap-by-default (D2, specs/03-intent-layer.md): the feature's whole
+    // premise is a SEPARATE, cheap model call — mirrors `onboarding`'s default.
+    defaultProvider: 'openrouter',
+    defaultModel: 'deepseek/deepseek-v4-flash',
   },
   {
     id: 'risk_brief',
@@ -234,6 +237,10 @@ export const PrDetail = PrMeta.extend({
   files: z.array(PrFile),
   commits: z.array(PrCommit),
   linked_issue: IssueMeta.nullish(),
+  /** The PR's classified Intent, when one has been run (POST /pulls/:id/intent).
+   *  Folded into PR detail rather than a separate GET so the Intent card renders
+   *  on initial page load with no extra round trip. Null until classified. */
+  intent: PrIntentRecord.nullish(),
 });
 export type PrDetail = z.infer<typeof PrDetail>;
 

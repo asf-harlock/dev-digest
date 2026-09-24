@@ -2,6 +2,8 @@
   "finding": {
     "accepted": "accepted",
     "dismissed": "dismissed",
+    "outOfScope": "Outside PR scope",
+    "outOfScopeHint": "This finding falls outside the PR's declared scope but was kept because of its severity.",
     "suggestedFix": "Suggested fix",
     "accept": "Accept",
     "dismiss": "Dismiss",

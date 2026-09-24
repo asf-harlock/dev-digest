@@ -6,10 +6,24 @@ import { z } from 'zod';
  */
 
 // ---- Intent ----
+/** One input the intent classifier drew on (or tried to). */
+export const IntentSource = z.object({
+  kind: z.enum(['title', 'description', 'linked_issue', 'spec', 'hunk_headers']),
+  status: z.enum(['used', 'missing', 'unreachable']),
+  note: z.string().nullish(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
 export const Intent = z.object({
   intent: z.string(),
   in_scope: z.array(z.string()),
   out_of_scope: z.array(z.string()),
+  /** How confident the classification is — low when key sources were missing
+   *  or unreachable (e.g. an empty description). Defaults 'high' for callers
+   *  (older persisted rows / other producers) that don't set it explicitly. */
+  confidence: z.enum(['high', 'medium', 'low']).default('high'),
+  /** Which sources were used/missing/unreachable — never silently fabricated. */
+  sources: z.array(IntentSource).default([]),
 });
 export type Intent = z.infer<typeof Intent>;
 

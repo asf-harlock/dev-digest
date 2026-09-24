@@ -230,6 +230,29 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       .where(eq(t.repos.id, pr.repoId));
     if (!repo) throw new NotFoundError('Repo not found');
 
+    // Intent Layer (specs/03-intent-layer.md §7.2): folded into PR detail
+    // rather than a separate GET so the Intent card renders on initial page
+    // load with no extra round trip. `reviewRepo` is the sanctioned
+    // cross-module access point (container.reviewRepo, per
+    // `no-cross-module-import`'s shared-entity exception) — `pulls` has no
+    // repository.ts of its own (known ORM debt, server/INSIGHTS.md).
+    const intentRow = await container.reviewRepo.getIntent(pr.id);
+    const intent = intentRow
+      ? {
+          pr_id: pr.id,
+          intent: intentRow.intent,
+          in_scope: intentRow.in_scope,
+          out_of_scope: intentRow.out_of_scope,
+          confidence: intentRow.confidence,
+          sources: intentRow.sources,
+          // Exposed for client-side staleness detection against the PR's
+          // current head_sha (specs/03-intent-layer.md §9) — already computed
+          // by `getIntent`, just not previously surfaced on this DTO.
+          classified_at: intentRow.classifiedAt?.toISOString() ?? null,
+          classified_for_sha: intentRow.classifiedForSha ?? null,
+        }
+      : null;
+
     // Local-first: refresh detail from GitHub when a token is configured;
     // otherwise serve the persisted files/commits/body (seeded or previously
     // imported) so PR detail works offline.
@@ -273,7 +296,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         })
         .where(eq(t.pullRequests.id, pr.id));
 
-      return { ...detail, id: pr.id };
+      return { ...detail, id: pr.id, intent };
     } catch (err) {
       app.log.warn({ err }, 'GitHub PR detail refresh skipped (no token / offline); serving persisted detail');
       const files = await container.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr.id));
@@ -305,6 +328,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           author: c.author,
           committed_at: c.committedAt?.toISOString() ?? null,
         })),
+        intent,
       };
     }
   });

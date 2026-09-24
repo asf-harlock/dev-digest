@@ -46,6 +46,17 @@ needed none of those and cannot drift.
 
 ## What Doesn't Work
 
+- **2026-09-23** — `GET /repos/:id/context` ("Project Context" specs) has a
+  CLIENT hook calling it (`client/src/lib/hooks/core.ts:126`,
+  `queryFn: () => api.get<SpecFile[]>(...)`) but **no server-side
+  implementation at all** — no `modules/context/`, no route registered in
+  `modules/index.ts`, nothing. `repo-intel` indexes code symbols, not markdown/
+  specs, so it isn't a hidden implementation either. Found while scoping Intent
+  Layer's "plan/spec" data source (`specs/03-intent-layer.md`), which had to
+  drop that source to "not yet available" rather than build against a route
+  that doesn't exist. Confirm with `grep -rn "SpecFile" server/src client/src`
+  before assuming this feature is live in a future session.
+
 ## Codebase Patterns
 
 - **2026-09-20** — `container.buildLlm`'s "throw `ConfigError` if the secret key
@@ -93,6 +104,20 @@ needed none of those and cannot drift.
   `ConventionsRepository` does the same for `settings` — it re-reads
   `feature_models` + `FeatureModelChoice.safeParse` itself rather than
   importing the helper. `server/src/modules/conventions/repository.ts`
+  **2026-09-23** — now a THIRD copy: `reviews/repository/pull.repo.ts`'s
+  `getFeatureModelOverride` (added for Intent Layer, `specs/03-intent-layer.md`)
+  is the same re-query shape again, plus a fourth wrinkle —
+  `reviews/constants.ts`'s `INTENT_FALLBACK_PROVIDER`/`INTENT_FALLBACK_MODEL`
+  hand-mirror `FEATURE_MODELS`'s `review_intent` registry entry
+  (`contracts/platform.ts`) by convention only, not by the type system. `pnpm
+  arch` cannot see this drift risk — dependency-cruiser checks import edges,
+  not logic duplication. Before adding a fourth "read `feature_models[id]`"
+  copy, check whether a shared helper in `modules/_shared/` (the pure-function
+  escape hatch two entries below) is now worth it instead of a fifth copy. A
+  guard test now pins the review_intent case:
+  `server/test/reviews-helpers.test.ts` (`INTENT_FALLBACK_PROVIDER/MODEL
+  mirrors FEATURE_MODELS`) — copy that pattern for any other feature-model
+  fallback constant.
 
 - **2026-09-20** — Same `no-cross-module-import` rule, other escape hatch: when
   the thing two modules need is a PURE FUNCTION over data both already hold
@@ -203,6 +228,14 @@ needed none of those and cannot drift.
   Expect the same shape for other repository methods re-exported through that
   facade.
 
+  **2026-09-23** — the facade's `upsertIntent`/`getIntent` (extended for
+  Intent Layer) sidestepped this by using direct pass-through delegation
+  (`return pullRepo.upsertIntent(this.db, prId, intent, meta)`) instead of
+  re-typing the object literal — adding a field to `pull.repo.ts`'s signature
+  needed no matching facade edit. Prefer pass-through delegation over re-typing
+  for any NEW facade method; the re-typing shape above is legacy, not the
+  pattern to copy.
+
 ## Tool & Library Notes
 
 - **2026-09-18** — Two dependency-cruiser settings decide whether `pnpm arch`
@@ -235,6 +268,18 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-09-23** — Built the full Intent Layer feature (`specs/03-intent-layer.md`):
+  `pr_intent`/`findings` schema extension (migration `0015`), the
+  `intent-classifier.ts` module (cheap-model `completeStructured` call,
+  hunk-header-only diff digest, linked-issue resolution, never-fabricate
+  fallback sourcing), `POST /pulls/:id/intent`, a new `reviewer-core`
+  `PromptParts.intent` slot, a deterministic scope filter over findings
+  (`applyScopeFilter`/`findingMatchesOutOfScope`, gated by the agent's own
+  `ciFailOn` threshold), and the client `IntentCard` on the PR Overview tab.
+  `review_intent`'s `FEATURE_MODELS` default changed to a cheap OpenRouter
+  flash model. See Codebase Patterns / What Doesn't Work above for the two
+  non-obvious findings from this session.
 
 - **2026-09-20** — Added local LLM provider support (Ollama + LM Studio):
   new `LocalOpenAICompatibleProvider` adapter, `container.buildLlm` branch,

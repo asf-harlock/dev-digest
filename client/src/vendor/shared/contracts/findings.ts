@@ -59,6 +59,11 @@ export const Finding = z.object({
   // Lethal-trifecta variant fields (present only when kind === 'lethal_trifecta')
   trifecta_components: z.array(TrifectaComponent).nullish(),
   evidence: z.array(TrifectaEvidence).nullish(),
+  /** Set by the deterministic out-of-scope filter (run-executor.ts) when a
+   *  finding matches the PR's declared out-of-scope but was kept anyway
+   *  because it met the agent's ciFailOn gate. Absent/null means "in scope /
+   *  not evaluated" — never a lie about scope, just no verdict either way. */
+  scope: z.enum(['out_of_scope']).nullish(),
 });
 export type Finding = z.infer<typeof Finding>;
 

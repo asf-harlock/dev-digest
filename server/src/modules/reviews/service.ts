@@ -7,6 +7,8 @@ import { type ReviewDto, type ReviewDtoFinding } from './helpers.js';
 import { ReviewRunExecutor, type Logger } from './run-executor.js';
 import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
+import { loadDiff } from './diff-loader.js';
+import { classifyIntent } from './intent-classifier.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
@@ -139,6 +141,51 @@ export class ReviewService {
 
   private publish(runId: string, kind: RunEventKind, msg: string, data?: unknown) {
     return this.container.runBus.publish(runId, kind, msg, data);
+  }
+
+  // ===========================================================================
+  // Intent classification (specs/03-intent-layer.md, D5/D6)
+  // ===========================================================================
+
+  /**
+   * Kick off intent classification for a PR — fire-and-forget (D6), same
+   * shape as `runReview`: validate the PR exists synchronously (so a bad id
+   * 404s immediately), then run the diff load + classifier call + persistence
+   * in the background. On completion, persists via `upsertIntent` with
+   * `classifiedAt: new Date()` and `classifiedForSha: pull.headSha`.
+   */
+  async runIntentClassification(
+    workspaceId: string,
+    prId: string,
+    logger?: Logger,
+  ): Promise<{ status: 'running' }> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const repo = await this.repo.getRepo(pull.repoId);
+    if (!repo) throw new NotFoundError('Repo not found');
+
+    void (async () => {
+      try {
+        const diff = await loadDiff(this.container, this.repo, workspaceId, pull, repo);
+        const { intent } = await classifyIntent(
+          this.container,
+          this.repo,
+          { workspaceId, pull, repoRef: { owner: repo.owner, name: repo.name }, diff },
+          logger,
+        );
+        await this.repo.upsertIntent(pull.id, intent, {
+          classifiedAt: new Date(),
+          classifiedForSha: pull.headSha,
+        });
+      } catch (err) {
+        logger?.error(
+          { prId, err: (err as Error).message },
+          'intent: background classification crashed',
+        );
+      }
+    })();
+
+    return { status: 'running' };
   }
 
   // ===========================================================================
