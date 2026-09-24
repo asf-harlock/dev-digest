@@ -28,5 +28,6 @@
     "cta": "Classify intent"
   },
   "riskAreas": "Risk areas",
-  "scopeEmpty": "None declared"
+  "scopeEmpty": "None declared",
+  "quote": "“{intent}”"
 }

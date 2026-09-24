@@ -80,7 +80,7 @@ export function IntentCard({
           </div>
         </div>
 
-        <p style={s.quote}>“{intent.intent}”</p>
+        <p style={s.quote}>{t("quote", { intent: intent.intent })}</p>
 
         <div style={s.lists}>
           <ScopeColumn kind="in" label={t("inScope")} items={intent.in_scope} empty={t("scopeEmpty")} />
@@ -99,7 +99,7 @@ export function IntentCard({
                 const RiskIcon = Icon[rm.icon];
                 return (
                   <span key={i} style={s.chip} title={risk.explanation}>
-                    <RiskIcon size={14} style={{ color: rm.c }} />
+                    <RiskIcon size={14} style={s.riskIcon(rm.c)} />
                     {risk.title}
                   </span>
                 );
@@ -109,7 +109,7 @@ export function IntentCard({
         )}
 
         {notes.length > 0 && (
-          <div style={{ ...s.divider, ...s.notes }}>
+          <div style={s.notesBlock}>
             {notes.map((source, i) => (
               <div key={i} style={s.noteRow}>
                 <Icon.AlertTriangle size={13} style={s.noteIcon} />
@@ -147,15 +147,18 @@ function ScopeColumn({
         <HeaderIcon size={13} />
         {label}
       </div>
-      {items.length === 0 && <div style={s.listItem("var(--text-muted)")}>{empty}</div>}
-      <ul style={s.list}>
-        {items.map((item, i) => (
-          <li key={i} style={s.listItem(m.item)}>
-            <span style={s.bullet(m.bullet)} aria-hidden />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
+      {items.length === 0 ? (
+        <div style={s.listItem("var(--text-muted)")}>{empty}</div>
+      ) : (
+        <ul style={s.list}>
+          {items.map((item, i) => (
+            <li key={i} style={s.listItem(m.item)}>
+              <span style={s.bullet(m.bullet)} aria-hidden />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

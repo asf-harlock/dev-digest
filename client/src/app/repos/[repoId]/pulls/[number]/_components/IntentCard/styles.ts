@@ -14,6 +14,7 @@ export const s = {
   header: {
     display: "flex",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 16,
   } satisfies CSSProperties,
@@ -28,6 +29,7 @@ export const s = {
   headerActions: {
     marginLeft: "auto",
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   } satisfies CSSProperties,
@@ -96,7 +98,15 @@ export const s = {
     fontSize: 13.5,
     color: "var(--text-primary)",
   } satisfies CSSProperties,
-  notes: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
+  notesBlock: {
+    marginTop: 20,
+    paddingTop: 18,
+    borderTop: "1px solid var(--border)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  } satisfies CSSProperties,
+  riskIcon: (color: string): CSSProperties => ({ color, flexShrink: 0 }),
   noteRow: {
     display: "flex",
     alignItems: "flex-start",
