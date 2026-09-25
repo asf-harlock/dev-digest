@@ -19,8 +19,10 @@
     { "cmd": ["wait", "--text", "src/config.ts"], "label": "Wiring starts open, so its seeded file renders without a click" },
     { "cmd": ["wait", "--text", "blocker"], "label": "the seeded CRITICAL finding on src/config.ts:12 anchors to its line and shows the blocker label" },
     { "cmd": ["wait", "--text", "Hardcoded Stripe secret key in commit"], "label": "the FindingCard for that finding renders inline under the line" },
+    { "cmd": ["scroll", "down", "5000", "--selector", "main"], "label": "scroll <main> (the page's scroll container) to the bottom so the last group, Boilerplate, is on-screen — `find … click` does not scroll a nested scroller in CI and an off-screen click silently misses" },
     { "cmd": ["find", "text", "Boilerplate", "click"], "label": "expand the Boilerplate group" },
     { "cmd": ["wait", "--text", "package-lock.json"], "label": "package-lock.json renders after Boilerplate is expanded" },
+    { "cmd": ["scroll", "up", "5000", "--selector", "main"], "label": "scroll <main> back to the top so the order toggle is on-screen" },
     { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch to Original order" },
     { "cmd": ["wait", "--text", "docs/rate-limiting.md"], "label": "Original order renders the flat file list, including docs/rate-limiting.md" }
   ]
