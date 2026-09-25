@@ -81,6 +81,19 @@ export class ReviewRepository {
     return runRepo.listRunsForPull(this.db, workspaceId, prId);
   }
 
+  /** One run by id, workspace-scoped. */
+  getRunSummary(workspaceId: string, runId: string): Promise<RunSummary | undefined> {
+    return runRepo.getRunSummary(this.db, workspaceId, runId);
+  }
+
+  /** The review (+ findings) a run produced, workspace-scoped via `reviews`. */
+  getReviewByRunId(
+    workspaceId: string,
+    runId: string,
+  ): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+    return runRepo.getReviewByRunId(this.db, workspaceId, runId);
+  }
+
   /** Delete one agent run (+ its trace via FK cascade). Workspace-scoped. */
   deleteAgentRun(workspaceId: string, runId: string): Promise<boolean> {
     return runRepo.deleteAgentRun(this.db, workspaceId, runId);

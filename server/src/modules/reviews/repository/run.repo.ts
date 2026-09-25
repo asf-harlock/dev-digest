@@ -2,8 +2,33 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
+import type { AgentRunRow, FindingRow, ReviewRow } from '../../../db/rows.js';
 
 // ---- in-flight / history --------------------------------------------------
+
+/** Map one `agent_runs` row (+ its joined agent name) onto the `RunSummary`
+ *  contract. Shared by `listRunsForPull` (many rows) and `getRunSummary` (one
+ *  row) so the two never drift. Exported for the colocated unit test. */
+export function toRunSummary(run: AgentRunRow, agentName: string | null): RunSummary {
+  return {
+    run_id: run.id,
+    agent_id: run.agentId,
+    agent_name: agentName ?? null,
+    provider: run.provider,
+    model: run.model,
+    status: run.status,
+    error: run.error,
+    duration_ms: run.durationMs,
+    tokens_in: run.tokensIn,
+    tokens_out: run.tokensOut,
+    cost_usd: run.costUsd,
+    findings_count: run.findingsCount,
+    grounding: run.grounding,
+    ran_at: run.ranAt ? run.ranAt.toISOString() : null,
+    score: run.score,
+    blockers: run.blockers,
+  };
+}
 
 /** In-flight runs for a PR (status='running') — the server-side source of
  *  truth for "which agents are running now". Joined with the agent name. */
@@ -48,24 +73,47 @@ export async function listRunsForPull(
     .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
     .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
     .orderBy(desc(t.agentRuns.ranAt));
-  return rows.map(({ run, agentName }) => ({
-    run_id: run.id,
-    agent_id: run.agentId,
-    agent_name: agentName ?? null,
-    provider: run.provider,
-    model: run.model,
-    status: run.status,
-    error: run.error,
-    duration_ms: run.durationMs,
-    tokens_in: run.tokensIn,
-    tokens_out: run.tokensOut,
-    cost_usd: run.costUsd,
-    findings_count: run.findingsCount,
-    grounding: run.grounding,
-    ran_at: run.ranAt ? run.ranAt.toISOString() : null,
-    score: run.score,
-    blockers: run.blockers,
-  }));
+  return rows.map(({ run, agentName }) => toRunSummary(run, agentName));
+}
+
+/** One run by id, workspace-scoped — same `RunSummary` shape as
+ *  `listRunsForPull`, single row. Used by `GET /runs/:id` (specs/lessons/L04,
+ *  the MCP server's `run_agent_on_pr`/`get_findings` polling target). */
+export async function getRunSummary(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<RunSummary | undefined> {
+  const [row] = await db
+    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .from(t.agentRuns)
+    .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.id, runId)));
+  if (!row) return undefined;
+  return toRunSummary(row.run, row.agentName);
+}
+
+/**
+ * The review (+ findings) a run produced, workspace-scoped. `findings` has no
+ * `workspace_id` of its own (server/INSIGHTS.md, 2026-09-17), so scoping goes
+ * through `reviews.workspace_id` directly rather than joining `agent_runs` —
+ * `reviews.run_id` already links back to the run 1:1. Returns `undefined` both
+ * when the run doesn't exist in the workspace AND when it exists but hasn't
+ * produced a review yet (e.g. still running/failed) — the route can't and
+ * shouldn't distinguish the two (the MCP `get_findings` tool polls `GET /runs/:id` for status).
+ */
+export async function getReviewByRunId(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+  const [review] = await db
+    .select()
+    .from(t.reviews)
+    .where(and(eq(t.reviews.workspaceId, workspaceId), eq(t.reviews.runId, runId)));
+  if (!review) return undefined;
+  const findings = await db.select().from(t.findings).where(eq(t.findings.reviewId, review.id));
+  return { review, findings };
 }
 
 /**

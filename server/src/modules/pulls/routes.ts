@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
@@ -11,14 +12,33 @@ import { deriveReviewStatus, sumRunCosts, toFindingsCounts } from './status.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
- *   GET /repos/:id/pulls → list PRs for a repo (open + recently merged/closed,
- *                          synced from GitHub, persisted). `status` is GitHub's
- *                          merge state (open/merged/closed).
- *   GET /pulls/:id       → full PR detail (diff/files, commits, body, linked issue)
+ *   GET /repos/:id/pulls        → list PRs for a repo (open + recently
+ *                                 merged/closed, synced from GitHub, persisted).
+ *                                 `status` is GitHub's merge state
+ *                                 (open/merged/closed).
+ *   GET /repos/:id/pulls/lookup → resolve {id,repo_id,number,title} for a PR
+ *                                 by `?number=`. Local DB read ONLY — unlike
+ *                                 the route above, it never syncs from GitHub
+ *                                 (the MCP server's `pr` argument → PR id
+ *                                 lookup must not have that side effect).
+ *   GET /pulls/:id              → full PR detail (diff/files, commits, body,
+ *                                 linked issue)
  *
  * Import is idempotent (unique repo_id+number). Review trigger is MANUAL
  * and owned by A2 — this module only imports/reads.
+ *
+ * No service.ts/repository.ts here (server/INSIGHTS.md — known ORM debt,
+ * allowlisted in .dependency-cruiser.cjs): handlers query `container.db`
+ * directly, same as the rest of this module.
  */
+
+/**
+ * `number` is validated by the route schema — a missing or non-positive-int
+ * value fails Fastify's schema validation, which the app's error handler
+ * turns into a 422.
+ */
+const PullLookupQuery = z.object({ number: z.coerce.number().int().positive() });
+
 export default async function pullsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
@@ -214,6 +234,38 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       };
     });
   });
+
+  app.get(
+    '/repos/:id/pulls/lookup',
+    { schema: { params: IdParams, querystring: PullLookupQuery } },
+    async (req): Promise<{ id: string; repo_id: string; number: number; title: string }> => {
+      const { workspaceId } = await getContext(container, req);
+      const number = req.query.number;
+
+      // Workspace-scope the repo first so a cross-workspace id 404s before
+      // touching pull_requests, same as the list route above. Deliberately no
+      // `container.github()` call anywhere in this handler — a local DB read
+      // only, so it never triggers the GitHub sync `GET /repos/:id/pulls` does.
+      const [repo] = await container.db
+        .select({ id: t.repos.id })
+        .from(t.repos)
+        .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, req.params.id)));
+      if (!repo) throw new NotFoundError('Repo not found');
+
+      const [pr] = await container.db
+        .select({
+          id: t.pullRequests.id,
+          repoId: t.pullRequests.repoId,
+          number: t.pullRequests.number,
+          title: t.pullRequests.title,
+        })
+        .from(t.pullRequests)
+        .where(and(eq(t.pullRequests.repoId, repo.id), eq(t.pullRequests.number, number)));
+      if (!pr) throw new NotFoundError('Pull request not found');
+
+      return { id: pr.id, repo_id: pr.repoId, number: pr.number, title: pr.title };
+    },
+  );
 
   app.get('/pulls/:id', { schema: { params: IdParams } }, async (req): Promise<PrDetail> => {
     const { workspaceId } = await getContext(container, req);

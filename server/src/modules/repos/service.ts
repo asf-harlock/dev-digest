@@ -141,4 +141,18 @@ export class RepoService {
     const ok = await this.repo.remove(workspaceId, id);
     if (!ok) throw new NotFoundError('Repo not found');
   }
+
+  /**
+   * Resolve a repo by its `owner/name` full name within the workspace — the
+   * MCP server's `repo` argument → repo id lookup. Deliberately returns only
+   * the three fields the caller needs, not the full `Repo` DTO.
+   */
+  async lookupByFullName(
+    workspaceId: string,
+    fullName: string,
+  ): Promise<{ id: string; full_name: string; name: string }> {
+    const repo = await this.repo.findByFullName(workspaceId, fullName);
+    if (!repo) throw new NotFoundError('Repo not found');
+    return { id: repo.id, full_name: repo.fullName, name: repo.name };
+  }
 }
