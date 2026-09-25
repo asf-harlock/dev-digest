@@ -59,6 +59,15 @@ needed none of those and cannot drift.
 
 ## Codebase Patterns
 
+- **2026-09-25** — Bad input on any `schema.querystring`/`params`/`body` fails
+  with **422** and `error.code: "validation_error"`, never 400
+  (`server/src/app.ts:115-119`). If a route contract asks for 400, get it
+  changed to 422. The alternative is hand-validating in the handler and
+  throwing `AppError(…, 400)`, which was tried on the L04 lookup routes and
+  reverted, because no other route does that. A client of the API has to treat
+  400 and 422 alike (`mcp/src/api-client.ts`).
+  `server/src/modules/repos/routes.ts` (`RepoLookupQuery`)
+
 - **2026-09-20** — `container.buildLlm`'s "throw `ConfigError` if the secret key
   is missing" guard is a cloud-provider-only rule. For a keyless, local,
   OpenAI-compatible provider (added for Ollama/LM Studio), the right shape is:
@@ -337,3 +346,11 @@ needed none of those and cannot drift.
   threaded through the run executor, repository and the PR-list route.
 
 ## Open Questions
+
+- **2026-09-25** — On a clean `L04-lab` HEAD (`main` plus nothing), 5 cases in
+  `test/skills.it.test.ts` and `test/skills-stats.it.test.ts` fail: they get
+  422 from `GET /skills/:id/stats[?days=]` and `/skills/:id/stats/:version`
+  where they expect 200/404. This was reproduced with every L04 change stashed,
+  so it predates L04. The cause has not been investigated yet. The likely
+  suspect is the `StatsQuery`/params schema in `skills/routes.ts` rejecting
+  those requests.
