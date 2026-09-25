@@ -143,7 +143,7 @@ path filter — full strategy in **[`TESTING.md`](TESTING.md)**.
 | server unit (hermetic) | `server-unit.yml` | no |
 | server integration (real Postgres) | `server-integration.yml` | yes |
 | reviewer-core (engine) | `reviewer-core.yml` | no |
-| web e2e (agent-browser, real stack) | `e2e-web.yml` | yes |
+| web e2e (agent-browser, real stack) | `e2e-web.yml` (manual dispatch only) | yes |
 
 Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
 Postgres); everything else is hermetic. The browser e2e flows live in

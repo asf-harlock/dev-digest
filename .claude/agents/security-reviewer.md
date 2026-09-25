@@ -83,11 +83,14 @@ Reuse this repo's rubric, `.claude/skills/pr-self-review/reference/severity-rubr
   tenancy**, or an **exploitable injection, SSRF or XSS** on a changed line
   where you can name the input and the sink. Everything else is at most a
   WARNING.
-- A secret literal or a `process.env` secret read is already CRITICAL via
-  `hard-rules.sh` (`secret-literal`, `process-env-read`) — do not put it in
-  Findings; list it under "Already enforced by hard-rules.sh" with its rule
-  id. A secret leaking into logs, an API response or the DB (which the
-  script cannot see) is a WARNING finding.
+- `hard-rules.sh` already flags `secret-literal` (only `sk-…`, `ghp_…`,
+  `github_pat_…`, `AKIA…`, PEM keys; skips tests/mocks/seed) and
+  `process-env-read` (only `server/src/`, minus its allowlist). Leave out of
+  Findings only a hit that script actually emits — list it under "Already
+  enforced by hard-rules.sh". Any other hardcoded secret, a `process.env`
+  secret read in `client/` (e.g. a `NEXT_PUBLIC_*` key shipped in the
+  bundle), or a secret leaking into logs, a response or the DB is a normal
+  finding (WARNING).
 - Under 0.85 confidence → at most WARNING. Below 0.6 → do not report.
 - Do not report: test files, dead code, server-controlled values (config,
   constants), framework-mitigated patterns (JSX escaping, Drizzle
