@@ -1,0 +1,27 @@
+{
+  "name": "Smart Diff groups the Files changed tab by role and shows findings inline",
+  "description": "From PR #482's Files changed tab, confirm all five reviewer-ordered groups render (Core logic, Tests, Wiring, Docs, Boilerplate) — 'Core logic' rendering with no prior click proves Smart order is the default, since the flat (Original-order) view never shows a role-group header. Confirms the seeded CRITICAL finding on src/config.ts:12 shows its 'blocker' label and FindingCard inline in the (open-by-default) Wiring group, that clicking the Boilerplate header reveals package-lock.json, and that Original order renders the flat file list (docs/rate-limiting.md included). Note: agent-browser's `wait --text` only proves presence, not prior absence, so this flow does not assert that package-lock.json/docs/rate-limiting.md were hidden before their respective steps. Exercises DiffTab's order toggle + SmartDiffGroups + the diff-viewer's injected findings (DiffFindingsApi). Read-only seeded data, no model call. Assumes a freshly-seeded DB where acme/payments-api (PR #482) is the first repo — guaranteed by e2e-web.yml; run locally via the hermetic stack (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "Add rate limiting to public API endpoints"], "label": "seeded PR title row is visible" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
+    { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
+    { "cmd": ["wait", "--text", "Smart order"], "label": "the Smart order / Original order toggle renders (the section title is CSS-uppercased, so it is not a stable text anchor)" },
+    { "cmd": ["wait", "--text", "Core logic"], "label": "the Core logic role-group header renders, which only Smart order shows — proves Smart order is the default" },
+    { "cmd": ["wait", "--text", "Tests"], "label": "the Tests group header is present" },
+    { "cmd": ["wait", "--text", "Wiring"], "label": "the Wiring group header is present" },
+    { "cmd": ["wait", "--text", "Docs"], "label": "the Docs group header is present" },
+    { "cmd": ["wait", "--text", "Boilerplate"], "label": "the Boilerplate group header is present" },
+    { "cmd": ["wait", "--text", "src/config.ts"], "label": "Wiring starts open, so its seeded file renders without a click" },
+    { "cmd": ["wait", "--text", "blocker"], "label": "the seeded CRITICAL finding on src/config.ts:12 anchors to its line and shows the blocker label" },
+    { "cmd": ["wait", "--text", "Hardcoded Stripe secret key in commit"], "label": "the FindingCard for that finding renders inline under the line" },
+    { "cmd": ["find", "text", "Boilerplate", "click"], "label": "expand the Boilerplate group" },
+    { "cmd": ["wait", "--text", "package-lock.json"], "label": "package-lock.json renders after Boilerplate is expanded" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch to Original order" },
+    { "cmd": ["wait", "--text", "docs/rate-limiting.md"], "label": "Original order renders the flat file list, including docs/rate-limiting.md" }
+  ]
+}

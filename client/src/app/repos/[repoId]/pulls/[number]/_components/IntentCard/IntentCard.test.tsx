@@ -5,13 +5,17 @@ import messages from "../../../../../../../../messages/en/intent.json";
 import type { PrIntentRecord } from "@devdigest/shared";
 
 const mutate = vi.fn();
+const hookState = { isClassifying: false };
 vi.mock("../../../../../../../lib/hooks/intent", () => ({
-  useClassifyIntent: () => ({ mutate, isPending: false }),
+  useIntentClassification: () => ({ start: mutate, isClassifying: hookState.isClassifying }),
 }));
 
 import { IntentCard } from "./IntentCard";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  hookState.isClassifying = false;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -44,13 +48,60 @@ describe("IntentCard (smoke)", () => {
   it("renders the summary, confidence badge, scope lists, and a non-dismissable source warning", () => {
     renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
 
-    expect(screen.getByText(baseIntent.intent)).toBeInTheDocument();
+    // The intent renders as a quote, in the card's own "Intent" header.
+    expect(screen.getByText(`“${baseIntent.intent}”`)).toBeInTheDocument();
+    expect(screen.getByText("Intent")).toBeInTheDocument();
     expect(screen.getByText("Medium confidence")).toBeInTheDocument();
     expect(screen.getByText(baseIntent.in_scope[0]!)).toBeInTheDocument();
     expect(screen.getByText(baseIntent.out_of_scope[0]!)).toBeInTheDocument();
     expect(
       screen.getByText(/the PR description was not provided/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows a muted placeholder under an empty scope list", () => {
+    renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, out_of_scope: [] }} headSha="abc123" />);
+    expect(screen.getByText("None declared")).toBeInTheDocument();
+  });
+
+  it("while classifying, shows a status line and disables both the empty-state CTA and the re-run button", () => {
+    hookState.isClassifying = true;
+    renderWithIntl(<IntentCard prId="pr1" intent={null} headSha="abc123" />);
+    expect(screen.getByText(/Classifying intent/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /classify intent/i })).toBeDisabled();
+    cleanup();
+
+    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
+    expect(screen.getByRole("status")).toHaveTextContent(/Classifying intent/);
+    expect(screen.getByRole("button", { name: "Classifying…" })).toBeDisabled();
+  });
+
+  it("re-runs classification from the compact header button", () => {
+    mutate.mockClear();
+    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
+    fireEvent.click(screen.getByRole("button", { name: "Run classification" }));
+    expect(mutate).toHaveBeenCalled();
+  });
+
+  it("hides Risk areas without risks and renders a chip per risk when supplied", () => {
+    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
+    expect(screen.queryByText("Risk areas")).not.toBeInTheDocument();
+    cleanup();
+
+    renderWithIntl(
+      <IntentCard
+        prId="pr1"
+        intent={baseIntent}
+        headSha="abc123"
+        risks={[
+          { kind: "auth", title: "Auth surface touched", explanation: "e", severity: "high", file_refs: [] },
+          { kind: "dep", title: "New dependency: ioredis", explanation: "e", severity: "medium", file_refs: [] },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Risk areas")).toBeInTheDocument();
+    expect(screen.getByText("Auth surface touched")).toBeInTheDocument();
+    expect(screen.getByText("New dependency: ioredis")).toBeInTheDocument();
   });
 
   it("shows a staleness banner when the PR's head_sha has moved since classification", () => {

@@ -11,6 +11,14 @@ in the DB). The canonical, reviewable copies live next to this file:
 - [`performance-reviewer.md`](./performance-reviewer.md)
 - [`test-quality-reviewer.md`](./test-quality-reviewer.md) — seeded **disabled**
   (see `specs/02-skills.md` §9); it is the one built-in agent with linked skills.
+- [`api-contract-reviewer.md`](./api-contract-reviewer.md) — L02 homework agent,
+  seeded **disabled**. Its own skills:
+  [`breaking-change`](../skills/breaking-change.md),
+  [`response-schema`](../skills/response-schema.md),
+  [`semver-discipline`](../skills/semver-discipline.md),
+  [`deprecation-policy`](../skills/deprecation-policy.md) (plus the four Test
+  Quality skills). See [`../skills/README.md`](../skills/README.md) before
+  importing anything from that folder.
 
 > The DB is the source of truth at run time. These files are the human-readable
 > originals — when you change a prompt, edit the file here **and** push it to the

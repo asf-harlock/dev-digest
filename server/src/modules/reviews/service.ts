@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, RunEventKind, RunTrace, SmartDiff } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -9,6 +9,8 @@ import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { classifyIntent } from './intent-classifier.js';
+import { buildSmartDiff } from './smart-diff/build-smart-diff.js';
+import { latestFindingsPerAgent } from './smart-diff/latest-findings-per-agent.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
@@ -222,5 +224,23 @@ export class ReviewService {
 
   async getRunTrace(runId: string): Promise<RunTrace | undefined> {
     return this.repo.getRunTrace(runId);
+  }
+
+  // ===========================================================================
+  // Smart Diff (specs/lessons/L03 — reviewer-ordered Files changed tab)
+  // ===========================================================================
+
+  /**
+   * Groups the PR's files by role and attaches finding counts, using the
+   * "latest review" definition already established by `pulls/routes.ts:118-144`
+   * (see `smart-diff/latest-findings-per-agent.ts` for the exact dedup rule).
+   */
+  async smartDiffForPull(workspaceId: string, prId: string): Promise<SmartDiff> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const files = await this.repo.getPrFiles(prId);
+    const rows = await this.repo.reviewsForPull(prId);
+    const findings = latestFindingsPerAgent(rows);
+    return buildSmartDiff(files, findings);
   }
 }

@@ -25,6 +25,18 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Tool & Library Notes
 
+- **2026-09-24** — Two agent-browser quirks, each of which failed a flow while
+  the UI was correct:
+  1. `wait --text` matches **rendered** text, so a string styled with
+     `text-transform: uppercase` (e.g. `SectionLabel` titles such as
+     "Reviewer-ordered diff") never matches its source casing. Anchor on
+     untransformed text, like a button label.
+  2. `find text <X> click` straight after `wait --url /pulls` races the list
+     render and fails intermittently (flows 04/05/08 failed on different runs).
+     Put `wait --text <X>` before the click, as flow 02 does.
+
+  `e2e/specs/02-repo-pulls-detail.flow.json`, `08-smart-diff.flow.json`
+
 ## Recurring Errors & Fixes
 
 ## Session Notes

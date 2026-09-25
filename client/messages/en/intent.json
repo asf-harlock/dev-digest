@@ -1,5 +1,5 @@
 {
-  "title": "Declared intent & scope",
+  "title": "Intent",
   "confidence": {
     "label": "Confidence",
     "high": "High confidence",
@@ -26,5 +26,14 @@
     "title": "Intent not classified yet",
     "body": "Run a cheap, separate model call to derive what this PR is for, so review findings can stay anchored to its actual scope.",
     "cta": "Classify intent"
+  },
+  "riskAreas": "Risk areas",
+  "scopeEmpty": "None declared",
+  "quote": "“{intent}”",
+  "classifying": {
+    "status": "Classifying intent… this usually takes a few seconds.",
+    "started": "Intent classification started",
+    "done": "Intent classified",
+    "timeout": "Classification is taking longer than expected — the result will appear here once it finishes."
   }
 }
