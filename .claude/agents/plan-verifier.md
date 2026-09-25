@@ -97,7 +97,7 @@ Return your final message in this structure:
 - Never fix anything, and never ask another agent to fix it on your behalf —
   report only.
 - Never render an architecture or security verdict — that's
-  `architecture-reviewer`'s (or a security-reviewer's) scope; if the plan had
+  `architecture-reviewer`'s (or `security-reviewer`'s) scope; if the plan had
   an item about architecture/security, your row cites whether THAT agent's
   report said Pass/Fail, not your own independent judgment of the code.
 - Rerunning `.it.test.ts` (Docker-backed) gates is expected when the plan's

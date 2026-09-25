@@ -15,12 +15,13 @@ each agent's own `.md` file; nothing here duplicates their prompt bodies.
 | [architecture-reviewer](architecture-reviewer.md) | Checks layering/boundaries, no write access | `Read, Grep, Glob, Bash` | sonnet | default |
 | [plan-verifier](plan-verifier.md) | Checks a diff against every plan item, not a code review | `Read, Grep, Glob, Bash` | sonnet | default |
 | [doc-writer](doc-writer.md) | Turns a plan/change into docs + diagrams, picks docs/ placement | `Read, Grep, Glob, Bash, Edit, Write, Skill` | sonnet | acceptEdits |
+| [security-reviewer](security-reviewer.md) | Finds exploitable security defects in a change, no write access | `Read, Grep, Glob, Bash, Skill` | sonnet | default |
+| [brainstorm](brainstorm.md) | Generates and compares distinct approaches before planning, never decides | `Read, Grep, Glob, Bash, WebSearch, WebFetch` | sonnet | default |
 
-Security review is still **out of scope for this set** — it is a separate
-agent, not covered here. Architecture review is now covered by
-`architecture-reviewer` (added after this line was first written); it stays
-read-only and defers merge/security judgment exactly as `planner` and
-`implementer` already say they do in their own prompts.
+Typical order: `brainstorm` → (user picks) → `planner` → `implementer` /
+`test-writer` → `architecture-reviewer` + `security-reviewer` +
+`plan-verifier` → `doc-writer`. The three reviewers are read-only and never
+decide a merge — `/pr-self-review`'s gate does.
 
 ## researcher
 
@@ -192,3 +193,51 @@ read-only and defers merge/security judgment exactly as `planner` and
   | DocAgent (arXiv:2504.08725) — separate Truthfulness axis / Verifier stage | self-audit treated as its own pass, not folded into drafting |
   | Mermaid+AI generate-render-validate practice | the diagram loop (one concept per diagram, fix before returning) |
   | `docs/architecture.md`, `docs/agent-prompts/README.md`, `e2e/CLAUDE.md` (repo, direct read) | the actual current `docs/` structure and the one real "narrate + link" template already in this repo |
+
+## security-reviewer
+
+- **Responsibility:** find security defects a change introduces — missing
+  tenancy scoping, secrets read outside `container.secrets`, injection /
+  SSRF / XSS, command injection in the git/ripgrep adapters, and prompt
+  injection where PR content reaches an LLM — reporting only findings whose
+  attacker-controlled input and sink it can name.
+- **Permissions:** read-only (`Read, Grep, Glob, Bash`) plus `Skill`, used
+  only to load the `security` skill. No `Write`/`Edit`; never reads
+  `~/.devdigest/secrets.json` or prints secret values.
+- **Input artifact:** a diff or scope; defaults to `git diff main...HEAD`.
+- **Output artifact:** a Security review report (`Findings` table with
+  input → sink and exploit scenario / `Checked, nothing found` / `Not
+  checked`). An empty Findings table is a valid result.
+- **Sources its rules are built on:**
+  | Source | Rule applied |
+  |---|---|
+  | Claude Code docs — sub-agents, `code-reviewer` example | read-only allowlist; `Skill` only to load `security` |
+  | `.claude/skills/security/SKILL.md` (repo) | confidence-based, trace-input-to-sink review; do-not-flag list |
+  | OWASP Top 10:2025; OWASP Top 10 for LLM Applications (LLM01) | category labels; PR content treated as untrusted model input |
+  | `anthropics/claude-code-security-review` (OSS) | high-confidence findings only; no DoS/rate-limit noise |
+  | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to tenancy and exploitable injection/SSRF/XSS |
+  | Root `CLAUDE.md` — no-auth tenancy, secrets chokepoint | the DevDigest-specific checks |
+
+## brainstorm
+
+- **Responsibility:** before planning, frame the problem, collect the repo's
+  constraints, generate 3–5 genuinely distinct approaches (always including
+  the smallest change and one that reuses existing code), compare their
+  trade-offs and recommend one. Never decides and never plans step by step
+  — the user picks, `planner` plans.
+- **Permissions:** read-only (`Read, Grep, Glob, Bash`) plus `WebSearch,
+  WebFetch` for prior art. No `Write`/`Edit`.
+- **Input artifact:** a problem or feature idea with more than one plausible
+  approach. Asks up to three clarifying questions if the problem or success
+  criterion is unclear.
+- **Output artifact:** a Brainstorm report (`Problem framing` /
+  `Constraints` / `Options` / `Comparison` / `Recommendation` / `Open
+  questions` / `Handoff`).
+- **Sources its rules are built on:**
+  | Source | Rule applied |
+  |---|---|
+  | Claude Code docs — sub-agents; best practices "explore, then plan, then code" | sits before `planner`, read-only, hands off |
+  | Double Diamond (Design Council) | diverge without judging, then converge |
+  | Osborn's brainstorming rules | distinct approaches, not variants of one |
+  | ADR practice (options considered, consequences) | per-option pros/cons/risk and comparison table |
+  | `researcher.md`, `planner.md` (repo) | clarify-first step; constraints from CLAUDE.md / INSIGHTS.md |
