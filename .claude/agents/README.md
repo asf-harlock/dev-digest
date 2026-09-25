@@ -204,7 +204,8 @@ decide a merge — `/pr-self-review`'s gate does.
 - **Permissions:** read-only (`Read, Grep, Glob, Bash`) plus `Skill`, used
   only to load the `security` skill. No `Write`/`Edit`; never reads
   `~/.devdigest/secrets.json` or prints secret values.
-- **Input artifact:** a diff or scope; defaults to `git diff main...HEAD`.
+- **Input artifact:** a diff or scope; defaults to every open change
+  against `main` (committed, staged, unstaged, untracked).
 - **Output artifact:** a Security review report (`Findings` table with
   input → sink and exploit scenario / `Checked, nothing found` / `Not
   checked`). An empty Findings table is a valid result.
@@ -215,7 +216,7 @@ decide a merge — `/pr-self-review`'s gate does.
   | `.claude/skills/security/SKILL.md` (repo) | confidence-based, trace-input-to-sink review; do-not-flag list |
   | OWASP Top 10:2025; OWASP Top 10 for LLM Applications (LLM01) | category labels; PR content treated as untrusted model input |
   | `anthropics/claude-code-security-review` (OSS) | high-confidence findings only; no DoS/rate-limit noise |
-  | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to its closed list — tenancy, exploitable injection/SSRF/XSS, secret literal / `process.env` read |
+  | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to tenancy and exploitable injection/SSRF/XSS; script-owned rules (`secret-literal`, `process-env-read`) not re-reported |
   | Root `CLAUDE.md` — no-auth tenancy, secrets chokepoint | the DevDigest-specific checks |
 
 ## brainstorm

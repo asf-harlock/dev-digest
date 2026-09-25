@@ -24,9 +24,11 @@ merges — `/pr-self-review`'s own gate remains the actual gate.
 
 ## Step 0 — clarify scope
 
-Confirm what to review: a diff (`git diff main...HEAD`, staged, or a PR), or
-a named path. If not given, default to the current branch's diff against
-`main` (`git diff --name-only main...HEAD`) — never the whole repo. Review
+Confirm what to review: a diff, a PR, or a named path. If not given, default
+to every open change against `main` — committed, staged, unstaged and
+untracked (`git diff --name-only main` plus
+`git ls-files --others --exclude-standard`), since this agent usually runs
+before anything is committed — never the whole repo. Review
 changed lines and the code paths they feed; flag pre-existing issues only
 when the change makes them reachable, and label them "pre-existing".
 
@@ -77,11 +79,15 @@ Check each of these against the changed files; they come from root
 ## Step 3 — severity and findings format
 
 Reuse this repo's rubric, `.claude/skills/pr-self-review/reference/severity-rubric.md`:
-- CRITICAL only for items on the rubric's closed list. For this agent that
-  is: **missing tenancy**; an **exploitable injection, SSRF or XSS** on a
-  changed line where you can name the input and the sink; or a **secret
-  literal / `process.env` secret read** (the rubric's `secret-literal` /
-  `process-env-read`). Everything else is at most a WARNING.
+- CRITICAL only for what that rubric allows a reviewer to add: **missing
+  tenancy**, or an **exploitable injection, SSRF or XSS** on a changed line
+  where you can name the input and the sink. Everything else is at most a
+  WARNING.
+- A secret literal or a `process.env` secret read is already CRITICAL via
+  `hard-rules.sh` (`secret-literal`, `process-env-read`) — do not put it in
+  Findings; list it under "Already enforced by hard-rules.sh" with its rule
+  id. A secret leaking into logs, an API response or the DB (which the
+  script cannot see) is a WARNING finding.
 - Under 0.85 confidence → at most WARNING. Below 0.6 → do not report.
 - Do not report: test files, dead code, server-controlled values (config,
   constants), framework-mitigated patterns (JSX escaping, Drizzle
@@ -100,6 +106,9 @@ hunk alone. Produce a standalone report as your final message:
 
 ### Checked, nothing found
 - <each Step 2 check that applied to this diff, one line each>
+
+### Already enforced by hard-rules.sh
+- <file:line — rule id, or "none">
 
 ### Not checked
 - <what was out of reach — e.g. runtime config, dependency CVEs (`pnpm audit` not run)>
@@ -128,5 +137,5 @@ padding it with low-confidence notes.
 | OWASP Top 10:2025 | category labels (A01–A10) in Step 2 |
 | OWASP Top 10 for LLM Applications — LLM01 Prompt Injection | Step 2 check 6: PR content is untrusted input to the model |
 | `anthropics/claude-code-security-review` (OSS) — high-confidence findings only, excludes DoS/rate-limit noise | the Step 3 do-not-report list; empty result is valid |
-| `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to its closed list (tenancy, exploitable injection/SSRF/XSS, secret literal / `process.env` read); confidence thresholds |
+| `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to what a reviewer may add (tenancy, exploitable injection/SSRF/XSS); script-owned rules not re-reported; confidence thresholds |
 | Root `CLAUDE.md` — no-auth tenancy, secrets chokepoint | Step 2 checks 1 and 2 |
