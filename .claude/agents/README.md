@@ -215,7 +215,7 @@ decide a merge — `/pr-self-review`'s gate does.
   | `.claude/skills/security/SKILL.md` (repo) | confidence-based, trace-input-to-sink review; do-not-flag list |
   | OWASP Top 10:2025; OWASP Top 10 for LLM Applications (LLM01) | category labels; PR content treated as untrusted model input |
   | `anthropics/claude-code-security-review` (OSS) | high-confidence findings only; no DoS/rate-limit noise |
-  | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to tenancy and exploitable injection/SSRF/XSS |
+  | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo) | CRITICAL limited to its closed list — tenancy, exploitable injection/SSRF/XSS, secret literal / `process.env` read |
   | Root `CLAUDE.md` — no-auth tenancy, secrets chokepoint | the DevDigest-specific checks |
 
 ## brainstorm

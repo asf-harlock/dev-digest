@@ -30,7 +30,7 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 | server-unit | `server/` | unit (hermetic) | vitest | `server-unit.yml` | no |
 | server-integration | `server/` | integration (real Postgres) | vitest | `server-integration.yml` | **yes** |
 | reviewer-core | `reviewer-core/` | unit (engine) | vitest | `reviewer-core.yml` | no |
-| e2e web | `e2e/` | browser e2e (deterministic) | agent-browser + `run.ts` | `e2e-web.yml` | yes (stack) |
+| e2e web | `e2e/` | browser e2e (deterministic) | agent-browser + `run.ts` | `e2e-web.yml` (manual dispatch only) | yes (stack) |
 
 ## What each suite covers
 
@@ -90,6 +90,8 @@ cd e2e && npm install && npm test
   only `--url` / `--text` / `find` locators — never the AI `chat` command.
 - **CI is path-filtered per package.** Cross-package source aliases are encoded
   in each workflow's `paths:` (e.g. `reviewer-core/**` triggers `server-unit`
-  because the server type-checks against `../reviewer-core/src`).
+  because the server type-checks against `../reviewer-core/src`). Exception:
+  `e2e-web.yml` runs on manual dispatch only (Actions → "Run workflow"), so
+  run `./scripts/e2e.sh` locally before merging seed or UI-text changes.
 - **`server/clones/**` is runtime data** (git-ignored) and never collected by
   any suite.
