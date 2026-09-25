@@ -8,20 +8,12 @@
 # serves the seeded read-only data the specs exercise — no LLM is called.
 name: e2e web
 
+# Manual-only for now: the browser suite is not part of the early lessons'
+# PR checks. Run it from the Actions tab ("Run workflow"). To re-enable on
+# PRs, restore the push/pull_request triggers with the client/server/e2e
+# path filters.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'client/**'
-      - 'server/**'
-      - 'e2e/**'
-      - '.github/workflows/e2e-web.yml'
-  pull_request:
-    paths:
-      - 'client/**'
-      - 'server/**'
-      - 'e2e/**'
-      - '.github/workflows/e2e-web.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
