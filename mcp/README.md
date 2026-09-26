@@ -9,12 +9,65 @@ It never touches the database. Every tool is a thin HTTP call to the running
 `@devdigest/api` on `:3001` — the same rate limits and validation the web UI
 gets apply here too.
 
-## Prerequisites
+## From zero
 
-1. `@devdigest/api` (and Postgres) must be running: from the repo root,
-   `./scripts/dev.sh` (or `docker compose up -d` + `cd server && pnpm
-   db:migrate && pnpm db:seed && pnpm dev`).
-2. `cd mcp && npm install` (npm, not pnpm — see the root `CLAUDE.md`).
+The app's scripts (`./scripts/dev.sh`, `./scripts/e2e.sh`, `docker compose`)
+never start this server. It is a stdio process that an MCP client (Claude
+Code, the Inspector) spawns for itself, one per session, and only once you
+enable it. There is no daemon to keep running.
+
+**Prerequisites:** Node ≥22 with npm, pnpm ≥10, Docker, and Claude Code.
+
+1. **Bring up the API** from the repo root:
+   `./scripts/dev.sh --no-client`, or plain `./scripts/dev.sh` if you also
+   want the web UI. It starts Postgres, runs the migrations and the seed, and
+   serves `@devdigest/api` on `:3001`. Check it with
+   `curl -s localhost:3001/agents`, which should return JSON.
+2. **Add an LLM key** (needed only for `run_agent_on_pr`): open the web UI →
+   **Settings**. Keys are stored in `~/.devdigest/secrets.json`, never in the
+   repo.
+3. **Install the package:** `cd mcp && npm ci`. Use npm, not pnpm; `npm ci`
+   installs exactly what `package-lock.json` pins.
+4. **Check it:** `npm run typecheck && npm test`.
+5. **Smoke-test it without Claude Code:** from the repo root, run the Inspector
+   command under [Verifying a change](#verifying-a-change). You should see four
+   tools, and `list_agents` should return the seeded agents.
+6. **Use it from Claude Code:** see [On-demand use](#on-demand-use-claude-code)
+   below.
+
+## On-demand use (Claude Code)
+
+`.mcp.json` only *declares* the server. Whether it connects is a per-developer
+switch kept in the git-ignored `.claude/settings.local.json`:
+
+```json
+{ "disabledMcpjsonServers": ["devdigest"] }
+```
+
+With that setting, new sessions start without the server: its tools and its
+`instructions` cost nothing. When you need it:
+
+1. Make sure the API is up (step 1 above).
+2. In the Claude Code session, run `/mcp enable devdigest` and check its status
+   with `/mcp`. The four tools are now available.
+3. When you are done, run `/mcp disable devdigest`, so the next sessions start
+   without it again.
+
+If you answered "use all project servers" at the trust prompt instead, the
+server connects in every session. Put `devdigest` into
+`disabledMcpjsonServers` (and out of `enabledMcpjsonServers`) to go back to
+on-demand use.
+
+**Troubleshooting**
+
+- Every call returns `api_unavailable` → the API is not running. Go back to
+  step 1.
+- `/mcp` shows the server as *failed* → run
+  `npm --prefix mcp run --silent start` from the repo root. The server should
+  print `[devdigest-mcp] ready …` on stderr and then wait for input (Ctrl-C to
+  quit). Any error printed there is the reason.
+- A code change isn't picked up → run `/mcp reconnect devdigest`. The process
+  is spawned once per connection.
 
 ## Registering with an MCP client
 
@@ -39,8 +92,10 @@ unpinned `tsx` from the registry instead of using the version pinned in
 against. `--silent` also keeps npm's own banner off stdout, which matters
 here: stdout is JSON-RPC protocol traffic only (see Gotchas in `CLAUDE.md`).
 
-Claude Code picks this up automatically from the repo root. No `alwaysLoad` is
-set on any tool — nothing here is preloaded into every session for free.
+No `alwaysLoad` is set on any tool, so nothing here is preloaded into a
+session. Claude Code asks once whether to trust the project's `.mcp.json`
+servers. Whether `devdigest` then connects in every session is up to you: see
+[On-demand use](#on-demand-use-claude-code).
 
 ## Environment variables
 
@@ -81,11 +136,12 @@ To exercise the server end to end:
 
 ```sh
 ./scripts/dev.sh   # from the repo root, if not already running
-npx @modelcontextprotocol/inspector --cli npx tsx mcp/src/index.ts --method tools/list
+npx @modelcontextprotocol/inspector --cli --config .mcp.json --server devdigest --method tools/list
 ```
 
 Then call a tool against the seeded demo data (`acme/payments-api`, PR #482),
-e.g. `--method tools/call --tool-name list_agents`.
+e.g. `--method tools/call --tool-name list_agents`. Add
+`-e DEVDIGEST_MCP_ENABLE_BLAST_RADIUS=true` to include the stub.
 
 From inside Claude Code with the repo's `.mcp.json` picked up, run `/context
 all` — the session should only be charged for the tool names and the
