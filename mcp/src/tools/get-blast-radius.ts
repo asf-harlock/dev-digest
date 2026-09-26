@@ -6,6 +6,7 @@
  * degrades rather than throws — a caller checks `degraded`/`reason`, not an
  * error, to know the map may be incomplete.
  */
+import type { BlastDegradedReason } from '@devdigest/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { toToolErrorResult } from '../errors.js';
@@ -42,16 +43,22 @@ const DownstreamImpactSchema = z.object({
 });
 
 // Mirrors `BlastDegradedReason` (`server/src/vendor/shared/contracts/brief.ts`)
-// — kept as a local literal union rather than a runtime import, per the
+// — kept as a local literal list rather than a runtime import, per the
 // `@devdigest/shared` "type-only" rule (a value import would pull server
-// code into this process).
-const BlastDegradedReasonSchema = z.enum([
+// code into this process). `satisfies` + the exhaustiveness check below make
+// `tsc` fail when the contract gains or loses a reason; otherwise the SDK's
+// outputSchema validation would reject every degraded call at runtime.
+const BLAST_DEGRADED_REASONS = [
   'flag_off',
   'index_failed',
   'index_partial',
   'repo_too_large',
   'no_data',
-]);
+] as const satisfies readonly BlastDegradedReason[];
+type MissingReason = Exclude<BlastDegradedReason, (typeof BLAST_DEGRADED_REASONS)[number]>;
+const reasonsAreExhaustive: [MissingReason] extends [never] ? true : MissingReason = true;
+void reasonsAreExhaustive;
+const BlastDegradedReasonSchema = z.enum(BLAST_DEGRADED_REASONS);
 
 const outputSchema = z.object({
   changed_symbols: z.array(ChangedSymbolSchema),

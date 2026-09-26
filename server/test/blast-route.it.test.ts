@@ -125,4 +125,23 @@ d('GET /pulls/:id/blast (Testcontainers pg)', () => {
 
     await app.close();
   });
+
+  it("404s for a PR that exists but belongs to another workspace, and never calls repoIntel", async () => {
+    const [seeded] = await pg.handle.db.select().from(t.pullRequests).where(eq(t.pullRequests.number, 482));
+    expect(seeded).toBeDefined();
+    const [other] = await pg.handle.db.insert(t.workspaces).values({ name: 'other-tenant' }).returning();
+    const { id: _id, ...rest } = seeded!;
+    const [foreign] = await pg.handle.db
+      .insert(t.pullRequests)
+      .values({ ...rest, workspaceId: other!.id, number: 90482 })
+      .returning();
+    await pg.handle.db.insert(t.prFiles).values({ prId: foreign!.id, path: 'secret/other-tenant.ts', additions: 1, deletions: 0 });
+
+    const calls: { repoId: string; files: string[] }[] = [];
+    const app = await appWith({ changedSymbols: [], callers: [], impactedEndpoints: [] }, calls);
+    const res = await app.inject({ method: 'GET', url: `/pulls/${foreign!.id}/blast` });
+    expect(res.statusCode).toBe(404);
+    expect(calls).toHaveLength(0);
+    await app.close();
+  });
 });

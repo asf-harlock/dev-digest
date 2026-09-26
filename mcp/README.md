@@ -115,7 +115,7 @@ See `.env.example`. All are optional; `.mcp.json` only sets `DEVDIGEST_API_URL`.
 | `run_agent_on_pr` | `repo, pr, agent, include_dismissed?, limit?` | `{status, run_id, verdict, score, counts, total, truncated, findings[]}` | The only tool that writes. Starts a review, polls `GET /runs/:id`, and returns findings once done — or `{status:'running'}` past the timeout, with a hint to call `get_findings`. |
 | `get_findings` | `run_id, include_dismissed?, limit?` | Same shape as `run_agent_on_pr` | Reads back a run started earlier. |
 | `get_conventions` | `repo, limit?` | `{repo, scanned, rules[], note}` | Only `accepted` conventions; empty + a `note` if the repo hasn't been scanned. |
-| `get_blast_radius` | `repo, pr` | `{changed_symbols[], downstream[], summary, degraded?, reason?, note?}` | A PR's impact map: changed symbols, their callers, and any endpoints/crons affected. `degraded`/`reason` (+ a note) when the repo index is missing or incomplete — best-effort, never an error. |
+| `get_blast_radius` | `repo, pr` | `{changed_symbols[], downstream[], summary, degraded?, reason?, note}` | A PR's impact map: changed symbols, their callers, and any endpoints/crons affected — the same response `GET /pulls/:id/blast` gives the web UI, with repo-sourced strings wrapped as untrusted. `degraded`/`reason` plus a resync hint in `note` when the repo index is missing or incomplete; a degraded map is not an error. |
 
 `repo` is always `owner/name`. Free text sourced from a PR or an LLM's own
 output (`title`, `rationale`, `suggestion`, `rule`, …) is wrapped in a

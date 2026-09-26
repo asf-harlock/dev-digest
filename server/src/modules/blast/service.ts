@@ -24,7 +24,7 @@ export class BlastService {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError(PULL_NOT_FOUND);
 
-    const changedFiles = await this.repo.getChangedFiles(pull.id);
+    const changedFiles = await this.repo.getChangedFiles(workspaceId, pull.id);
     const result = await this.container.repoIntel.getBlastRadius(pull.repoId, changedFiles);
     return toBlastRadius(result);
   }

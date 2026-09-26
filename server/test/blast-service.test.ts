@@ -36,7 +36,7 @@ function patchRepo(
       getPullCalls.push([workspaceId, prId]);
       return opts.pull;
     },
-    getChangedFiles: async (_prId: string) => opts.changedFiles ?? [],
+    getChangedFiles: async (_workspaceId: string, _prId: string) => opts.changedFiles ?? [],
   };
   return { getPullCalls };
 }

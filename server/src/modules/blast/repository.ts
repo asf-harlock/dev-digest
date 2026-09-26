@@ -25,11 +25,14 @@ export class BlastRepository {
     return row;
   }
 
-  async getChangedFiles(prId: string): Promise<string[]> {
+  /** Scoped through `pull_requests.workspace_id` itself, so a caller that skips
+   *  `getPull` still cannot read another workspace's file list. */
+  async getChangedFiles(workspaceId: string, prId: string): Promise<string[]> {
     const rows = await this.db
       .select({ path: t.prFiles.path })
       .from(t.prFiles)
-      .where(eq(t.prFiles.prId, prId));
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.prFiles.prId))
+      .where(and(eq(t.pullRequests.workspaceId, workspaceId), eq(t.prFiles.prId, prId)));
     return rows.map((r) => r.path);
   }
 }
