@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace, SmartDiff } from '@devdigest/shared';
+import type { FindingActionKind, RunEventKind, RunSummary, RunTrace, SmartDiff } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -224,6 +224,31 @@ export class ReviewService {
 
   async getRunTrace(runId: string): Promise<RunTrace | undefined> {
     return this.repo.getRunTrace(runId);
+  }
+
+  /** One run by id, workspace-scoped (specs/lessons/L04 — the MCP server's
+   *  poll target for `run_agent_on_pr`/`get_findings`). */
+  async getRunSummary(workspaceId: string, runId: string): Promise<RunSummary> {
+    const run = await this.repo.getRunSummary(workspaceId, runId);
+    if (!run) throw new NotFoundError('Run not found');
+    return run;
+  }
+
+  /**
+   * The review (+ findings) a run produced, workspace-scoped. 404s both when
+   * the run doesn't exist in the workspace and when it exists but has no
+   * review yet (still running/failed) — same as `getReviewByRunId`.
+   */
+  async getRunFindings(workspaceId: string, runId: string): Promise<ReviewDto> {
+    const found = await this.repo.getReviewByRunId(workspaceId, runId);
+    if (!found) throw new NotFoundError('Review not found');
+    const { review, findings } = found;
+    let agentName: string | null = null;
+    if (review.agentId) {
+      const agent = await this.agents.getById(workspaceId, review.agentId);
+      agentName = agent?.name ?? null;
+    }
+    return reviewToDto(review, findings, agentName);
   }
 
   // ===========================================================================

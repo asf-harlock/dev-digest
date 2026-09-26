@@ -12,7 +12,9 @@ import { ReviewService } from './service.js';
  *   POST   /pulls/:id/review  {agentId} | {all:true}  → run review(s); returns runs
  *   POST   /pulls/:id/intent                           → classify PR intent (fire-and-forget)
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
+ *   GET    /runs/:id                                    → RunSummary (workspace-scoped)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
+ *   GET    /runs/:id/findings                           → ReviewDto for the run's review
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
  *   GET    /pulls/:id/smart-diff                        → files grouped by role + finding counts
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
@@ -117,6 +119,12 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     return service.listRuns(workspaceId, req.params.id);
   });
 
+  // ---- One run by id (workspace-scoped; specs/lessons/L04 MCP poll target) -
+  app.get('/runs/:id', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return service.getRunSummary(workspaceId, req.params.id);
+  });
+
   // ---- Delete one run from the history (+ its trace) ----------------------
   app.delete('/runs/:id', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(container, req);
@@ -137,6 +145,12 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     const trace = await service.getRunTrace(req.params.id);
     if (!trace) throw new NotFoundError('Run trace not found');
     return trace;
+  });
+
+  // ---- The review + findings a run produced (workspace-scoped) ------------
+  app.get('/runs/:id/findings', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return service.getRunFindings(workspaceId, req.params.id);
   });
 
   // ---- Reads --------------------------------------------------------------
