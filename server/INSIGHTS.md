@@ -59,6 +59,29 @@ needed none of those and cannot drift.
 
 ## Codebase Patterns
 
+
+- **2026-09-26** — A module that maps another module's facade result cannot
+  type its `helpers.ts` with that result's type. `no-cross-module-import` blocks
+  `import type` from `../repo-intel/types.js` (`tsPreCompilationDeps: true`), and
+  `pure-helpers-stay-pure` separately blocks `helpers.ts` from reaching
+  `platform/container.ts` (so `Container['repoIntel']` is out too). What passes
+  both is a structural mirror interface in `helpers.ts`, fed by an **uncast**
+  `container.repoIntel.…()` call in `service.ts`. That call site is the only
+  place drift is caught, so never cast it. `server/src/modules/blast/helpers.ts`
+  (`BlastFacadeResult`), `server/.dependency-cruiser.cjs`
+
+
+- **2026-09-26** — `repoIntel.getBlastRadius` returns a thinner result than its
+  types suggest in two cases. (1) The ripgrep fallback is always `degraded:true,
+  reason:'no_data'` and has no `factsByFile`, so there are no crons and no
+  per-symbol endpoints. The seeded demo repo has `clonePath: null`, so it always
+  lands here with empty arrays, and a blast e2e can only assert the degraded
+  state. (2) The persistent path caps callers with
+  `slice(0, MAX_CALLERS_PER_SYMBOL)` over the **whole** list, not per symbol, so
+  a PR with many changed symbols can starve later symbols of callers. The facade
+  was left as it is. `server/src/modules/repo-intel/service.ts:228-237,386`,
+  `server/src/db/seed.ts:145`
+
 - **2026-09-25** — Bad input on any `schema.querystring`/`params`/`body` fails
   with **422** and `error.code: "validation_error"`, never 400
   (`server/src/app.ts:115-119`). If a route contract asks for 400, get it

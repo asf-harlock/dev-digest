@@ -141,6 +141,18 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Recurring Errors & Fixes
 
+
+- **2026-09-26** — `pr-self-review`'s `hard-rules.sh` has two false-positive
+  CRITICALs that block pushes of correct code. (1) `client-fetch` greps
+  `(^|[^.\w])fetch\(`, but in POSIX ERE `\w` inside brackets is literal, so
+  `refetch()` matches. Rename it (`refetch: retry`) rather than overriding.
+  (2) `private-underscore-import` flags `modules/<x>/routes.ts` importing
+  `../_shared/…`. That import is legitimate (a sibling under the `_shared`
+  parent, and `pnpm arch` passes), and every route needs `getContext`, so only
+  `# psr-skip` with the reason gets it through. `homework-to-main` also fires on
+  every `L0x-homework` branch even when the PR targets the fork's `main`.
+  `.claude/skills/pr-self-review/scripts/hard-rules.sh:227,285,343`
+
 - **2026-09-18** — A tool that writes its output *inside* the repo and also
   reads `git ls-files --others --exclude-standard` will consume its own output:
   the first run's artefact is untracked, so the second run folds it into the
@@ -152,6 +164,14 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   negation. `.gitignore:25-26`
 
 ## Session Notes
+
+
+- **2026-09-26** — Blast Radius (L04 homework): `GET /pulls/:id/blast`, the
+  Overview block (tree + mermaid graph + degraded states) and a real
+  `get_blast_radius` MCP tool. Pipeline: Explore ×3 → planner → implementer ×2 ∥
+  → test-writer ×2 ∥ → architecture-reviewer ∥ plan-verifier ∥ security-reviewer,
+  then 3 `/pr-self-review` rounds. Entries: root Recurring Errors (hard-rules
+  false positives), `server/` Codebase Patterns ×2.
 
 - **2026-09-24** — Smart Diff (L03), built through the subagent pipeline:
   researcher ×3 → planner → implementer ×2 in parallel → architecture-reviewer ∥
