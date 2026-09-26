@@ -35,6 +35,7 @@ export function registerGetFindings(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'get_findings',
     {
+      title: 'Get findings',
       description: DESCRIPTION,
       inputSchema,
       outputSchema: reviewResultOutputSchema,

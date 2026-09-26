@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { toToolErrorResult } from '../errors.js';
-import { resolveAgent, resolvePull, resolveRepo } from '../resolvers.js';
+import { REPO_ARG_DESCRIPTION, resolveAgent, resolvePull, resolveRepo } from '../resolvers.js';
 import { newNonce } from '../security.js';
 import type { ToolDeps } from '../server.js';
 import {
@@ -15,7 +15,7 @@ import {
 } from './review-result.js';
 
 const inputSchema = {
-  repo: z.string().min(1).describe("Repository as 'owner/name'."),
+  repo: z.string().min(1).describe(REPO_ARG_DESCRIPTION),
   pr: z.number().int().positive().describe('Pull request number.'),
   agent: z.string().min(1).describe('Agent id, or its name (case-insensitive).'),
   include_dismissed: z
@@ -33,14 +33,21 @@ const inputSchema = {
     .describe(`Max findings to return (1-${MAX_LIMIT}, default ${DEFAULT_LIMIT}).`),
 };
 
-const DESCRIPTION =
-  "Runs one review agent against a pull request end to end: resolves the repo/pr/agent, starts a NEW review run, and polls until it finishes or the poll budget runs out. Returns a verdict, score, and findings sorted by severity and capped at `limit`. If the run has not finished in time, returns status:'running' with the run_id so the caller can retry via get_findings. This is the only tool that writes, and it always starts a fresh run — call get_findings instead to re-check an existing one.";
+function description(timeoutMs: number): string {
+  const seconds = Math.round(timeoutMs / 1000);
+  return (
+    `Runs one review agent on a pull request and returns the finished result: verdict, score and findings sorted by severity, capped at \`limit\`. ` +
+    `Waits up to ${seconds}s; if the run is still going it returns status:'running' with a run_id — then call get_findings(run_id) instead of starting another run. ` +
+    'Each call starts a NEW paid LLM run (the only tool that writes; capped at 10 runs/minute).'
+  );
+}
 
 export function registerRunAgentOnPr(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'run_agent_on_pr',
     {
-      description: DESCRIPTION,
+      title: 'Run agent on PR',
+      description: description(deps.config.runTimeoutMs),
       inputSchema,
       outputSchema: reviewResultOutputSchema,
       annotations: {

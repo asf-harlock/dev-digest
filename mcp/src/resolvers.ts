@@ -7,6 +7,9 @@ import type { Agent } from '@devdigest/shared';
 import type { DevDigestApi } from './api-client.js';
 import { McpToolError, notFound } from './errors.js';
 
+/** One wording for every tool's `repo` argument. */
+export const REPO_ARG_DESCRIPTION = "Repository as 'owner/name', e.g. 'acme/payments-api'.";
+
 function isNotFound(err: unknown): err is McpToolError {
   return err instanceof McpToolError && err.code === 'not_found';
 }

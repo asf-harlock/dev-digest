@@ -10,6 +10,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { McpToolError, toToolErrorResult } from '../errors.js';
+import { REPO_ARG_DESCRIPTION } from '../resolvers.js';
 import type { ToolDeps } from '../server.js';
 
 export function registerGetBlastRadius(server: McpServer, _deps: ToolDeps): void {
@@ -18,9 +19,9 @@ export function registerGetBlastRadius(server: McpServer, _deps: ToolDeps): void
     {
       title: 'Get blast radius (stub, not implemented)',
       description:
-        'STUB — not implemented yet. Intended to report which other files and tests a PR is likely to affect. Always returns an error; do not retry.',
+        'STUB — not implemented yet. Will report the impact map of a PR: the symbols it changes, their callers and the endpoints affected. Always returns an error for now; do not retry.',
       inputSchema: {
-        repo: z.string().describe("Repository full name, e.g. 'owner/name'."),
+        repo: z.string().describe(REPO_ARG_DESCRIPTION),
         pr: z.number().int().positive().describe('Pull request number.'),
       },
       annotations: {

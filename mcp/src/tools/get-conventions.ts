@@ -9,7 +9,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { toToolErrorResult } from '../errors.js';
-import { resolveRepo } from '../resolvers.js';
+import { REPO_ARG_DESCRIPTION, resolveRepo } from '../resolvers.js';
 import { newNonce, UNTRUSTED_NOTE, wrapUntrusted } from '../security.js';
 import type { ToolDeps } from '../server.js';
 
@@ -25,8 +25,14 @@ const MAX_LIMIT = 200;
 // object schema is assignable to `AnySchema` directly, without that
 // per-property recursion.
 const inputSchema = z.object({
-  repo: z.string().min(1).describe("Repo full name, 'owner/name'."),
-  limit: z.number().int().positive().max(MAX_LIMIT).default(DEFAULT_LIMIT),
+  repo: z.string().min(1).describe(REPO_ARG_DESCRIPTION),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_LIMIT)
+    .default(DEFAULT_LIMIT)
+    .describe(`Max rules to return (1-${MAX_LIMIT}, default ${DEFAULT_LIMIT}).`),
 });
 
 const RuleSchema = z.object({
@@ -57,7 +63,7 @@ export function registerGetConventions(server: McpServer, deps: ToolDeps): void 
     {
       title: 'Get repo conventions',
       description:
-        "Get this repo's accepted coding conventions (house rules) — only candidates with status 'accepted' are returned. If the repo was never scanned, or has no accepted rules yet, the response explains what to do next.",
+        "Get a repo's accepted coding conventions (house rules): category, rule and an evidence file for each. Call it before reviewing or writing code in that repo so the work follows its rules. Only rules with status 'accepted' are returned; if the repo was never scanned or has none accepted yet, the note says what to do next.",
       inputSchema,
       outputSchema,
       annotations: {
