@@ -50,10 +50,23 @@ export const DownstreamImpact = z.object({
 });
 export type DownstreamImpact = z.infer<typeof DownstreamImpact>;
 
+/** Why the map may be incomplete — mirrors repo-intel's `DegradedReason`. */
+export const BlastDegradedReason = z.enum([
+  'flag_off',
+  'index_failed',
+  'index_partial',
+  'repo_too_large',
+  'no_data',
+]);
+export type BlastDegradedReason = z.infer<typeof BlastDegradedReason>;
+
 export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  /** true when the repo index was missing/partial and the map is best-effort. */
+  degraded: z.boolean().optional(),
+  reason: BlastDegradedReason.optional(),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 
