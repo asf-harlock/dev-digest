@@ -1,16 +1,30 @@
 {
+  "title": "Blast radius",
   "stat": {
-    "symbols": "symbols",
-    "callers": "callers",
-    "endpoints": "endpoints",
-    "crons": "cron/jobs"
+    "symbols": "{count, plural, one {symbol} other {symbols}}",
+    "callers": "{count, plural, one {caller} other {callers}}",
+    "endpoints": "{count, plural, one {endpoint} other {endpoints}}",
+    "crons": "{count, plural, one {cron} other {crons}}"
   },
   "view": {
-    "tree": "tree",
-    "graph": "graph"
+    "tree": "Tree",
+    "graph": "Graph"
   },
-  "callerCount": "{count} callers",
-  "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "callerCount": "{count, plural, one {# caller} other {# callers}}",
+  "noDownstream": "{count, plural, one {# changed symbol} other {# changed symbols}}, no downstream callers found.",
+  "empty": {
+    "noSymbols": "No symbol-level changes to map for this PR."
+  },
+  "error": "Couldn't load the blast radius.",
+  "degraded": {
+    "flag_off": "Blast radius is turned off for this workspace.",
+    "index_failed": "The repo index failed to build — this map may be incomplete.",
+    "index_partial": "The repo index is only partially built — this map may be incomplete.",
+    "repo_too_large": "This repo is too large to index — this map may be incomplete.",
+    "no_data": "No repo index is available yet — this map may be incomplete."
+  },
+  "degradedHint": "Rebuilding the index may fill in missing callers, endpoints, and crons.",
+  "resync": "Rebuild index",
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"
