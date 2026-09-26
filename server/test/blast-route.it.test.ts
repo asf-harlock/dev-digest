@@ -9,6 +9,7 @@ import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
 import type { RepoIntel } from '../src/modules/repo-intel/types.js';
 import type { BlastFacadeResult } from '../src/modules/blast/helpers.js';
+import { BlastRepository } from '../src/modules/blast/repository.js';
 
 /**
  * Route-level coverage for `GET /pulls/:id/blast` (specs/lessons/L04). The
@@ -143,5 +144,10 @@ d('GET /pulls/:id/blast (Testcontainers pg)', () => {
     expect(res.statusCode).toBe(404);
     expect(calls).toHaveLength(0);
     await app.close();
+
+    // The repository scopes pr_files itself, not only via getPull's call order.
+    const blastRepo = new BlastRepository(pg.handle.db);
+    expect(await blastRepo.getChangedFiles(seeded!.workspaceId, foreign!.id)).toEqual([]);
+    expect(await blastRepo.getChangedFiles(other!.id, foreign!.id)).toEqual(['secret/other-tenant.ts']);
   });
 });

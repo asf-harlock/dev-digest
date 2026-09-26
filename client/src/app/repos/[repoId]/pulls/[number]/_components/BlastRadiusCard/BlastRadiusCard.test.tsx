@@ -15,7 +15,8 @@ const hookState: {
   isError: boolean;
   data: BlastRadius | undefined;
   resyncing: boolean;
-} = { isLoading: false, isError: false, data: undefined, resyncing: false };
+  resyncOutcome: "timeout" | "poll_failed" | null;
+} = { isLoading: false, isError: false, data: undefined, resyncing: false, resyncOutcome: null };
 
 vi.mock("@/lib/hooks", () => ({
   useBlastRadius: () => ({
@@ -24,7 +25,7 @@ vi.mock("@/lib/hooks", () => ({
     isError: hookState.isError,
     refetch: vi.fn(),
   }),
-  useBlastResync: () => ({ start: resyncStart, isResyncing: hookState.resyncing }),
+  useBlastResync: () => ({ start: resyncStart, isResyncing: hookState.resyncing, outcome: hookState.resyncOutcome }),
 }));
 
 // --- MermaidDiagram lazy-loads the real `mermaid` package client-side; stub
@@ -41,6 +42,7 @@ afterEach(() => {
   hookState.isError = false;
   hookState.data = undefined;
   hookState.resyncing = false;
+  hookState.resyncOutcome = null;
   resyncStart.mockClear();
 });
 
@@ -197,6 +199,14 @@ describe("BlastRadiusCard", () => {
     expect(screen.getByText("Mailer")).toBeInTheDocument();
     expect(screen.getByText("2 callers")).toBeInTheDocument();
     expect(screen.getByText("1 caller")).toBeInTheDocument();
+  });
+
+  it("tells the user when a rebuild ended without the index advancing", () => {
+    hookState.data = baseBlast({ changed_symbols: [], downstream: [], degraded: true, reason: "no_data" });
+    hookState.resyncOutcome = "timeout";
+    renderCard();
+
+    expect(screen.getByText(/The rebuild didn't finish/)).toBeInTheDocument();
   });
 
   it("links each caller to its exact GitHub blob line when the repo and head sha are known", () => {

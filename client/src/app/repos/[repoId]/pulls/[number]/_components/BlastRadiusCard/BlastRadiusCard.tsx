@@ -86,6 +86,9 @@ export function BlastRadiusCard({
             <div style={s.degradedText}>
               <div>{t(`degraded.${blast.reason ?? "no_data"}`)}</div>
               {canResync && <div style={s.degradedHint}>{t("degradedHint")}</div>}
+              {canResync && resync.outcome && (
+                <div style={s.degradedHint}>{t(`resyncOutcome.${resync.outcome}`)}</div>
+              )}
             </div>
             {canResync && (
               <Button

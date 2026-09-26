@@ -25,6 +25,10 @@
   },
   "degradedHint": "Rebuilding the index may fill in missing callers, endpoints, and crons.",
   "resync": "Rebuild index",
+  "resyncOutcome": {
+    "timeout": "The rebuild didn't finish — the repo may not be cloned yet. Check the repo's index status, then try again.",
+    "poll_failed": "Couldn't check the rebuild's progress. Try again in a moment."
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"

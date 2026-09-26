@@ -37,6 +37,11 @@ export interface BlastResyncState {
    *  milliseconds while the real reindex runs in the background
    *  (client/INSIGHTS.md "What Doesn't Work", 2026-09-24). */
   isResyncing: boolean;
+  /** Why the last tracked resync ended without the index advancing:
+   *  `timeout` (nothing landed within BLAST_RESYNC_TIMEOUT_MS — e.g. the
+   *  repo has no clone, so no index row is ever written) or `poll_failed`.
+   *  null while idle, while running, and after a successful rebuild. */
+  outcome: "timeout" | "poll_failed" | null;
 }
 
 /**
@@ -64,6 +69,7 @@ export function useBlastResync(
     startedAt: number;
     baseline: { sha: string; updatedAt: string } | null;
   } | null>(null);
+  const [outcome, setOutcome] = React.useState<BlastResyncState["outcome"]>(null);
   const status = useRepoIntelStatus(repoId, run !== null);
 
   const start = React.useCallback(() => {
@@ -71,6 +77,7 @@ export function useBlastResync(
     const current = status.data;
     const baseline = current ? { sha: current.lastIndexedSha, updatedAt: current.updatedAt } : null;
     // The POST itself failing is already toasted globally (MutationCache.onError).
+    setOutcome(null);
     resync.mutate(undefined, {
       onSuccess: () => setRun({ startedAt: Date.now(), baseline }),
     });
@@ -82,14 +89,16 @@ export function useBlastResync(
     if (!run) return;
     if (status.errorUpdatedAt >= run.startedAt) {
       setRun(null);
+      setOutcome("poll_failed");
       return;
     }
     const current = status.data;
     if (!current) return;
-    const advanced =
-      !run.baseline ||
-      current.lastIndexedSha !== run.baseline.sha ||
-      current.updatedAt !== run.baseline.updatedAt;
+    // No baseline (index-state hadn't loaded at click time): only a row
+    // written after the click counts, not the first poll result.
+    const advanced = run.baseline
+      ? current.lastIndexedSha !== run.baseline.sha || current.updatedAt !== run.baseline.updatedAt
+      : Date.parse(current.updatedAt) >= run.startedAt;
     if (advanced) {
       setRun(null);
       if (prId) qc.invalidateQueries({ queryKey: ["blast", prId] });
@@ -99,9 +108,12 @@ export function useBlastResync(
   // Give up after BLAST_RESYNC_TIMEOUT_MS if neither of the above fired.
   React.useEffect(() => {
     if (!run) return;
-    const id = setTimeout(() => setRun(null), BLAST_RESYNC_TIMEOUT_MS);
+    const id = setTimeout(() => {
+      setRun(null);
+      setOutcome("timeout");
+    }, BLAST_RESYNC_TIMEOUT_MS);
     return () => clearTimeout(id);
   }, [run]);
 
-  return { start, isResyncing: resync.isPending || run !== null };
+  return { start, isResyncing: resync.isPending || run !== null, outcome };
 }

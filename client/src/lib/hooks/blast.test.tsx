@@ -124,6 +124,7 @@ describe("useBlastResync", () => {
     await act(() => vi.advanceTimersByTimeAsync(1600));
 
     expect(result.current.isResyncing).toBe(false);
+    expect(result.current.outcome).toBeNull();
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["blast", "pr1"] });
   });
 
@@ -146,6 +147,7 @@ describe("useBlastResync", () => {
     await act(() => vi.advanceTimersByTimeAsync(BLAST_RESYNC_TIMEOUT_MS));
 
     expect(result.current.isResyncing).toBe(false);
+    expect(result.current.outcome).toBe("timeout");
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ["blast", "pr1"] });
   });
 
@@ -172,6 +174,7 @@ describe("useBlastResync", () => {
     await act(() => vi.advanceTimersByTimeAsync(1600));
 
     expect(result.current.isResyncing).toBe(false);
+    expect(result.current.outcome).toBe("poll_failed");
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ["blast", "pr1"] });
   });
 
