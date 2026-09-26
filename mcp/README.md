@@ -30,7 +30,7 @@ enable it. There is no daemon to keep running.
    installs exactly what `package-lock.json` pins.
 4. **Check it:** `npm run typecheck && npm test`.
 5. **Smoke-test it without Claude Code:** from the repo root, run the Inspector
-   command under [Verifying a change](#verifying-a-change). You should see four
+   command under [Verifying a change](#verifying-a-change). You should see five
    tools, and `list_agents` should return the seeded agents.
 6. **Use it from Claude Code:** see [On-demand use](#on-demand-use-claude-code)
    below.
@@ -49,7 +49,7 @@ With that setting, new sessions start without the server: its tools and its
 
 1. Make sure the API is up (step 1 above).
 2. In the Claude Code session, run `/mcp enable devdigest` and check its status
-   with `/mcp`. The four tools are now available.
+   with `/mcp`. The five tools are now available.
 3. When you are done, run `/mcp disable devdigest`, so the next sessions start
    without it again.
 
@@ -106,7 +106,6 @@ See `.env.example`. All are optional; `.mcp.json` only sets `DEVDIGEST_API_URL`.
 | `DEVDIGEST_API_URL` | `http://localhost:3001` | Base URL of `@devdigest/api`. |
 | `DEVDIGEST_MCP_RUN_TIMEOUT_MS` | `55000` | How long `run_agent_on_pr` polls before returning `{status:'running'}`. |
 | `DEVDIGEST_MCP_POLL_INTERVAL_MS` | `2000` | Poll interval while a review run is in progress. |
-| `DEVDIGEST_MCP_ENABLE_BLAST_RADIUS` | `false` (must be exactly `true` to enable) | Registers the `get_blast_radius` stub tool. |
 
 ## Tools
 
@@ -116,7 +115,7 @@ See `.env.example`. All are optional; `.mcp.json` only sets `DEVDIGEST_API_URL`.
 | `run_agent_on_pr` | `repo, pr, agent, include_dismissed?, limit?` | `{status, run_id, verdict, score, counts, total, truncated, findings[]}` | The only tool that writes. Starts a review, polls `GET /runs/:id`, and returns findings once done — or `{status:'running'}` past the timeout, with a hint to call `get_findings`. |
 | `get_findings` | `run_id, include_dismissed?, limit?` | Same shape as `run_agent_on_pr` | Reads back a run started earlier. |
 | `get_conventions` | `repo, limit?` | `{repo, scanned, rules[], note}` | Only `accepted` conventions; empty + a `note` if the repo hasn't been scanned. |
-| `get_blast_radius` | `repo, pr` | Always `isError:true` | **Stub** — registered only under `DEVDIGEST_MCP_ENABLE_BLAST_RADIUS=true`. L04 homework: wire it to `container.repoIntel.getBlastRadius` (`server/src/modules/repo-intel/service.ts:220`) and the `BlastRadius` contract (`server/src/vendor/shared/contracts/brief.ts:53`). |
+| `get_blast_radius` | `repo, pr` | `{changed_symbols[], downstream[], summary, degraded?, reason?, note?}` | A PR's impact map: changed symbols, their callers, and any endpoints/crons affected. `degraded`/`reason` (+ a note) when the repo index is missing or incomplete — best-effort, never an error. |
 
 `repo` is always `owner/name`. Free text sourced from a PR or an LLM's own
 output (`title`, `rationale`, `suggestion`, `rule`, …) is wrapped in a
@@ -140,8 +139,7 @@ npx @modelcontextprotocol/inspector --cli --config .mcp.json --server devdigest 
 ```
 
 Then call a tool against the seeded demo data (`acme/payments-api`, PR #482),
-e.g. `--method tools/call --tool-name list_agents`. Add
-`-e DEVDIGEST_MCP_ENABLE_BLAST_RADIUS=true` to include the stub.
+e.g. `--method tools/call --tool-name list_agents`.
 
 From inside Claude Code with the repo's `.mcp.json` picked up, run `/context
 all` — the session should only be charged for the tool names and the

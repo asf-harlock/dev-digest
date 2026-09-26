@@ -8,7 +8,6 @@ export interface McpConfig {
   apiUrl: string;
   runTimeoutMs: number;
   pollIntervalMs: number;
-  enableBlastRadius: boolean;
 }
 
 const DEFAULT_API_URL = 'http://localhost:3001';
@@ -27,6 +26,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): McpConfig {
     apiUrl: apiUrl && apiUrl.length > 0 ? apiUrl : DEFAULT_API_URL,
     runTimeoutMs: parsePositiveInt(env.DEVDIGEST_MCP_RUN_TIMEOUT_MS, DEFAULT_RUN_TIMEOUT_MS),
     pollIntervalMs: parsePositiveInt(env.DEVDIGEST_MCP_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS),
-    enableBlastRadius: env.DEVDIGEST_MCP_ENABLE_BLAST_RADIUS === 'true',
   };
 }

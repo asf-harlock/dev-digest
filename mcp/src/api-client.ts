@@ -6,7 +6,7 @@
 import type { Agent, ConventionsSnapshot, RunSummary } from '@devdigest/shared';
 import type { McpConfig } from './config.js';
 import { apiUnavailable, McpToolError } from './errors.js';
-import type { ReviewDtoLite } from './types.js';
+import type { Blast, ReviewDtoLite } from './types.js';
 
 export interface DevDigestApi {
   listAgents(): Promise<Agent[]>;
@@ -21,6 +21,7 @@ export interface DevDigestApi {
   getRun(runId: string): Promise<RunSummary>;
   getRunFindings(runId: string): Promise<ReviewDtoLite>;
   getConventions(repoId: string): Promise<ConventionsSnapshot>;
+  getBlast(prId: string): Promise<Blast>;
 }
 
 /** Minimal shape this module needs from a `fetch` response — lets tests pass
@@ -103,5 +104,7 @@ export function createApiClient(cfg: McpConfig, fetchImpl: ApiFetch = fetch): De
     getRunFindings: (runId) => call<ReviewDtoLite>(`/runs/${runId}/findings`),
 
     getConventions: (repoId) => call<ConventionsSnapshot>(`/repos/${repoId}/conventions`),
+
+    getBlast: (prId) => call<Blast>(`/pulls/${prId}/blast`),
   };
 }

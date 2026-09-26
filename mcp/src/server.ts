@@ -19,10 +19,10 @@ export interface ToolDeps {
   now?: () => number;
 }
 
-// 255 chars — well under the ≤400 budget a client charges against context at
-// connect time. Keep it this short; it is loaded on every session, always.
+// Kept well under the ≤400 budget a client charges against context at
+// connect time — it is loaded on every session, always.
 export const INSTRUCTIONS =
-  "DevDigest PR review via the local API (:3001, start with ./scripts/dev.sh). Workflow: list_agents → run_agent_on_pr(repo,pr,agent) for a verdict+findings → get_findings(run_id) if still running → get_conventions(repo) for house rules. repo = 'owner/name'.";
+  "DevDigest PR review via the local API (:3001, start with ./scripts/dev.sh). Workflow: list_agents → run_agent_on_pr(repo,pr,agent) for a verdict+findings → get_findings(run_id) if still running → get_conventions(repo) for house rules → get_blast_radius(repo,pr) for impact map. repo = 'owner/name'.";
 
 export function buildMcpServer(deps: ToolDeps): McpServer {
   const server = new McpServer(
@@ -34,11 +34,7 @@ export function buildMcpServer(deps: ToolDeps): McpServer {
   registerRunAgentOnPr(server, deps);
   registerGetFindings(server, deps);
   registerGetConventions(server, deps);
-  // Registered only behind the flag — the tool is a stub (L04 homework),
-  // and an always-present tool the client can't use yet is worse than none.
-  if (deps.config.enableBlastRadius) {
-    registerGetBlastRadius(server, deps);
-  }
+  registerGetBlastRadius(server, deps);
 
   return server;
 }

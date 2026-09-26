@@ -8,7 +8,6 @@ const config: McpConfig = {
   apiUrl: 'http://localhost:3001',
   runTimeoutMs: 55_000,
   pollIntervalMs: 2_000,
-  enableBlastRadius: false,
 };
 
 function jsonResponse(status: number, body: unknown, statusText = ''): ApiFetchResponse {
@@ -77,6 +76,22 @@ describe('createApiClient — error mapping', () => {
     const err = await api.lookupPull('repo-1', -1).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(McpToolError);
     expect((err as McpToolError).code).toBe('bad_request');
+  });
+
+  it('maps a 404 on getBlast to not_found, using the server message', async () => {
+    const fetchImpl: ApiFetch = vi.fn(async () =>
+      jsonResponse(404, { error: { code: 'not_found', message: 'Pull request not found' } }),
+    );
+    const api = createApiClient(config, fetchImpl);
+
+    const err = await api.getBlast('pr-1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(McpToolError);
+    expect((err as McpToolError).code).toBe('not_found');
+    expect((err as McpToolError).message).toBe('Pull request not found');
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:3001/pulls/pr-1/blast',
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 
   it('maps any other non-2xx status to internal', async () => {
@@ -178,6 +193,22 @@ describe('createApiClient — happy paths', () => {
     await expect(api.getConventions('r1')).resolves.toEqual(snapshot);
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://localhost:3001/repos/r1/conventions',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('getBlast: GET /pulls/:id/blast', async () => {
+    const blast = {
+      changed_symbols: [{ name: 'chargeCard', file: 'src/billing.ts', kind: 'function' }],
+      downstream: [],
+      summary: '1 changed symbol · 0 callers · 0 endpoints · 0 crons',
+    };
+    const fetchImpl: ApiFetch = vi.fn(async () => jsonResponse(200, blast));
+    const api = createApiClient(config, fetchImpl);
+
+    await expect(api.getBlast('pr-1')).resolves.toEqual(blast);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:3001/pulls/pr-1/blast',
       expect.objectContaining({ method: 'GET' }),
     );
   });
