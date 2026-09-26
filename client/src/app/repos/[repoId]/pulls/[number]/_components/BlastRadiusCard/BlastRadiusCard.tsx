@@ -33,7 +33,7 @@ export function BlastRadiusCard({
   headSha: string | null | undefined;
 }) {
   const t = useTranslations("blast");
-  const { data: blast, isLoading, isError, refetch } = useBlastRadius(prId);
+  const { data: blast, isLoading, isError, refetch: retry } = useBlastRadius(prId);
   const resync = useResyncRepoIntel(repoId);
   const [view, setView] = React.useState<BlastView>("tree");
 
@@ -61,7 +61,7 @@ export function BlastRadiusCard({
             <Icon.Zap size={14} style={s.headerIcon} />
             <span style={s.label}>{t("title")}</span>
           </div>
-          <ErrorState title={t("error")} onRetry={() => refetch()} />
+          <ErrorState title={t("error")} onRetry={() => retry()} />
         </div>
       </section>
     );
