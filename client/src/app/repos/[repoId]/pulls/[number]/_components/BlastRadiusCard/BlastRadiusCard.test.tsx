@@ -6,14 +6,16 @@ import type { BlastRadius } from "@devdigest/shared";
 import { githubBlobUrl } from "@/lib/github-urls";
 
 // --- hooks: BlastRadiusCard reads both through the "@/lib/hooks" barrel it
-// imports from (client/CLAUDE.md: no fetch in components). ---
-const resyncMutate = vi.fn();
+// imports from (client/CLAUDE.md: no fetch in components). useBlastResync's
+// own polling/timeout orchestration is covered directly (fake timers) in
+// lib/hooks/blast.test.tsx — here it's a plain start()/isResyncing stub. ---
+const resyncStart = vi.fn();
 const hookState: {
   isLoading: boolean;
   isError: boolean;
   data: BlastRadius | undefined;
-  resyncPending: boolean;
-} = { isLoading: false, isError: false, data: undefined, resyncPending: false };
+  resyncing: boolean;
+} = { isLoading: false, isError: false, data: undefined, resyncing: false };
 
 vi.mock("@/lib/hooks", () => ({
   useBlastRadius: () => ({
@@ -22,7 +24,7 @@ vi.mock("@/lib/hooks", () => ({
     isError: hookState.isError,
     refetch: vi.fn(),
   }),
-  useResyncRepoIntel: () => ({ mutate: resyncMutate, isPending: hookState.resyncPending }),
+  useBlastResync: () => ({ start: resyncStart, isResyncing: hookState.resyncing }),
 }));
 
 // --- MermaidDiagram lazy-loads the real `mermaid` package client-side; stub
@@ -38,8 +40,8 @@ afterEach(() => {
   hookState.isLoading = false;
   hookState.isError = false;
   hookState.data = undefined;
-  hookState.resyncPending = false;
-  resyncMutate.mockClear();
+  hookState.resyncing = false;
+  resyncStart.mockClear();
 });
 
 function renderCard(props: Partial<React.ComponentProps<typeof BlastRadiusCard>> = {}) {
@@ -139,15 +141,20 @@ describe("BlastRadiusCard", () => {
 
     const cta = screen.getByRole("button", { name: "Rebuild index" });
     fireEvent.click(cta);
-    expect(resyncMutate).toHaveBeenCalled();
+    expect(resyncStart).toHaveBeenCalled();
   });
 
-  it("shows a degraded warning without a Rebuild index CTA for a non-resyncable reason", () => {
+  it("shows a degraded warning without a Rebuild index CTA or hint for a non-resyncable reason", () => {
     hookState.data = baseBlast({ changed_symbols: [], downstream: [], degraded: true, reason: "flag_off" });
     renderCard();
 
     expect(screen.getByText("Blast radius is turned off for this workspace.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rebuild index" })).not.toBeInTheDocument();
+    // The hint ("rebuilding may fill in...") only makes sense next to a CTA
+    // that can actually trigger a rebuild — flag_off can't, so neither shows.
+    expect(
+      screen.queryByText("Rebuilding the index may fill in missing callers, endpoints, and crons."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders stat counts with accessible names, and expands/collapses a symbol's caller list", () => {
@@ -220,18 +227,26 @@ describe("BlastRadiusCard", () => {
     expect(screen.getByText("nightly-email-digest")).toBeInTheDocument();
   });
 
-  it("toggles between Tree and Graph views", () => {
+  it("toggles between Tree and Graph views, keeping aria-pressed in sync", () => {
     hookState.data = baseBlast();
     renderCard();
 
+    const treeBtn = screen.getByRole("button", { name: "Tree" });
+    const graphBtn = screen.getByRole("button", { name: "Graph" });
+    expect(treeBtn).toHaveAttribute("aria-pressed", "true");
+    expect(graphBtn).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("createUser()")).toBeInTheDocument();
     expect(screen.queryByTestId("mermaid-diagram")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    fireEvent.click(graphBtn);
+    expect(treeBtn).toHaveAttribute("aria-pressed", "false");
+    expect(graphBtn).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("createUser()")).not.toBeInTheDocument();
     expect(screen.getByTestId("mermaid-diagram")).toHaveTextContent("flowchart LR");
 
-    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(treeBtn);
+    expect(treeBtn).toHaveAttribute("aria-pressed", "true");
+    expect(graphBtn).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("createUser()")).toBeInTheDocument();
     expect(screen.queryByTestId("mermaid-diagram")).not.toBeInTheDocument();
   });

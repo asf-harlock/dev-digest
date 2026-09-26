@@ -11,7 +11,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, EmptyState, ErrorState, Icon, Skeleton } from "@devdigest/ui";
-import { useBlastRadius, useResyncRepoIntel } from "@/lib/hooks";
+import { useBlastRadius, useBlastResync } from "@/lib/hooks";
 import { BlastSummary, type BlastView } from "./_components/BlastSummary";
 import { BlastTree } from "./_components/BlastTree";
 import { BlastGraph } from "./_components/BlastGraph";
@@ -34,7 +34,7 @@ export function BlastRadiusCard({
 }) {
   const t = useTranslations("blast");
   const { data: blast, isLoading, isError, refetch: retry } = useBlastRadius(prId);
-  const resync = useResyncRepoIntel(repoId);
+  const resync = useBlastResync(prId, repoId);
   const [view, setView] = React.useState<BlastView>("tree");
 
   if (isLoading) {
@@ -46,7 +46,7 @@ export function BlastRadiusCard({
             <span style={s.label}>{t("title")}</span>
           </div>
           <Skeleton height={16} width={280} />
-          <div style={{ height: 10 }} />
+          <div style={s.skeletonGap} />
           <Skeleton height={60} />
         </div>
       </section>
@@ -85,15 +85,15 @@ export function BlastRadiusCard({
             <Icon.AlertTriangle size={14} style={s.degradedIcon} />
             <div style={s.degradedText}>
               <div>{t(`degraded.${blast.reason ?? "no_data"}`)}</div>
-              <div style={s.degradedHint}>{t("degradedHint")}</div>
+              {canResync && <div style={s.degradedHint}>{t("degradedHint")}</div>}
             </div>
             {canResync && (
               <Button
                 kind="secondary"
                 size="sm"
                 icon="RefreshCw"
-                loading={resync.isPending}
-                onClick={() => resync.mutate()}
+                loading={resync.isResyncing}
+                onClick={resync.start}
               >
                 {t("resync")}
               </Button>

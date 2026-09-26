@@ -19,6 +19,7 @@ export const s = {
     marginBottom: 16,
   } satisfies CSSProperties,
   headerIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  skeletonGap: { height: 10 } satisfies CSSProperties,
   label: {
     fontSize: 12,
     fontWeight: 700,

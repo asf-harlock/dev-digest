@@ -30,26 +30,40 @@ export function BlastSummary({
       <div style={s.stats}>
         {STAT_ITEMS.map(({ key, icon, labelKey }) => {
           const Icn = Icon[icon];
-          const count = stats[key];
-          const label = t(labelKey, { count });
-          const title = `${count} ${label}`;
+          // The ICU message (`"{count, plural, one {# symbol} other {#
+          // symbols}}"`, blast.json) is the single source for both the
+          // visible text and its accessible name — no manual
+          // `${count} ${label}` concatenation to keep in sync with it.
+          const text = t(labelKey, { count: stats[key] });
           return (
-            <span key={key} style={s.stat} title={title} aria-label={title}>
+            <span key={key} style={s.stat} title={text} aria-label={text}>
               <Icn size={13} style={s.statIcon} />
-              <span className="tnum">{count}</span> {label}
+              <span className="tnum">{text}</span>
             </span>
           );
         })}
       </div>
       {showToggle && (
-      <div style={s.segmented} role="group" aria-label={t("title")}>
-        <Button kind="tertiary" size="sm" active={view === "tree"} onClick={() => onViewChange("tree")}>
-          {t("view.tree")}
-        </Button>
-        <Button kind="tertiary" size="sm" active={view === "graph"} onClick={() => onViewChange("graph")}>
-          {t("view.graph")}
-        </Button>
-      </div>
+        <div style={s.segmented} role="group" aria-label={t("title")}>
+          <Button
+            kind="tertiary"
+            size="sm"
+            active={view === "tree"}
+            aria-pressed={view === "tree"}
+            onClick={() => onViewChange("tree")}
+          >
+            {t("view.tree")}
+          </Button>
+          <Button
+            kind="tertiary"
+            size="sm"
+            active={view === "graph"}
+            aria-pressed={view === "graph"}
+            onClick={() => onViewChange("graph")}
+          >
+            {t("view.graph")}
+          </Button>
+        </div>
       )}
     </div>
   );
