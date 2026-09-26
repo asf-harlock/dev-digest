@@ -7,7 +7,7 @@ Adapters (LLM, GitHub, git, ast-grep, …) sit behind a DI container so they can
 swapped for mocks in tests.
 
 > This is the **starter** module set. Later course lessons add their own modules
-> (skills, blast, brief/context/onboarding, eval/ci/hooks, memory, plugins, …) —
+> (skills, brief/context/onboarding, eval/ci/hooks, memory, plugins, …) —
 > each is a self-contained `modules/<name>/` plugin plus, usually, a slot it
 > starts feeding the reviewer prompt. Intent and Smart Diff (L03) are the
 > exception: they live inside `reviews` (`POST /pulls/:id/intent`,
@@ -78,6 +78,7 @@ flowchart TB
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
+    blast["blast<br/>/pulls/:id/blast"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
