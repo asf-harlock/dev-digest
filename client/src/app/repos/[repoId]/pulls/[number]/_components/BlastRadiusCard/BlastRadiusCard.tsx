@@ -16,7 +16,7 @@ import { BlastSummary, type BlastView } from "./_components/BlastSummary";
 import { BlastTree } from "./_components/BlastTree";
 import { BlastGraph } from "./_components/BlastGraph";
 import { RESYNCABLE_REASONS } from "./constants";
-import { kindsByName, statsFor } from "./helpers";
+import { kindsByName, statsFor, symbolsWithoutCallers } from "./helpers";
 import { s } from "./styles";
 
 export function BlastRadiusCard({
@@ -114,11 +114,12 @@ export function BlastRadiusCard({
           <div style={s.noDownstream}>{t("noDownstream", { count: stats.symbols })}</div>
         )}
 
-        {hasSymbols && hasDownstream && (
+        {hasSymbols && (
           <>
-            {view === "tree" ? (
+            {view === "tree" || !hasDownstream ? (
               <BlastTree
                 downstream={blast.downstream}
+                unreached={symbolsWithoutCallers(blast)}
                 kinds={kindsByName(blast)}
                 repoFullName={repoFullName}
                 headSha={headSha}

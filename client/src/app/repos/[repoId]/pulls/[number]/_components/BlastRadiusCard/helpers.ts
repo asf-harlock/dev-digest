@@ -52,6 +52,21 @@ export function kindsByName(blast: BlastRadius): Map<string, string> {
   return kinds;
 }
 
+/** Changed symbols no caller reaches (the server leaves them out of
+ *  `downstream`), deduped by name in `changed_symbols` order — so the tree
+ *  and graph can still show every symbol the summary row counts. */
+export function symbolsWithoutCallers(blast: BlastRadius): { name: string; kind: string }[] {
+  const reached = new Set(blast.downstream.map((d) => d.symbol));
+  const out: { name: string; kind: string }[] = [];
+  const seen = new Set<string>();
+  for (const sym of blast.changed_symbols) {
+    if (reached.has(sym.name) || seen.has(sym.name)) continue;
+    seen.add(sym.name);
+    out.push({ name: sym.name, kind: sym.kind });
+  }
+  return out;
+}
+
 /** Characters that mermaid's flowchart node-label syntax would otherwise
  *  parse as structure (quotes end the label early, `#`/`;` are entity/
  *  statement syntax, brackets/parens/angle-brackets can be read as another
@@ -114,6 +129,10 @@ export function toMermaid(blast: BlastRadius): string {
       }
     }
   }
+
+  // Symbols nobody calls: isolated nodes, so the graph accounts for every
+  // symbol the summary row counts.
+  for (const sym of symbolsWithoutCallers(blast)) idFor("s", sym.name, sym.name);
 
   return lines.join("\n");
 }

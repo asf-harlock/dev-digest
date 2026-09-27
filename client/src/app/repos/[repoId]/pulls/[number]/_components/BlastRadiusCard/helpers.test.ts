@@ -3,7 +3,7 @@
    framework-free transforms over the BlastRadius contract. */
 import { describe, it, expect } from "vitest";
 import type { BlastRadius } from "@devdigest/shared";
-import { kindsByName, statsFor, symbolLabel, toMermaid } from "./helpers";
+import { kindsByName, statsFor, symbolLabel, symbolsWithoutCallers, toMermaid } from "./helpers";
 
 function blast(overrides: Partial<BlastRadius> = {}): BlastRadius {
   return {
@@ -153,5 +153,34 @@ describe("symbolLabel / kindsByName", () => {
     });
     expect(kinds.get("a")).toBe("function");
     expect(kinds.get("T")).toBe("type");
+  });
+});
+
+describe("symbolsWithoutCallers", () => {
+  const map: BlastRadius = {
+    changed_symbols: [
+      { name: "rowsToSettings", file: "h.ts", kind: "function" },
+      { name: "SettingsRow", file: "h.ts", kind: "interface" },
+      { name: "SettingsRow", file: "other.ts", kind: "interface" },
+    ],
+    downstream: [
+      {
+        symbol: "rowsToSettings",
+        callers: [{ name: "settingsRoutes", file: "routes.ts", line: 65 }],
+        endpoints_affected: ["GET /settings"],
+        crons_affected: [],
+      },
+    ],
+    summary: "",
+  };
+
+  it("returns changed symbols absent from downstream, deduped by name", () => {
+    expect(symbolsWithoutCallers(map)).toEqual([{ name: "SettingsRow", kind: "interface" }]);
+  });
+
+  it("adds them to the graph as isolated nodes (no edges)", () => {
+    const chart = toMermaid(map);
+    expect(chart).toMatch(/s1\["SettingsRow"\]/);
+    expect(chart).not.toMatch(/s1 -->/);
   });
 });

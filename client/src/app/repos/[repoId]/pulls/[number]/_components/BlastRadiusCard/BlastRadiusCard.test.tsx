@@ -126,6 +126,9 @@ describe("BlastRadiusCard", () => {
     renderCard();
 
     expect(screen.getByText("2 changed symbols, no downstream callers found.")).toBeInTheDocument();
+    // Each uncalled symbol is still listed by name.
+    expect(screen.getByText("a()")).toBeInTheDocument();
+    expect(screen.getByText("b()")).toBeInTheDocument();
     // The summary row still renders (0 callers is an answer), but there is
     // nothing to switch between, so no Tree/Graph toggle.
     expect(screen.getByTitle("0 callers")).toBeInTheDocument();
@@ -207,6 +210,19 @@ describe("BlastRadiusCard", () => {
     renderCard();
 
     expect(screen.getByText(/The rebuild didn't finish/)).toBeInTheDocument();
+  });
+
+  it("lists a changed symbol with no callers as a muted 0-callers row, so the tree matches the summary", () => {
+    hookState.data = baseBlast({
+      changed_symbols: [...baseBlast().changed_symbols, { name: "SettingsRow", file: "users.ts", kind: "interface" }],
+    });
+    renderCard();
+
+    expect(screen.getByTitle("3 symbols")).toBeInTheDocument();
+    expect(screen.getByText("SettingsRow")).toBeInTheDocument();
+    expect(screen.getByText("0 callers")).toBeInTheDocument();
+    // Not expandable: only the two symbols with callers are toggle buttons.
+    expect(screen.getAllByRole("button", { expanded: true }).length + screen.getAllByRole("button", { expanded: false }).length).toBe(2);
   });
 
   it("links each caller to its exact GitHub blob line when the repo and head sha are known", () => {

@@ -36,5 +36,9 @@ export const s = {
   callerRow: { display: "flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
   callerIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
   callerText: { fontSize: 13, color: "var(--text-secondary)" } satisfies CSSProperties,
+  quietRow: { display: "flex", alignItems: "center", gap: 8, padding: "8px 6px" } satisfies CSSProperties,
+  /** Same width as the chevron, so quiet rows align with expandable ones. */
+  chevronSlot: { width: 13, flexShrink: 0 } satisfies CSSProperties,
+  quietName: { fontSize: 13.5, fontWeight: 500, color: "var(--text-muted)" } satisfies CSSProperties,
   chips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 } satisfies CSSProperties,
 } as const;

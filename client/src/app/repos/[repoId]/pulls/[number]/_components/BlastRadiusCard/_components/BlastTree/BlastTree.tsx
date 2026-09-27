@@ -16,11 +16,15 @@ import { s } from "./styles";
 
 export function BlastTree({
   downstream,
+  unreached = [],
   kinds,
   repoFullName,
   headSha,
 }: {
   downstream: DownstreamImpact[];
+  /** Changed symbols with no callers — listed after the groups as muted,
+   *  non-expandable rows so the tree matches the summary's symbol count. */
+  unreached?: { name: string; kind: string }[];
   /** symbol name → kind (from `changed_symbols`), for the `name()` label. */
   kinds: Map<string, string>;
   /** null until the repo record loads — callers render as plain mono text,
@@ -40,6 +44,26 @@ export function BlastTree({
           headSha={headSha}
         />
       ))}
+      {unreached.map((sym) => (
+        <UnreachedRow key={sym.name} name={sym.name} kind={sym.kind} />
+      ))}
+    </div>
+  );
+}
+
+function UnreachedRow({ name, kind }: { name: string; kind: string }) {
+  const t = useTranslations("blast");
+  return (
+    <div style={s.quietRow}>
+      <span style={s.chevronSlot} />
+      <Icon.Code size={13} style={s.symbolIcon} />
+      <span className="mono" style={s.quietName}>
+        {symbolLabel(name, kind)}
+      </span>
+      <span style={s.spacer} />
+      <span className="tnum" style={s.callerCount}>
+        {t("callerCount", { count: 0 })}
+      </span>
     </div>
   );
 }
