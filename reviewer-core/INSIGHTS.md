@@ -17,6 +17,16 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Decisions
 
+### 2026-09-29 — Project-context guard sentence is conditional
+
+**What:** `PROJECT_CONTEXT_GUARD` (`prompt.ts`) is appended after `INJECTION_GUARD`
+only when at least one project-context doc is attached; `INJECTION_GUARD` itself
+is unchanged.
+**Why:** SPEC-04 EC-14 requires a byte-identical prompt when no context is attached,
+but AC-25 asks for a guard sentence, and the guard is in every prompt.
+**Rejected:** adding the sentence to `INJECTION_GUARD` unconditionally — it changed
+every review's system prompt even with zero documents.
+
 ### 2026-09-20 — `verdict` is derived from findings, never trusted from the model
 
 **What:** `run.ts` now computes the persisted `review.verdict` with

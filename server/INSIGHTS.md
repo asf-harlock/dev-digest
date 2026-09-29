@@ -56,9 +56,22 @@ needed none of those and cannot drift.
   drop that source to "not yet available" rather than build against a route
   that doesn't exist. Confirm with `grep -rn "SpecFile" server/src client/src`
   before assuming this feature is live in a future session.
+  **Fixed 2026-09-29 (SPEC-04):** `modules/context/` now serves `GET /repos/:id/context`,
+  `GET .../context/file` and `POST .../context/rescan`; the client hook returns
+  `ContextListing`, not `SpecFile[]`.
 
 ## Codebase Patterns
 
+
+- **2026-09-29** — The repo clone is a throwaway read-only mirror, not a
+  working copy. `SimpleGitClient.sync()` runs `reset --hard origin/<branch>`
+  on every resync, so any file written into the clone (an "edit this doc"
+  feature, a generated file) is silently lost. The PR head exists only as the
+  local ref `pr-N` (`fetchPullHead`), never as the worktree. `readFile(repo,
+  path)` is a bare `join(clonePath, path)` with no containment check, so a
+  feature that reads a user-chosen path must reject `..`, absolute paths and
+  symlinks itself (precedent: `repo-intel/pipeline/walk.ts:89`).
+  `server/src/adapters/git/simple-git.ts:77-88,129-131`
 
 - **2026-09-26** — A module that maps another module's facade result cannot
   type its `helpers.ts` with that result's type. `no-cross-module-import` blocks

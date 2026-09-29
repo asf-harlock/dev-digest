@@ -65,6 +65,11 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-09-29** — A new editor tab needs its key added in TWO places, or `?tab=<key>`
+  silently falls back to the first tab: the editor's `constants.ts` **and** the
+  `VALID_TABS` list in the route's `page.tsx` (`app/agents/[id]/page.tsx`,
+  `app/skills/[id]/page.tsx`). Nothing fails typecheck or tests.
+
 - **2026-09-24** — Every failed mutation, and every query failure with status 0
   or 5xx, is already toasted globally, by `MutationCache.onError` and
   `QueryCache.onError`. A component that toasts its own error shows the same
@@ -104,6 +109,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `nav.ts` edit is out of bounds.
 
 ## Tool & Library Notes
+
+- **2026-09-29** — A failing `getByRole` prints the whole "Here are the
+  accessible roles" list, and `DEBUG_PRINT_LIMIT` does NOT cap it (it only caps
+  the `prettyDOM` dump). A 300-node render produced 69 KB of vitest output for
+  one failure. When reading a failure, the useful part is the first line and the
+  `❯ src/…:line` frame after the list — `./scripts/check.sh client related
+  <files>` trims to exactly that. `scripts/check.sh`
 
 - **2026-09-24** — TanStack Query v5 keeps a query in `status: "error"` after a
   failed refetch (its data is kept) until a later fetch succeeds. `status ===
@@ -151,6 +163,10 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   fireEvents. `LinkToAgentPanel.test.tsx` (agent picker → `useAgentSkills`).
 
 ## Session Notes
+
+- **2026-09-29** — Built `scripts/check.sh` to cut implementer gate output;
+  the `getByRole` role-list entry (Tool & Library Notes) came from measuring
+  raw vs trimmed vitest failures.
 
 - **2026-09-24** — Smart Diff (L03) and Intent card fixes. The diff-viewer's
   new-side finding anchoring (Codebase Patterns) came from the Smart Diff
