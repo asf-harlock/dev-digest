@@ -132,6 +132,22 @@ if want yaml:parse; then
   fi
 fi
 
+if want spec:lint; then
+  # Form check for SPEC-NN files (.claude/skills/spec-authoring). Legacy specs
+  # with no `Spec ID:` line are skipped by the lint itself, not here.
+  specs=()
+  while read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && specs+=("$f")
+  done < <(jq -r '.files[] | select(.bucket == "spec") | .path' "$CHANGESET")
+  if ! command -v node >/dev/null 2>&1; then
+    skip spec:lint "node lint-spec.mjs <changed specs>" "node is not installed — specs were not lint-checked"
+  elif [ ${#specs[@]} -eq 0 ]; then
+    skip spec:lint "node lint-spec.mjs <changed specs>" "every changed spec was deleted — nothing to lint"
+  else
+    gate spec:lint node .claude/skills/spec-authoring/scripts/lint-spec.mjs "${specs[@]}"
+  fi
+fi
+
 jq -s '.' "$RESULTS" > "$PSR_DIR/gates.json"; rm -f "$RESULTS"
 
 # ---- failures → findings ----------------------------------------------------
@@ -177,6 +193,17 @@ while IFS=$'\t' read -r id cmd status log skipr; do
     fail)
       full="$PSR_DIR/$log"
       case "$id" in
+        spec:lint)
+          # lint-spec.mjs prints "path:line: message" — one finding per line.
+          while IFS= read -r ln; do
+            fp="${ln%%:*}"; rest="${ln#*:}"; lno="${rest%%:*}"; msg="${rest#*: }"
+            case "$lno" in ''|*[!0-9]*) continue ;; esac
+            emit_gate "spec:lint" CRITICAL style "$fp" "$lno" \
+              "spec lint: $msg" \
+              "The spec breaks a rule in \`.claude/skills/spec-authoring/reference/template.md\`. implementation-planner and plan-verifier trace against this format. Full log: \`$log\`" \
+              "Fix the spec, then re-run \`node .claude/skills/spec-authoring/scripts/lint-spec.mjs $fp\`."
+          done < "$full"
+          ;;
         *:lint)
           pkg="${id%%:*}"
           # eslint --format json, filtered to lines that this change actually added

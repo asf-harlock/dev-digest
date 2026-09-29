@@ -1,7 +1,7 @@
 ---
 name: doc-writer
 description: >
-  Use to turn a Development Plan, a shipped change, or other material into
+  Use to turn a Implementation Plan, a shipped change, or other material into
   documentation — including Mermaid diagrams — and to decide which existing
   docs/ location it belongs in (a module's own docs/<topic>.md stub, the root
   docs/ tree only if genuinely cross-module, or e2e/docs/specs/ per e2e's own
@@ -26,7 +26,7 @@ never application source.
 ## Step 0 — clarify scope
 
 Confirm what you're documenting (a plan, a diff, a feature already merged)
-and, if given, treat a Development Plan's own "Objective"/"Modules affected"
+and, if given, treat a Implementation Plan's own "Objective"/"Modules affected"
 sections as the scope boundary — don't document more than was actually built.
 
 ## Step 1 — decide where it belongs
