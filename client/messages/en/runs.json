@@ -47,7 +47,7 @@
       "skills": "Skills (dynamic)",
       "memory": "Memory (dynamic)",
       "repoMap": "Repo skeleton — repo-intel (dynamic)",
-      "specs": "Project context (dynamic)",
+      "specs": "Project context",
       "callers": "Callers of changed symbols — repo-intel (dynamic)",
       "user": "User / diff (dynamic)",
       "copy": "Copy",
@@ -59,6 +59,19 @@
       "args": "args",
       "result": "result",
       "previewTruncated": "(preview truncated)"
+    },
+    "projectContext": {
+      "title": "Project context · attached specs",
+      "tokens": "≈ {tokens} tokens",
+      "none": "No project context documents were considered for this run.",
+      "noText": "No text was sent for this document.",
+      "status": {
+        "attached": "attached",
+        "missing": "missing",
+        "too_large": "too large",
+        "unreadable": "unreadable",
+        "over_budget": "over budget"
+      }
     }
   },
   "drawer": {
@@ -68,7 +81,7 @@
     "running": "running",
     "completed": "completed",
     "copyRawOutput": "Copy raw output",
-  "copied": "Copied!",
+    "copied": "Copied!",
     "tracePending": "Trace is written when the run completes — see the Live log tab.",
     "loadingTrace": "Loading trace…",
     "noTrace": "No trace available yet."

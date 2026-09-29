@@ -51,7 +51,8 @@
       "skills": "Skills",
       "evals": "Evals",
       "stats": "Stats",
-      "ci": "CI"
+      "ci": "CI",
+      "context": "Context"
     }
   },
   "config": {
@@ -103,5 +104,9 @@
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
+  },
+  "context": {
+    "title": "Project context",
+    "hint": "Attach repository documents (specs, docs, insights) this agent should read on every review. Order matters — earlier documents are added to the prompt first. Documents from the agent’s enabled skills are listed read-only."
   }
 }

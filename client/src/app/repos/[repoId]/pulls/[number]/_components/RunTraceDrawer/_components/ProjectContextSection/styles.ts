@@ -1,0 +1,40 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  none: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+  row: { borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8, overflow: "hidden" } satisfies CSSProperties,
+  head: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: "10px 12px",
+    border: "none",
+    textAlign: "left",
+    cursor: "pointer",
+    background: "var(--bg-surface)",
+    color: "var(--text-primary)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  path: { flex: 1, minWidth: 0, overflowWrap: "anywhere" } satisfies CSSProperties,
+  meta: { fontSize: 12, color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  chevron: (open: boolean): CSSProperties => ({
+    color: "var(--text-muted)",
+    transform: open ? "rotate(180deg)" : "none",
+    transition: "transform .15s",
+    flexShrink: 0,
+  }),
+  text: {
+    margin: 0,
+    padding: "10px 14px",
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "var(--text-primary)",
+    background: "var(--code-bg)",
+    borderTop: "1px solid var(--border)",
+    whiteSpace: "pre-wrap",
+    overflow: "auto",
+    maxHeight: 360,
+  } satisfies CSSProperties,
+  empty: { padding: "10px 14px", fontSize: 12, color: "var(--text-muted)", borderTop: "1px solid var(--border)" } satisfies CSSProperties,
+} as const;

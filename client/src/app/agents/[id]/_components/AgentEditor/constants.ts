@@ -7,8 +7,9 @@ export interface EditorTab {
   icon: IconName;
 }
 
-/** Editor tabs. Part-0 shipped Config only; L02 adds Skills. */
+/** Editor tabs. Part-0 shipped Config only; L02 adds Skills, SPEC-04 adds Context. */
 export const TABS: readonly EditorTab[] = [
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
   { key: "skills", labelKey: "editor.tabs.skills", icon: "Wrench" },
+  { key: "context", labelKey: "editor.tabs.context", icon: "FileText" },
 ];

@@ -131,3 +131,42 @@ export function useSetAgentSkills() {
     },
   });
 }
+
+export interface SaveContextInput {
+  id: string;
+  /** The FULL ordered list of attached repo-relative paths (last save wins). */
+  paths: string[];
+}
+
+/** Saves an agent's attached project-context paths (`PUT /agents/:id/context`).
+ *  No Save button: callers fire it on every toggle/move. Optimistic — the
+ *  cached agent shows the new list at once and is rolled back on failure.
+ *  Callers disable the controls while `isPending`, so saves do not overlap;
+ *  if two tabs still race, only the last one to settle refetches, so the list
+ *  from the last completed save is what stays. */
+export function useSaveAgentContext() {
+  const qc = useQueryClient();
+  const mutationKey = ["save-agent-context"];
+  return useMutation({
+    mutationKey,
+    mutationFn: ({ id, paths }: SaveContextInput) => api.put<Agent>(`/agents/${id}/context`, { paths }),
+    onMutate: async ({ id, paths }) => {
+      await qc.cancelQueries({ queryKey: ["agent", id] });
+      const previous = qc.getQueryData<Agent>(["agent", id]);
+      if (previous) qc.setQueryData<Agent>(["agent", id], { ...previous, context_paths: paths });
+      return { previous, id };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["agent", ctx.id], ctx.previous);
+    },
+    onSuccess: (data) => {
+      if (qc.isMutating({ mutationKey }) <= 1) qc.setQueryData(["agent", data.id], data);
+    },
+    onSettled: (_data, _err, { id }) => {
+      if (qc.isMutating({ mutationKey }) <= 1) {
+        qc.invalidateQueries({ queryKey: ["agent", id] });
+        qc.invalidateQueries({ queryKey: ["agents"] });
+      }
+    },
+  });
+}

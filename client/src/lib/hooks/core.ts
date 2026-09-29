@@ -16,6 +16,7 @@ import type {
   PrMeta,
   PrDetail,
   SpecFile,
+  ContextListing,
   IndexStatus,
 } from "../types";
 
@@ -119,12 +120,38 @@ export function usePullDetail(prId: string | number | null | undefined) {
   });
 }
 
-// ---- Project Context (A3 contract; safe to call once API exposes it) ----
+// ---- Project Context (SPEC-04) ----
+/** Document listing for a repo (no `content`). Wrapper shape carries the scan
+ *  time, the pre-cap `total`, `state: 'not_cloned'` and the rescan `warning`. */
 export function useContextFiles(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
+    queryFn: () => api.get<ContextListing>(`/repos/${repoId}/context`),
     enabled: !!repoId,
+  });
+}
+
+/** One document with its `content` (preview panel / drawer). Only fetched
+ *  while a path is selected. */
+export function usePreviewContextFile(repoId: string | null | undefined, path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["context-file", repoId, path],
+    queryFn: () => api.get<SpecFile>(`/repos/${repoId}/context/file?path=${encodeURIComponent(path ?? "")}`),
+    enabled: !!repoId && !!path,
+  });
+}
+
+/** Rescan: fetch the default branch and re-list. The reply is the fresh
+ *  listing, so it is written straight into the listing cache. `warning`
+ *  (`fetch_failed` / `timeout`) rides on the reply, not on an HTTP error. */
+export function useRescanContext() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (repoId: string) => api.post<ContextListing>(`/repos/${repoId}/context/rescan`),
+    onSuccess: (data, repoId) => {
+      qc.setQueryData(["context", repoId], data);
+      qc.invalidateQueries({ queryKey: ["context-file", repoId] });
+    },
   });
 }
 

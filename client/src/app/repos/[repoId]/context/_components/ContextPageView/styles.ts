@@ -1,0 +1,40 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  page: { padding: 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 } satisfies CSSProperties,
+  h1: { fontSize: 20, fontWeight: 700, margin: 0 } satisfies CSSProperties,
+  repoName: { color: "var(--text-secondary)", fontWeight: 500 } satisfies CSSProperties,
+  subtitle: { fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0", lineHeight: 1.45 } satisfies CSSProperties,
+  notice: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 12px",
+    borderRadius: 7,
+    border: "1px solid var(--border-strong)",
+    background: "var(--bg-elevated)",
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  body: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" } satisfies CSSProperties,
+  bodySingle: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16 } satisfies CSSProperties,
+  selectHint: {
+    padding: 24,
+    borderRadius: 8,
+    border: "1px dashed var(--border)",
+    fontSize: 13,
+    color: "var(--text-muted)",
+    textAlign: "center",
+  } satisfies CSSProperties,
+  footer: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    flexWrap: "wrap",
+    paddingTop: 12,
+    borderTop: "1px solid var(--border)",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+} as const;
