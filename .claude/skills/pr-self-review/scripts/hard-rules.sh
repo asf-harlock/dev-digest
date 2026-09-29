@@ -224,7 +224,7 @@ while IFS=$'\t' read -r f ln txt; do
     "fetch() inside a component" \
     "\`client/CLAUDE.md\`: \`fetch\` inside a component is banned. Go through a hook in \`src/lib/hooks/*\`, which goes through \`lib/api.ts\`. This is the backstop for when \`pnpm lint\` could not run." \
     "Add or reuse a hook in \`client/src/lib/hooks/\`."
-done < <(added '^client/src/(app|components)/' '(^|[^.\w])fetch\(')
+done < <(added '^client/src/(app|components)/' '(^|[^.A-Za-z0-9_])fetch\(')
 
 # ---------------------------------------------------------- test placement ---
 while read -r f; do
@@ -336,6 +336,9 @@ done < <(match '^(server|client|reviewer-core)/src/.*\.(ts|tsx)$')
 while IFS=$'\t' read -r f ln txt; do
   [ -z "$f" ] && continue
   case "$f" in */_components/*|*/_shared/*|*/db/schema/*) continue ;; esac
+  # `_shared` is private to its PARENT: server/src/modules/_shared is open to all of server/src/modules/**.
+  case "$f" in server/src/modules/*)
+    case "$txt" in *"/_components/"*) ;; *) continue ;; esac ;; esac
   emit private-underscore-import CRITICAL bug "$f" "$ln" \
     "Import reaches into a _-prefixed private directory" \
     "Root \`CLAUDE.md\` → Naming: a \`_\` prefix means private to its parent — never import one from outside it. Added line: \`$(printf '%s' "$txt" | cut -c1-120)\`" \
