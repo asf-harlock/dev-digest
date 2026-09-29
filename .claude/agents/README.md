@@ -17,12 +17,18 @@ each agent's own `.md` file; nothing here duplicates their prompt bodies.
 | [doc-writer](doc-writer.md) | Turns a plan/change into docs + diagrams, picks docs/ placement | `Read, Grep, Glob, Bash, Edit, Write, Skill` | sonnet | acceptEdits |
 | [security-reviewer](security-reviewer.md) | Finds exploitable security defects in a change, no write access | `Read, Grep, Glob, Bash, Skill` | sonnet | default |
 | [brainstorm](brainstorm.md) | Generates and compares distinct approaches before planning, never decides | `Read, Grep, Glob, Bash, WebSearch, WebFetch` | sonnet | default |
-| [spec-creator](spec-creator.md) | Analyses designs for gaps, asks, then writes a SPEC-NN EARS spec; writes only `*/specs/NN-*.md` | `Read, Grep, Glob, Write, Edit, Skill, WebSearch, WebFetch` + Figma/Playwright read tools | opus | default |
+| [spec-creator](spec-creator.md) | Analyses designs for gaps, asks, then writes a SPEC-NN EARS spec; writes only `*/specs/NN-*.md` | `Read, Grep, Glob, Write, Edit, Skill` + Playwright read tools | opus | default |
 
 Typical order: `spec-creator` → (user approves the spec) → `implementation-planner` → `implementer` /
 `test-writer` → `architecture-reviewer` + `security-reviewer` +
 `plan-verifier` → `doc-writer`. The three reviewers are read-only and never
 decide a merge — `/pr-self-review`'s gate does.
+From an approved plan onward, `/implement SPEC-NN`
+(`.claude/skills/implement/`) runs this chain for you: implementer(s) →
+plan-verifier → architecture ∥ security ∥ bug review → a fix loop of at most
+3 rounds (re-review limited to the fix diff) → plan-verifier. `spec-creator`
+and `implementation-planner` stay manual; save the plan to
+`.claude/sdd/SPEC-NN/plan.md`. `test-writer` runs only with `--tests`.
 `brainstorm` is optional for feature work — `spec-creator` compares approaches
 itself; use `brainstorm` for design questions that are not a feature spec.
 
@@ -263,14 +269,15 @@ itself; use `brainstorm` for design questions that are not a feature spec.
 ## spec-creator
 
 - **Responsibility:** turn a feature idea and the design sources the user
-  supplies (text, Figma, screenshots/mockups, existing code, the running app)
+  supplies (text, screenshots/mockups or exported Figma frames, existing code, the running app)
   into a Spec-Driven-Development spec. Before writing it analyses the design
   for missing states, uncovered corner cases, cross-module interactions,
   UX improvements and untrusted inputs, compares approaches when more than
   one is plausible, and asks the user. Never plans file-by-file, never writes
   code, never sets a spec to `approved`.
-- **Permissions:** `Read, Grep, Glob, Write, Edit, Skill, WebSearch,
-  WebFetch` plus Figma and Playwright read-only tools (no click). No `Bash`.
+- **Permissions:** `Read, Grep, Glob, Write, Edit, Skill` plus Playwright
+  read-only tools (no click). No `Bash`, no web tools, no Figma tools — all
+  research (git history, repo sweeps, external facts) goes to `researcher`.
   Loads `spec-authoring` (always), `engineering-insights` (read mode) and
   `security` (untrusted-input lens). Writes only
   `specs/NN-*.md` (cross-module) or

@@ -82,13 +82,22 @@ and traceable, not that it is the right requirement.
 cannot run shell commands. The main session drives the loop:
 
 1. **Intake.** Launch `spec-creator` with the user's request and every design
-   source (Figma link, screenshot paths, "app is running on :3000").
+   source (screenshot paths, Figma frames exported as PNG — the agent has no
+   Figma tools — or "app is running on :3000").
 2. **Research fan-out.** If the intake has `Research requests`, launch one
    `researcher` per row **in a single message** so they run in parallel —
    paste the row's question, scope, where-to-look and what it unblocks as the
-   researcher's task. At most 4 per round, 2 rounds. Resume `spec-creator`
-   (SendMessage, same agent) with the reports verbatim, labelled `R1`…`Rn`;
-   it returns a revised intake. Skip this step when the table says `None`.
+   researcher's task. At most 4 per round, 2 rounds. Skip this step when the
+   table says `None`.
+   - **A blocking question is `pending R<n>`** → wait for the reports, resume
+     `spec-creator` (SendMessage, same agent) with them verbatim, labelled
+     `R1`…`Rn`; it returns a revised intake, and only then go to step 3.
+   - **No blocking question is `pending`** → go to step 3 while research
+     runs. When the reports arrive, tell the user what they change. If they
+     change no finding's priority and no question's default, skip the
+     revised-intake round and pass the reports **verbatim** in the step 4
+     resume, together with the answers. If they do change one, resume for a
+     revised intake first.
 3. **Ask the user.** Relay the blocking questions, then the non-blocking ones
    (AskUserQuestion for choices, with the agent's default as the first,
    "(Recommended)" option), and the findings table for keep/drop. Never
