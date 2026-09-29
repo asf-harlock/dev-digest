@@ -60,6 +60,12 @@ export interface ReviewInput {
   /** Project-context spec chunks (untrusted; delimiter-wrapped downstream). */
   specs?: string[];
   /**
+   * Repo project-context docs (untrusted; each wrapped as
+   * `project-context:<path>` in the `## Project context` section). Applied to
+   * single-pass and every per-file map-reduce call. Empty/undefined → omitted.
+   */
+  projectContext?: { path: string; text: string }[];
+  /**
    * Optional callers-of-changed-symbols digest (T1.3). Untrusted; rendered
    * before the diff section. Empty/undefined → section omitted.
    */
@@ -140,6 +146,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     skills: input.skills,
     memory: input.memory,
     specs: input.specs,
+    projectContext: input.projectContext,
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
