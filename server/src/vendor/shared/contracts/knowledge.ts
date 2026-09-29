@@ -146,6 +146,8 @@ export const Skill = z.object({
   // UI uses to explain why and to block re-enabling.
   injection_flagged: z.boolean(),
   injection_patterns: z.array(z.string()),
+  // Ordered repo-relative markdown paths attached to this skill (SPEC-04).
+  context_paths: z.array(z.string()).default([]),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -332,6 +334,8 @@ export const Agent = z.object({
   // Inject repo-intel context (repo skeleton + callers + rank note) into this
   // agent's review prompt. Default on; gated again by the global flag.
   repo_intel: z.boolean().default(true),
+  // Ordered repo-relative markdown paths attached to this agent (SPEC-04).
+  context_paths: z.array(z.string()).default([]),
 });
 export type Agent = z.infer<typeof Agent>;
 
@@ -358,6 +362,8 @@ export const AgentVersionConfig = z.object({
   ci_fail_on: CiFailOn,
   repo_intel: z.boolean(),
   skills: z.array(z.string()),
+  // `default` so snapshots written before SPEC-04 keep parsing.
+  context_paths: z.array(z.string()).default([]),
 });
 export type AgentVersionConfig = z.infer<typeof AgentVersionConfig>;
 

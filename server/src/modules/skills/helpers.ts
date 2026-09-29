@@ -39,6 +39,7 @@ export function toSkillDto(row: SkillRow, tokenEstimate: number): Skill {
     token_estimate: tokenEstimate,
     injection_flagged: injection.detected,
     injection_patterns: injection.patterns,
+    context_paths: row.contextPaths,
   };
 }
 

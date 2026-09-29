@@ -1,5 +1,6 @@
 import type {
   MemoryPulled,
+  ProjectContextEntry,
   PromptAssembly,
   RunLogLine,
   RunStats,
@@ -31,6 +32,8 @@ export interface BuildTraceInput {
   rawOutput: string;
   memoryPulled: MemoryPulled[];
   specsRead: string[];
+  /** Resolved Project Context (SPEC-04); omitted/empty → no key in the trace. */
+  projectContext?: ProjectContextEntry[];
   log: RunLogLine[];
 }
 
@@ -50,6 +53,9 @@ export function buildRunTrace(input: BuildTraceInput): RunTrace {
     raw_output: input.rawOutput,
     memory_pulled: input.memoryPulled,
     specs_read: input.specsRead,
+    ...(input.projectContext && input.projectContext.length > 0
+      ? { project_context: input.projectContext }
+      : {}),
     log: input.log,
   };
   // Validate so a malformed trace fails loudly at write-time, not read-time.

@@ -1,6 +1,11 @@
 import type { Container } from '../../platform/container.js';
 import type { Skill, SkillImportPreview, SkillSource, SkillStats, SkillSummary, SkillType, SkillVersion } from '@devdigest/shared';
-import { NotFoundError } from '../../platform/errors.js';
+import { NotFoundError, ValidationError } from '../../platform/errors.js';
+import {
+  MAX_CONTEXT_LISTING_FILES,
+  dedupePaths,
+  firstInvalidContextPath,
+} from '../_shared/context-paths.js';
 import { SkillsRepository, type SkillRow } from './repository.js';
 import { detectInjectionPatterns } from '../_shared/injection-detection.js';
 import {
@@ -87,6 +92,24 @@ export class SkillsService {
       evidenceFiles: input.evidence_files,
     });
     return this.toDto(row);
+  }
+
+  /**
+   * Replace the skill's attached Project Context paths (full ordered list, last
+   * save wins). Invalid paths are a 422 `validation_error` (UI-1). No version
+   * bump and no `skill_versions` row (AC-18).
+   */
+  async setContextPaths(workspaceId: string, id: string, paths: string[]): Promise<Skill | undefined> {
+    if (paths.length > MAX_CONTEXT_LISTING_FILES) {
+      throw new ValidationError(`At most ${MAX_CONTEXT_LISTING_FILES} documents can be attached`);
+    }
+    const invalid = firstInvalidContextPath(paths, {
+      globs: this.container.config.contextGlobs,
+      excludes: this.container.config.contextExcludes,
+    });
+    if (invalid) throw new ValidationError(`Invalid context path: ${invalid.reason}`, { path: invalid.path });
+    const row = await this.repo.setContextPaths(workspaceId, id, dedupePaths(paths));
+    return row ? this.toDto(row) : undefined;
   }
 
   async update(workspaceId: string, id: string, patch: UpdateSkillInput): Promise<Skill | undefined> {

@@ -129,6 +129,24 @@ export class SkillsRepository {
   }
 
   /**
+   * Replace the skill's attached Project Context paths (SPEC-04). Deliberately
+   * touches neither `version` nor `skill_versions` (AC-18): attachments are
+   * references to repo files, not part of the skill's versioned body.
+   */
+  async setContextPaths(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<SkillRow | undefined> {
+    const [row] = await this.db
+      .update(t.skills)
+      .set({ contextPaths: paths })
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+      .returning();
+    return row;
+  }
+
+  /**
    * Update a skill. A change to name/description/type/body (or `forceBump`)
    * bumps `version` and inserts a `skill_versions` row; toggling `enabled`
    * alone bumps neither.

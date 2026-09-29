@@ -11,6 +11,12 @@ import type {
 } from '@devdigest/shared';
 import { AgentsRepository } from './repository.js';
 import { toAgentDto, toAgentSkillDetail, toAgentVersionDto } from './helpers.js';
+import { ValidationError } from '../../platform/errors.js';
+import {
+  MAX_CONTEXT_LISTING_FILES,
+  dedupePaths,
+  firstInvalidContextPath,
+} from '../_shared/context-paths.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -106,6 +112,28 @@ export class AgentsService {
       ...(patch.repo_intel !== undefined ? { repoIntel: patch.repo_intel } : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
     });
+    return row ? toAgentDto(row) : undefined;
+  }
+
+  /**
+   * Replace the agent's attached Project Context paths (full ordered list, last
+   * save wins). Every path must pass the UI-1 rules or the save is a 422
+   * `validation_error`. A changed list bumps the agent version + snapshots it.
+   */
+  async setContextPaths(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<Agent | undefined> {
+    if (paths.length > MAX_CONTEXT_LISTING_FILES) {
+      throw new ValidationError(`At most ${MAX_CONTEXT_LISTING_FILES} documents can be attached`);
+    }
+    const invalid = firstInvalidContextPath(paths, {
+      globs: this.container.config.contextGlobs,
+      excludes: this.container.config.contextExcludes,
+    });
+    if (invalid) throw new ValidationError(`Invalid context path: ${invalid.reason}`, { path: invalid.path });
+    const row = await this.repo.setContextPaths(workspaceId, id, dedupePaths(paths));
     return row ? toAgentDto(row) : undefined;
   }
 

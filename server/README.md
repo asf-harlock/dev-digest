@@ -74,7 +74,8 @@ flowchart TB
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id · /runs/:id/findings · /runs/:id/(events|trace) · /pulls/:id/smart-diff"]
   end
   subgraph Agents["Agents"]
-    agents["agents<br/>/agents · /agents/:id"]
+    agents["agents<br/>/agents · /agents/:id · /agents/:id/context"]
+    context["context<br/>/repos/:id/context · /context/file · /context/rescan"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
@@ -100,6 +101,8 @@ flowchart TB
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `CONTEXT_GLOBS` | `**/{specs,docs,insights}/**/*.md` | comma-separated globs a Project Context document must match (subset below). Commas inside `{…}` are kept, e.g. `CONTEXT_GLOBS=**/{specs,docs}/**/*.md,notes/*.md` is two globs; unbalanced or nested braces fail startup |
+| `CONTEXT_EXCLUDES` | `node_modules,.git,dist,build,vendor` | comma-separated directory NAMES excluded from scans and attachments |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
 
@@ -110,6 +113,44 @@ through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with
 Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
 (`acme/payments-api`, PR #482, the two built-in agents).
+
+## Project Context routes (SPEC-04)
+
+Markdown documents of a repo clone (default branch) that an author attaches to an
+agent or a skill; the run executor reads them at run time and sends them as
+`<untrusted source="project-context:<path>">` blocks under `## Project context`.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `GET /repos/:id/context` | — | `ContextListing` `{ files, total, scanned_at, state?, warning? }`; files carry `kind`, `tokens`, `attachable`, `unattachable_reason`, `injection_flagged`, `injection_patterns`, `used_by` but **no** `content`. Max 500 files in path order (`total` counts all); `state: 'not_cloned'` when the repo has no clone. |
+| `GET /repos/:id/context/file?path=` | `path` (UI-1 rules) | `SpecFile` **with** `content` (preview). 422 invalid path, 404 missing / not cloned / symlink. |
+| `POST /repos/:id/context/rescan` | — | `ContextListing`. Runs `container.git.sync` (NOT `resyncRepo`) under a per-repo in-memory mutex, raced against 30 s. On a failed or slow fetch the on-disk listing is returned with `warning: 'fetch_failed' \| 'timeout'`. |
+| `PUT /agents/:id/context` | `{ paths: string[] }` — the full ordered list, last save wins | updated `Agent`. A changed list bumps `version` and snapshots `context_paths` into `agent_versions.config_json`; an identical list is a no-op. |
+| `PUT /skills/:id/context` | `{ paths: string[] }` | updated `Skill`. No `version` bump, no `skill_versions` row. |
+
+An attachment path must be relative, free of `..`/`.`/empty segments, end in
+`.md`, match the globs and sit outside the excluded directories — anything else is
+**422 `validation_error`**. Stored paths are re-checked on every read: a symlink,
+or a real path outside the clone, is treated as missing.
+
+**Glob subset** (own matcher, `modules/_shared/context-paths.ts`): a double-star
+followed by `/` = zero or more directories (a leading one also matches the repo
+root); `*` = anything but `/`; `{a,b}` = alternation (no nesting). No `?`, classes
+or negation. Case-sensitive.
+
+Tokens (`container.tokenizer` over the text **as wrapped for the prompt**),
+injection flags and `used_by` (distinct agents in the workspace: direct, or via an
+enabled link AND enabled skill) are computed per request and never stored.
+
+**Run resolution** (`resolveProjectContext`): the agent's paths, then each enabled
+skill's in link order, first occurrence wins; an injection-flagged skill
+contributes nothing. HEAD is read before and after the files (one retry; a second
+mismatch marks the documents `unreadable`). Per-document status: `attached`,
+`missing`, `too_large` (> 32 KB), `unreadable` (not UTF-8), `over_budget` (the
+first document that would take the wrapped block past 16 000 tokens and every one
+after it). `run_traces.trace` gets `specs_read` (attached paths, prompt order) and
+`project_context` (every listed document with its exact sent `text`), also on
+failure or cancel.
 
 ## Review context (non-obvious)
 
