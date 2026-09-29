@@ -22,6 +22,8 @@ export const skills = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     version: integer('version').notNull().default(1),
     evidenceFiles: jsonb('evidence_files').$type<string[]>(),
+    // Ordered repo-relative markdown paths injected into the prompt (SPEC-04).
+    contextPaths: jsonb('context_paths').$type<string[]>().notNull().default([]),
     createdAt: now(),
   },
   (t) => ({
