@@ -51,9 +51,9 @@ never touches the database or a server module directly.
   (and CI) was deliberately deferred when this package was created. Run `cd mcp && npm run typecheck && npm
   test` manually before opening a PR that touches this package, and say so in
   the PR body.
-- `get_blast_radius` is registered only when `DEVDIGEST_MCP_ENABLE_BLAST_RADIUS
-  =true` — it is a stub that always returns `isError:true`. An always-listed
-  tool a client can't actually use yet is worse than an absent one.
+- `get_blast_radius` only relays `GET /pulls/:id/blast` — the route already maps
+  repo-intel's `BlastResult` into the `BlastRadius` contract. Never regroup or
+  recompute callers here, or the MCP answer drifts from what the web UI shows.
 - **Never add a `zod` path alias to `tsconfig.json`** (the `"zod": ["./node_modules/zod"]`
   trick `reviewer-core` uses). With it, every `server.registerTool(...)` call
   fails with `TS2589 Type instantiation is excessively deep` and `tsc` can run

@@ -4,7 +4,7 @@
  * server's vendored contracts — that would couple this package to server
  * internals at runtime instead of just at the type level).
  */
-import type { FindingCategory, Severity } from '@devdigest/shared';
+import type { BlastRadius, FindingCategory, Severity } from '@devdigest/shared';
 
 /**
  * Mirrors the subset of `ReviewDto` (`server/src/modules/reviews/helpers.ts`)
@@ -30,6 +30,14 @@ export interface ReviewDtoLite {
   score: number | null;
   findings: ReviewDtoLiteFinding[];
 }
+
+/**
+ * A PR's impact map (`GET /pulls/:id/blast`,
+ * `server/src/modules/blast/service.ts`). A straight mirror of `BlastRadius`
+ * — the whole contract is already exactly what `get_blast_radius` needs, so
+ * this is just the MCP's local name for it, matching the other DTOs here.
+ */
+export type Blast = BlastRadius;
 
 /** Per-severity finding counts, uppercase keys — matches the server's
  *  `PrMeta.findings_counts` convention (`server/src/vendor/shared/contracts/platform.ts`). */

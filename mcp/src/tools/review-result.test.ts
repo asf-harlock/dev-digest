@@ -243,6 +243,9 @@ function fakeApi(overrides: Partial<DevDigestApi> = {}): DevDigestApi {
     getConventions: async () => {
       throw new Error('unused in these tests');
     },
+    getBlast: async () => {
+      throw new Error('unused in these tests');
+    },
     ...overrides,
   };
 }
@@ -252,7 +255,6 @@ function fakeConfig(overrides: Partial<McpConfig> = {}): McpConfig {
     apiUrl: 'http://localhost:3001',
     runTimeoutMs: 5_000,
     pollIntervalMs: 1_000,
-    enableBlastRadius: false,
     ...overrides,
   };
 }

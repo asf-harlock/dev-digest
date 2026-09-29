@@ -1,0 +1,14 @@
+{
+  "name": "PR Overview shows the Blast radius block with an honest degraded state",
+  "description": "Open PR #482 (lands on the Overview tab by default) and confirm the Blast radius block renders from GET /pulls/:id/blast. The seeded repo acme/payments-api has no clone and no repo-intel index (clonePath: null in seed.ts), so repo-intel's facade returns degraded:true / reason:'no_data' — the block must say so instead of rendering an empty map, and offer the Rebuild index action. The section label is CSS-uppercased, so the flow anchors on the degraded body text, never on the title. It does NOT click Rebuild index: that enqueues a resync job, and flows stay read-only. Read-only seeded data, no model call. Assumes a freshly-seeded DB where acme/payments-api (PR #482) is the first repo — guaranteed by e2e-web.yml; run locally via the hermetic stack (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "Add rate limiting to public API endpoints"], "label": "seeded PR title row is visible" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route (Overview is the default tab)" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail and blast data settle" },
+    { "cmd": ["wait", "--text", "No repo index is available yet"], "label": "the Blast radius block reports the no_data degraded reason instead of an empty map" },
+    { "cmd": ["wait", "--text", "Rebuild index"], "label": "the degraded state offers the Rebuild index action" }
+  ]
+}

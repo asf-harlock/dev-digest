@@ -23,6 +23,9 @@ function fakeApi(overrides: Partial<DevDigestApi> = {}): DevDigestApi {
     getConventions: async () => {
       throw new Error('unused in these tests');
     },
+    getBlast: async () => {
+      throw new Error('unused in these tests');
+    },
     ...overrides,
   };
 }

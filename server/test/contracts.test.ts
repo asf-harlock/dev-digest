@@ -83,6 +83,18 @@ describe('AI contracts parse fixtures', () => {
         summary: 's',
       }),
     ).not.toThrow();
+    expect(
+      BlastRadius.parse({
+        changed_symbols: [],
+        downstream: [],
+        summary: 's',
+        degraded: true,
+        reason: 'index_partial',
+      }).reason,
+    ).toBe('index_partial');
+    expect(() =>
+      BlastRadius.parse({ changed_symbols: [], downstream: [], summary: 's', reason: 'nope' }),
+    ).toThrow();
     expect(() =>
       Risks.parse({
         risks: [{ kind: 'security', title: 't', explanation: 'e', severity: 'high', file_refs: [] }],

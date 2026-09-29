@@ -29,7 +29,6 @@ function fakeDeps(overrides: Partial<McpConfig> = {}) {
     apiUrl: 'http://localhost:3001',
     runTimeoutMs: 55_000,
     pollIntervalMs: 2_000,
-    enableBlastRadius: false,
     ...overrides,
   };
   return { api, config };
@@ -46,21 +45,12 @@ describe('INSTRUCTIONS', () => {
 });
 
 describe('buildMcpServer', () => {
-  it('always registers the four core tools', () => {
+  it('always registers all five tools', () => {
     buildMcpServer(fakeDeps());
     expect(mocks.registerListAgents).toHaveBeenCalledTimes(1);
     expect(mocks.registerRunAgentOnPr).toHaveBeenCalledTimes(1);
     expect(mocks.registerGetFindings).toHaveBeenCalledTimes(1);
     expect(mocks.registerGetConventions).toHaveBeenCalledTimes(1);
-  });
-
-  it('does NOT register get_blast_radius unless the flag is set', () => {
-    buildMcpServer(fakeDeps({ enableBlastRadius: false }));
-    expect(mocks.registerGetBlastRadius).not.toHaveBeenCalled();
-  });
-
-  it('registers get_blast_radius when DEVDIGEST_MCP_ENABLE_BLAST_RADIUS is set', () => {
-    buildMcpServer(fakeDeps({ enableBlastRadius: true }));
     expect(mocks.registerGetBlastRadius).toHaveBeenCalledTimes(1);
   });
 
