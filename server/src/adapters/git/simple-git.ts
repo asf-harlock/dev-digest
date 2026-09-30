@@ -19,6 +19,10 @@ import { parseUnifiedDiff } from './diff-parser.js';
  */
 const RESYNC_FETCH_DEPTH = 50;
 
+/** Hard ceiling for the history fetch + log in `historyCounts()`. */
+const HISTORY_TIMEOUT_MS = 60_000;
+const HISTORY_MAX_DAYS = 3650;
+
 /**
  * GitClient over simple-git. Repos clone to
  * `<cloneDir>/<owner>/<repo>`. We NEVER execute repo code — only git ops.
@@ -124,6 +128,42 @@ export class SimpleGitClient implements GitClient {
       author: c.author_name,
       date: c.date,
     }));
+  }
+
+  async historyCounts(repo: RepoRef, sinceDays: number): Promise<Record<string, number>> {
+    if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > HISTORY_MAX_DAYS) {
+      throw new RangeError(`sinceDays must be an integer in 1..${HISTORY_MAX_DAYS}`);
+    }
+    const dest = this.clonePathFor(repo);
+    if (!(await this.exists(join(dest, '.git')))) {
+      throw new Error('repository is not cloned');
+    }
+    // One abort signal covers both the fetch and the log (60 s total).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), HISTORY_TIMEOUT_MS);
+    try {
+      const g = simpleGit({ baseDir: dest, abort: controller.signal });
+      // Deepen the clone to cover the window. `--shallow-since` is a no-op
+      // deepening on a full clone, so an already-deep repo just works.
+      await g.raw(['fetch', `--shallow-since=${sinceDays}.days.ago`, 'origin']);
+      const raw = await g.raw([
+        'log',
+        '--name-only',
+        '--pretty=format:',
+        `--since=${sinceDays}.days.ago`,
+      ]);
+      const counts: Record<string, number> = {};
+      for (const line of raw.split('\n')) {
+        const path = line.trim();
+        if (path) counts[path] = (counts[path] ?? 0) + 1;
+      }
+      return counts;
+    } catch (err) {
+      if (controller.signal.aborted) throw new Error('git history timed out after 60s');
+      throw err instanceof Error ? err : new Error(String(err));
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async readFile(repo: RepoRef, path: string): Promise<string> {

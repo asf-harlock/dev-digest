@@ -140,7 +140,7 @@ describe('AI contracts parse fixtures', () => {
     ).not.toThrow();
     expect(() =>
       Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
+        sections: [{ kind: 'architecture', body: 'b', nodes: [], edges: [] }],
       }),
     ).not.toThrow();
     expect(() =>

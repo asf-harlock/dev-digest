@@ -25,26 +25,140 @@ export const Conformance = z.object({
 });
 export type Conformance = z.infer<typeof Conformance>;
 
-// ---- Onboarding ----
-export const OnboardingLink = z.object({
-  label: z.string(),
-  path: z.string(),
-});
-export type OnboardingLink = z.infer<typeof OnboardingLink>;
+// ---- Onboarding tour ----
+export const TourSectionKind = z.enum([
+  'architecture',
+  'critical_paths',
+  'run_locally',
+  'reading_path',
+  'first_tasks',
+]);
+export type TourSectionKind = z.infer<typeof TourSectionKind>;
 
-export const OnboardingSection = z.object({
-  kind: z.string(),
-  title: z.string(),
+/** Where the tour content came from: deterministic facts only, or model-enriched. */
+export const TourSource = z.enum(['skeleton', 'llm']);
+export type TourSource = z.infer<typeof TourSource>;
+
+export const TourRankingMode = z.enum(['import_graph', 'activity']);
+export type TourRankingMode = z.infer<typeof TourRankingMode>;
+
+export const TourDiagramNode = z.object({ id: z.string(), label: z.string(), path: z.string() });
+export type TourDiagramNode = z.infer<typeof TourDiagramNode>;
+
+export const TourDiagramEdge = z.object({ from: z.string(), to: z.string() });
+export type TourDiagramEdge = z.infer<typeof TourDiagramEdge>;
+
+export const TourArchitecture = z.object({
+  kind: z.literal('architecture'),
   body: z.string(), // markdown
-  diagram: z.string().nullish(), // mermaid
-  links: z.array(OnboardingLink),
+  nodes: z.array(TourDiagramNode),
+  edges: z.array(TourDiagramEdge),
 });
-export type OnboardingSection = z.infer<typeof OnboardingSection>;
+export type TourArchitecture = z.infer<typeof TourArchitecture>;
+
+export const TourCriticalPath = z.object({
+  path: z.string(),
+  reason: z.string(),
+  rank: z.number().nullish(),
+  hotness: z.number().min(0).max(1).nullish(),
+});
+export type TourCriticalPath = z.infer<typeof TourCriticalPath>;
+
+export const TourCriticalPaths = z.object({
+  kind: z.literal('critical_paths'),
+  items: z.array(TourCriticalPath),
+});
+export type TourCriticalPaths = z.infer<typeof TourCriticalPaths>;
+
+export const TourCommand = z.object({
+  command: z.string(),
+  description: z.string().nullish(),
+  source: z.string().nullish(), // manifest the command was derived from
+});
+export type TourCommand = z.infer<typeof TourCommand>;
+
+export const TourRunLocally = z.object({
+  kind: z.literal('run_locally'),
+  commands: z.array(TourCommand),
+  env_keys: z.array(z.string()), // key names only, never values
+});
+export type TourRunLocally = z.infer<typeof TourRunLocally>;
+
+export const TourReadingStep = z.object({
+  path: z.string(),
+  why: z.string(),
+});
+export type TourReadingStep = z.infer<typeof TourReadingStep>;
+
+export const TourReadingPath = z.object({
+  kind: z.literal('reading_path'),
+  items: z.array(TourReadingStep),
+});
+export type TourReadingPath = z.infer<typeof TourReadingPath>;
+
+export const TourFirstTask = z.object({
+  title: z.string(),
+  description: z.string(),
+  paths: z.array(z.string()),
+});
+export type TourFirstTask = z.infer<typeof TourFirstTask>;
+
+export const TourFirstTasks = z.object({
+  kind: z.literal('first_tasks'),
+  items: z.array(TourFirstTask),
+});
+export type TourFirstTasks = z.infer<typeof TourFirstTasks>;
+
+export const TourSection = z.discriminatedUnion('kind', [
+  TourArchitecture,
+  TourCriticalPaths,
+  TourRunLocally,
+  TourReadingPath,
+  TourFirstTasks,
+]);
+export type TourSection = z.infer<typeof TourSection>;
+
+/** Persisted in the `onboarding` jsonb; every field nullish/defaulted so old rows still parse. */
+export const TourMeta = z.object({
+  source: TourSource.default('skeleton'),
+  degraded_reason: z.string().nullish(),
+  index_sha: z.string().nullish(),
+  ranking_mode: TourRankingMode.default('import_graph'),
+  window_days: z.number().int().nullish(),
+  model: z.string().nullish(),
+  provider: z.string().nullish(),
+  generated_at: z.string().nullish(),
+  last_error: z.string().nullish(),
+  dropped_count: z.number().int().default(0),
+  truncated: z.boolean().default(false),
+  ranking_fallback: z.string().nullish(), // why activity mode fell back to import graph
+});
+export type TourMeta = z.infer<typeof TourMeta>;
 
 export const Onboarding = z.object({
-  sections: z.array(OnboardingSection),
+  sections: z.array(TourSection),
+  meta: TourMeta.default({}),
 });
 export type Onboarding = z.infer<typeof Onboarding>;
+
+/** `GET /repos/:repoId/onboarding-tour`. `stored:false` means the skeleton was built live. */
+export const OnboardingTourResponse = z.object({
+  stored: z.boolean(),
+  generating: z.boolean(),
+  stale: z.boolean(),
+  tour: Onboarding,
+  model_hint: z.object({ provider: z.string(), model: z.string() }).nullish(),
+  file_count: z.number().int(),
+  can_use_activity: z.boolean(),
+});
+export type OnboardingTourResponse = z.infer<typeof OnboardingTourResponse>;
+
+/** `POST /repos/:repoId/onboarding-tour/generate`. */
+export const OnboardingTourGenerateRequest = z.object({
+  mode: TourRankingMode.default('import_graph'),
+  window_days: z.number().int().min(7).max(730).nullish(),
+});
+export type OnboardingTourGenerateRequest = z.infer<typeof OnboardingTourGenerateRequest>;
 
 // ---- Eval ----
 export const EvalPerTrace = z.object({
