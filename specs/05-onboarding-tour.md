@@ -1,6 +1,6 @@
 # Spec: Onboarding Tour
 Spec ID: SPEC-05
-Status: draft
+Status: approved
 Supersedes: —
 
 ## Проблема й користувач
