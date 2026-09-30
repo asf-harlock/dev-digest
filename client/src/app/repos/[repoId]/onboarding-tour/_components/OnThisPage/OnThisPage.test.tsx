@@ -42,6 +42,8 @@ function Harness({ initiallyClosed = [] as string[] }) {
   const [closed, setClosed] = React.useState(new Set(initiallyClosed));
   return (
     <NextIntlClientProvider locale="en" messages={{ onboarding: messages }}>
+      {/* The app scrolls <main>, not window — events come from a nested scroller. */}
+      <main>
       <OnThisPage
         items={ITEMS}
         onExpand={(id) =>
@@ -57,6 +59,7 @@ function Harness({ initiallyClosed = [] as string[] }) {
           body {i.id}
         </TourSection>
       ))}
+      </main>
     </NextIntlClientProvider>
   );
 }
@@ -101,7 +104,7 @@ describe("OnThisPage", () => {
     expect(screen.getByRole("link", { name: "Beta" })).toHaveAttribute("aria-current", "true");
     expect(window.location.hash).toBe("");
     act(() => {
-      window.dispatchEvent(new Event("scroll"));
+      document.querySelector("main")!.dispatchEvent(new Event("scroll"));
     });
     fire("b", false);
     fire("c", true);
@@ -115,17 +118,74 @@ describe("OnThisPage", () => {
     fire("a", true); // intermediate section passing through the band
     expect(screen.getByRole("link", { name: "Gamma" })).toHaveAttribute("aria-current", "true");
     act(() => {
-      window.dispatchEvent(new Event("scrollend"));
+      document.querySelector("main")!.dispatchEvent(new Event("scrollend"));
     });
     fire("a", false);
     fire("b", true);
     expect(screen.getByRole("link", { name: "Beta" })).toHaveAttribute("aria-current", "true");
   });
 
-  it("AC-15: a hash on load scrolls to and marks that section", () => {
+  it("AC-15: a hash on load expands, scrolls to and marks that section — without flushSync in an effect", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     window.history.replaceState(null, "", "/#b");
-    render(<Harness />);
+    render(<Harness initiallyClosed={["b"]} />);
+    act(() => {
+      vi.advanceTimersByTime(20); // next animation frame
+    });
+    expect(document.getElementById("b-panel")).not.toHaveAttribute("hidden");
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
     expect(screen.getByRole("link", { name: "Beta" })).toHaveAttribute("aria-current", "true");
+    expect(consoleError.mock.calls.flat().join(" ")).not.toMatch(/flushSync/);
+    consoleError.mockRestore();
+  });
+
+  it("a fresh items array on every render does not re-create the observer", () => {
+    let observers = 0;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(c: IntersectionObserverCallback) {
+          observers += 1;
+          cb = c;
+        }
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+      },
+    );
+    function Fresh() {
+      const [, force] = React.useReducer((n: number) => n + 1, 0);
+      return (
+        <NextIntlClientProvider locale="en" messages={{ onboarding: messages }}>
+          <button onClick={force}>rerender</button>
+          <OnThisPage items={ITEMS.map((i) => ({ ...i }))} onExpand={() => {}} />
+        </NextIntlClientProvider>
+      );
+    }
+    render(<Fresh />);
+    fireEvent.click(screen.getByRole("button", { name: "rerender" }));
+    fireEvent.click(screen.getByRole("button", { name: "rerender" }));
+    expect(observers).toBe(1);
+  });
+
+  it("the spy writes the hash only when the current section changes", () => {
+    render(<Harness />);
+    const replace = vi.spyOn(window.history, "replaceState");
+    act(() => {
+      document.querySelector("main")!.dispatchEvent(new Event("scroll"));
+    });
+    fire("b", true);
+    fire("a", false);
+    fire("a", false);
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(window.location.hash).toBe("#b");
+    replace.mockRestore();
+  });
+
+  it("inactive items show the grey rail from the first render, without a border shorthand", () => {
+    render(<Harness />);
+    const beta = screen.getByRole("link", { name: "Beta" });
+    expect(beta.style.borderLeftColor).toBe("var(--border)");
+    expect(beta.getAttribute("style")).not.toMatch(/border-left:/);
   });
 });

@@ -55,6 +55,10 @@ export function TourPage() {
       return next;
     });
   }, []);
+  const tocItems = React.useMemo(
+    () => SECTION_DEFS.map((d) => ({ id: d.id, label: t(`tour.sections.${d.titleKey}`) })),
+    [t],
+  );
 
   if (repoNotFound) {
     return (
@@ -133,7 +137,7 @@ export function TourPage() {
 
         <div style={s.layout}>
           <OnThisPage
-            items={SECTION_DEFS.map((d) => ({ id: d.id, label: t(`tour.sections.${d.titleKey}`) }))}
+            items={tocItems}
             onExpand={expand}
           />
           <div style={s.content}>

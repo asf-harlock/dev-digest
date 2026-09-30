@@ -31,7 +31,13 @@ export function OnThisPage({
   onExpand: (id: string) => void;
 }) {
   const t = useTranslations("onboarding");
-  const ids = React.useMemo(() => items.map((i) => i.id), [items]);
+  // Keyed by the id list, not the array: callers may pass a fresh array every
+  // render, and re-running the spy effect per render re-creates the observer,
+  // whose initial callback then loops setActive → render → replaceState.
+  const idsKey = items.map((i) => i.id).join("\n");
+  const ids = React.useMemo(() => (idsKey ? idsKey.split("\n") : []), [idsKey]);
+  const onExpandRef = React.useRef(onExpand);
+  onExpandRef.current = onExpand;
   const [active, setActive] = React.useState<string>(() => ids[0] ?? "");
   const locked = React.useRef(false);
   const userScrolled = React.useRef(false);
@@ -51,24 +57,31 @@ export function OnThisPage({
     (id: string, opts: { focus: boolean; writeHash: boolean }) => {
       lock();
       setActive(id);
-      flushSync(() => onExpand(id)); // a collapsed target must be open before we scroll (AC-13)
+      // Event handler, not render: flushSync is allowed here and makes a
+      // collapsed target open before we scroll to it (AC-13).
+      flushSync(() => onExpandRef.current(id));
       const el = document.getElementById(id);
       if (!el) return;
       el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
       if (opts.focus) document.getElementById(`${id}-heading`)?.focus({ preventScroll: true });
-      if (opts.writeHash) window.history.replaceState(null, "", `#${id}`);
+      if (opts.writeHash) writeHash(id);
     },
-    [lock, onExpand],
+    [lock],
   );
 
   // Hash on load (AC-15) — scroll instantly, no focus steal, hash already in the URL.
+  // No flushSync inside an effect (React is mid-commit): expand, then scroll on
+  // the next frame once the section has rendered open.
   React.useEffect(() => {
     const id = hashTarget(window.location.hash, ids);
     if (!id) return;
     lock();
     setActive(id);
-    flushSync(() => onExpand(id));
-    document.getElementById(id)?.scrollIntoView({ behavior: "auto", block: "start" });
+    onExpandRef.current(id);
+    const frame = requestAnimationFrame(() =>
+      document.getElementById(id)?.scrollIntoView({ behavior: "auto", block: "start" }),
+    );
+    return () => cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, []);
 
@@ -77,8 +90,11 @@ export function OnThisPage({
     const onScroll = () => {
       userScrolled.current = true;
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("scrollend", releaseLock);
+    // Capture on document: the app scrolls `<main>`, not the window, and
+    // scroll/scrollend do not bubble — capture sees them from any scroller.
+    const opts = { capture: true, passive: true } as const;
+    document.addEventListener("scroll", onScroll, opts);
+    document.addEventListener("scrollend", releaseLock, opts);
 
     let observer: IntersectionObserver | undefined;
     if (typeof IntersectionObserver !== "undefined") {
@@ -94,7 +110,7 @@ export function OnThisPage({
           const current = firstVisible(ids, visible);
           if (!current || locked.current) return;
           setActive(current);
-          if (userScrolled.current) window.history.replaceState(null, "", `#${current}`);
+          if (userScrolled.current) writeHash(current);
         },
         { rootMargin: SPY_ROOT_MARGIN },
       );
@@ -104,8 +120,8 @@ export function OnThisPage({
       }
     }
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("scrollend", releaseLock);
+      document.removeEventListener("scroll", onScroll, opts);
+      document.removeEventListener("scrollend", releaseLock, opts);
       observer?.disconnect();
       if (lockTimer.current) clearTimeout(lockTimer.current);
     };
@@ -133,6 +149,13 @@ export function OnThisPage({
       })}
     </nav>
   );
+}
+
+/** Mirror the section into the URL only when it changes — browsers cap
+ *  `history.replaceState` at 100 calls per 10 s and throw a SecurityError. */
+function writeHash(id: string): void {
+  if (window.location.hash === `#${id}`) return;
+  window.history.replaceState(null, "", `#${id}`);
 }
 
 export default OnThisPage;
