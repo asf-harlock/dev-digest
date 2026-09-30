@@ -78,6 +78,7 @@
       "medium": "Medium complexity",
       "high": "High complexity"
     },
-    "suggestedComplexity": "{level} (suggested)"
+    "suggestedComplexity": "{level} (suggested)",
+    "suggestedMarker": "(suggested)"
   }
 }

@@ -21,12 +21,18 @@ const renderIt = (complexity: "low" | "medium" | "high" | null | undefined) =>
 
 describe("FirstTasksSection", () => {
   it.each([
-    ["low", "Low complexity (suggested)"],
-    ["medium", "Medium complexity (suggested)"],
-    ["high", "High complexity (suggested)"],
-  ] as const)("AC-9/NFR-8: %s complexity is text with the suggestion marker", (level, text) => {
+    ["low", "Low complexity", "var(--ok)"],
+    ["medium", "Medium complexity", "var(--warn)"],
+    ["high", "High complexity", "var(--crit)"],
+  ] as const)("AC-9/NFR-8: %s complexity is coloured text with the suggestion marker", (level, text, color) => {
     renderIt(level);
-    expect(screen.getByText(text)).toBeInTheDocument();
+    // The suggestion marker stays as the tooltip and as visually hidden text for assistive tech.
+    const badge = screen.getByTitle(`${text} (suggested)`).firstElementChild as HTMLElement;
+    expect(badge).toHaveTextContent(`${text} (suggested)`);
+    // Visible label matches the mockup; colour is per level but never the only signal.
+    expect(badge.style.color).toBe(color);
+    expect(badge.style.background).toBe("transparent");
+    expect(badge.style.borderColor).toBe("var(--border-strong)");
   });
 
   it("AC-9: null or absent complexity shows only the suggestion marker", () => {
