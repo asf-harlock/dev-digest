@@ -38,3 +38,22 @@ export function groupFindingsByPath(findings: FindingRecord[]): Map<string, Find
   }
   return byPath;
 }
+
+export type DeepLinkTarget =
+  | { status: "none" }
+  | { status: "missing" }
+  | { status: "found"; path: string; line: number | null };
+
+/** Resolve the `?file=&line=` deep link (UI-8). `file` must equal a path in
+ *  the PR's file list exactly — nothing is fuzzy-matched — and `line` counts
+ *  only as a positive integer; anything else is ignored. */
+export function resolveDeepLink(
+  files: { path: string }[],
+  fileParam: string | null | undefined,
+  lineParam: string | null | undefined,
+): DeepLinkTarget {
+  if (!fileParam) return { status: "none" };
+  if (!files.some((f) => f.path === fileParam)) return { status: "missing" };
+  const line = lineParam && /^[1-9]\d*$/.test(lineParam) ? Number(lineParam) : null;
+  return { status: "found", path: fileParam, line: line !== null && Number.isSafeInteger(line) ? line : null };
+}

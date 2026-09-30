@@ -16,6 +16,8 @@ export function DiffViewer({
   files,
   commenting,
   findings,
+  targetPath = null,
+  highlightLine = null,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -23,6 +25,10 @@ export function DiffViewer({
    *  `findings.ts`'s `DiffFindingsApi`. Optional: the "Original order" flat
    *  view still renders findings inline when the route layer supplies it. */
   findings?: DiffFindingsApi;
+  /** Deep-link target (exact path match): that card opens and scrolls into view. */
+  targetPath?: string | null;
+  /** New-side line to highlight inside the target file. */
+  highlightLine?: number | null;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -31,7 +37,14 @@ export function DiffViewer({
   return (
     <div style={s.list}>
       {files.map((f, i) => (
-        <FileCard key={i} file={f} commenting={commenting} findings={findings} />
+        <FileCard
+          key={i}
+          file={f}
+          commenting={commenting}
+          findings={findings}
+          forceOpen={targetPath != null && f.path === targetPath}
+          highlightLine={targetPath != null && f.path === targetPath ? highlightLine : null}
+        />
       ))}
     </div>
   );

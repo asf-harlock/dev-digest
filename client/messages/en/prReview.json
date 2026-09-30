@@ -120,7 +120,7 @@
     },
     "filesCount": "{count} files",
     "findingsPreviewTitle": "{count} findings",
-    "findingsCellLabel": "Findings by severity \u2014 hover for details",
+    "findingsCellLabel": "Findings by severity — hover for details",
     "errorTitle": "Couldn’t load pull requests",
     "errorBody": "The engine returned an error.",
     "emptyTitle": "No pull requests",
@@ -132,5 +132,8 @@
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run",
     "findingsInRun": "{count} findings in this run"
+  },
+  "overview": {
+    "description": "Description"
   }
 }

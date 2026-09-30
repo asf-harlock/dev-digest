@@ -8,8 +8,9 @@ import {
 } from '@devdigest/shared';
 import { redactSecrets } from '@devdigest/reviewer-core';
 import type { ReviewRepository, PullRow } from './repository.js';
+import { buildHunkHeaderDigest } from '../_shared/hunk-headers.js';
+import { resolveLinkedIssue } from '../_shared/linked-issue.js';
 import {
-  buildHunkHeaderDigest,
   buildIntentSources,
   computeIntentConfidence,
   detectExternalLinks,
@@ -48,18 +49,6 @@ export type Logger = {
  * they're computed deterministically from what we actually gave it, below.
  */
 const RawIntent = Intent.omit({ confidence: true, sources: true });
-
-/**
- * `#123` / `closes #123` / `fixes #123` / `resolves #123` — the SAME regex
- * `OctokitGitHubClient`'s (private) `resolveLinkedIssue` uses
- * (`adapters/github/octokit.ts`). Duplicated here rather than imported: a
- * module may not import a concrete adapter class
- * (`no-concrete-adapter-in-modules`, `server/.dependency-cruiser.cjs`), the
- * method is private besides, and it's one line of regex — not worth a public
- * refactor of the adapter just to share it. `container.github().getIssue(...)`
- * (the port method) is what actually does the fetching.
- */
-const LINKED_ISSUE_RE = /(?:closes|fixes|resolves)?\s*#(\d+)/i;
 
 /**
  * Project Context specs (D1 correction row, specs/03-intent-layer.md): there
@@ -165,22 +154,11 @@ export async function classifyIntent(
   const externalLinks = detectExternalLinks(description);
 
   // ---- Linked issue (D10 — the classifier resolves its own) ---------------
-  let linkedIssueStatus: IntentSource['status'] = 'missing';
-  let linkedIssueNote: string | undefined;
-  let linkedIssueText: string | null = null;
-  const issueMatch = description.match(LINKED_ISSUE_RE);
-  if (issueMatch?.[1]) {
-    try {
-      const gh = await container.github();
-      const issue = await gh.getIssue(repoRef, Number(issueMatch[1]));
-      linkedIssueStatus = 'used';
-      linkedIssueText = `#${issue.number} ${issue.title}\n${issue.body ?? ''}`;
-    } catch (err) {
-      linkedIssueStatus = 'unreachable';
-      linkedIssueNote =
-        err instanceof Error ? err.message : 'Linked issue could not be fetched';
-    }
-  }
+  const issue = await resolveLinkedIssue({ container, repoRef, body: description });
+  const linkedIssueStatus: IntentSource['status'] =
+    issue.status === 'none' ? 'missing' : issue.status;
+  const linkedIssueNote = issue.note;
+  const linkedIssueText = issue.text ?? null;
 
   const sources = buildIntentSources({
     description,

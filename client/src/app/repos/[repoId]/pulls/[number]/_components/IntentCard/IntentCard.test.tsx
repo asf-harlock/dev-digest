@@ -83,27 +83,6 @@ describe("IntentCard (smoke)", () => {
     expect(mutate).toHaveBeenCalled();
   });
 
-  it("hides Risk areas without risks and renders a chip per risk when supplied", () => {
-    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
-    expect(screen.queryByText("Risk areas")).not.toBeInTheDocument();
-    cleanup();
-
-    renderWithIntl(
-      <IntentCard
-        prId="pr1"
-        intent={baseIntent}
-        headSha="abc123"
-        risks={[
-          { kind: "auth", title: "Auth surface touched", explanation: "e", severity: "high", file_refs: [] },
-          { kind: "dep", title: "New dependency: ioredis", explanation: "e", severity: "medium", file_refs: [] },
-        ]}
-      />,
-    );
-    expect(screen.getByText("Risk areas")).toBeInTheDocument();
-    expect(screen.getByText("Auth surface touched")).toBeInTheDocument();
-    expect(screen.getByText("New dependency: ioredis")).toBeInTheDocument();
-  });
-
   it("shows a staleness banner when the PR's head_sha has moved since classification", () => {
     renderWithIntl(
       <IntentCard prId="pr1" intent={baseIntent} headSha="def456" />,

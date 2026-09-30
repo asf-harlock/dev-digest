@@ -118,15 +118,17 @@ function TreeRow({
             {group.callers.map((caller) => (
               <div key={`${caller.file}:${caller.line}:${caller.name}`} style={s.callerRow}>
                 <Icon.CornerDownRight size={12} style={s.callerIcon} />
-                {repoFullName && headSha ? (
-                  <MonoLink href={githubBlobUrl(repoFullName, headSha, caller.file, caller.line)}>
-                    {caller.file}:{caller.line}
-                  </MonoLink>
-                ) : (
-                  <span className="mono" style={s.callerText}>
-                    {caller.file}:{caller.line}
-                  </span>
-                )}
+                <span style={s.callerPath}>
+                  {repoFullName && headSha ? (
+                    <MonoLink href={githubBlobUrl(repoFullName, headSha, caller.file, caller.line)}>
+                      {caller.file}:{caller.line}
+                    </MonoLink>
+                  ) : (
+                    <span className="mono" style={s.callerText}>
+                      {caller.file}:{caller.line}
+                    </span>
+                  )}
+                </span>
               </div>
             ))}
           </div>

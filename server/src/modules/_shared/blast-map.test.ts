@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BlastRadius } from '@devdigest/shared';
-import { buildSummary, toBlastRadius, type BlastFacadeResult } from '../src/modules/blast/helpers.js';
+import { buildSummary, toBlastRadius, type BlastFacadeResult } from './blast-map.js';
 
 /**
  * Hermetic, no DB — `toBlastRadius`/`buildSummary` are pure transforms over

@@ -2,7 +2,7 @@
  * Pure helpers for the review service (side-effect free; operate purely on
  * their arguments — no DB / network / `this`).
  */
-import type { CiFailOn, Finding, Intent, IntentSource, UnifiedDiff } from '@devdigest/shared';
+import type { CiFailOn, Finding, Intent, IntentSource } from '@devdigest/shared';
 import { countBlockers } from '@devdigest/reviewer-core';
 import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 
@@ -96,24 +96,6 @@ export function taskLine(pull: PullRow): string {
 // =============================================================================
 // Intent classification (specs/03-intent-layer.md)
 // =============================================================================
-
-/**
- * One hunk-header-only digest string per hunk, grouped by file path — never
- * hunk CONTENT (`@@ -oldStart,oldLines +newStart,newLines @@` only). This is
- * what the intent classifier sees of the diff: enough shape to know which
- * files/how-much changed, never the lines themselves.
- */
-export function buildHunkHeaderDigest(diff: UnifiedDiff): string {
-  const lines: string[] = [];
-  for (const file of diff.files) {
-    if (file.hunks.length === 0) continue;
-    lines.push(`### ${file.path}`);
-    for (const h of file.hunks) {
-      lines.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
-    }
-  }
-  return lines.join('\n');
-}
 
 /**
  * `http(s)://…` links found in a PR description, deduped, in order of first

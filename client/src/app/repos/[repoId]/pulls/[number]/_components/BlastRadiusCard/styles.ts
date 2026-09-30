@@ -5,7 +5,9 @@ import type { CSSProperties } from "react";
  *  a warn-tinted degraded row and a muted one-liner for the "no downstream"
  *  state. */
 export const s = {
-  wrap: { marginBottom: 20 } satisfies CSSProperties,
+  /** Spacing comes from the PR Brief grid gap, not a margin; `minWidth: 0`
+   *  lets the card shrink inside its grid column. */
+  wrap: { minWidth: 0 } satisfies CSSProperties,
   card: {
     padding: 24,
     borderRadius: 12,

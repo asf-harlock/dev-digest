@@ -1,12 +1,22 @@
 import type { BlastCaller, BlastDegradedReason, BlastRadius, ChangedSymbol, DownstreamImpact } from '@devdigest/shared';
-import { SUMMARY_LABELS } from './constants.js';
+
+/**
+ * Singular/plural label pairs for `buildSummary`'s "N label(s)" segments,
+ * joined with ` · ` in this fixed order:
+ * `"2 changed symbols · 14 callers · 3 endpoints · 1 cron"`.
+ */
+const SUMMARY_LABELS = {
+  changedSymbols: ['changed symbol', 'changed symbols'],
+  callers: ['caller', 'callers'],
+  endpoints: ['endpoint', 'endpoints'],
+  crons: ['cron', 'crons'],
+} as const;
 
 /**
  * Structural mirror of `repo-intel`'s `BlastResult` (`repo-intel/types.ts`),
  * declared independently rather than `import type … from
- * '../repo-intel/types.js'` — `blast/` may not cross-import another module
- * (`no-cross-module-import`), and `pure-helpers-stay-pure` additionally bars
- * `helpers.ts` from importing `platform/container.ts` (which is where the
+ * '../repo-intel/types.js'` — shared helpers may not cross-import another module
+ * (`no-cross-module-import`), and purity additionally bars importing `platform/container.ts` (which is where the
  * real type would otherwise be reached through `Container['repoIntel']`).
  * `service.ts` calls `container.repoIntel.getBlastRadius(...)` and passes the
  * result straight into `toBlastRadius` — TypeScript matches the two shapes

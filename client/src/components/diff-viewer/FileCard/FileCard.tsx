@@ -47,6 +47,8 @@ export function FileCard({
   file,
   commenting,
   findings,
+  forceOpen = false,
+  highlightLine = null,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -54,6 +56,11 @@ export function FileCard({
    *  optional so the plain Files-changed flow (no Smart Diff data yet/failed)
    *  keeps working unchanged. */
   findings?: DiffFindingsApi;
+  /** Deep-link target: open this card even when it starts collapsed. */
+  forceOpen?: boolean;
+  /** Deep-link target: new-side line to outline and scroll to. Ignored when
+   *  the line is not a rendered new-side line (the file still opens). */
+  highlightLine?: number | null;
 }) {
   const t = useTranslations("shell");
   const tSmart = useTranslations("prReview");
@@ -61,6 +68,18 @@ export function FileCard({
     (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+  const highlightIdx =
+    highlightLine == null
+      ? -1
+      : lines.findIndex((ln) => (ln.kind === "add" || ln.kind === "ctx") && ln.newNo === highlightLine);
+  // No exact line to land on: bring the file card itself into view.
+  React.useEffect(() => {
+    if (forceOpen && highlightIdx < 0) cardRef.current?.scrollIntoView?.({ block: "start" });
+  }, [forceOpen, highlightIdx]);
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
@@ -91,7 +110,7 @@ export function FileCard({
   const hasDot = !!findings && hasActiveFindings(fileFindings);
 
   return (
-    <div style={s.fileCard}>
+    <div ref={cardRef} style={s.fileCard}>
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
@@ -138,6 +157,7 @@ export function FileCard({
                 commenting={commenting}
                 findings={findingsForLine(ln, matchedFindings)}
                 renderFinding={findings?.renderFinding}
+                highlighted={i === highlightIdx}
               />
             ))
           )}

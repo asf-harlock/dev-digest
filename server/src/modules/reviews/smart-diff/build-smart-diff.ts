@@ -1,6 +1,6 @@
 import type { SmartDiff, SmartDiffFile, SmartDiffRole } from '@devdigest/shared';
 import type { FindingRow, PrFileRow } from '../../../db/rows.js';
-import { classifyFile } from './classify-file.js';
+import { classifyFile } from '../../_shared/smart-diff-roles.js';
 import { SMART_DIFF_ROLE_ORDER } from './constants.js';
 
 /**
