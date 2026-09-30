@@ -74,3 +74,22 @@ export const ERROR_REPO_NOT_FOUND = 'Repo not found';
 export const ERROR_ALREADY_GENERATING = 'A tour is already being generated for this repository';
 
 export const GENERATE_STATUS_RUNNING = 'running' as const;
+
+// ---- Model enrichment (slice 3) ----
+export const TOUR_FEATURE_ID = 'onboarding' as const;
+export const TOUR_PROMPT_FILE = 'onboarding.system.md';
+export const TOUR_LANGUAGE = 'English';
+export const TOUR_SCHEMA_NAME = 'OnboardingTourEnrichment';
+/** Model call ceiling (Q10). The client gives up at 200 s, so no internal retries. */
+export const TOUR_LLM_TIMEOUT_MS = 120_000;
+export const TOUR_LLM_MAX_RETRIES = 0;
+/** Token budget for the facts block, counted with the container tokenizer (Q-1). */
+export const TOUR_TOKEN_BUDGET = 24_000;
+
+/** Stable `meta.last_error` prefixes. The failure time is appended as ` (<ISO time>)`. */
+export const LAST_ERROR_NOT_CONFIGURED = 'Model not configured';
+export const LAST_ERROR_TIMEOUT = 'Model call timed out';
+export const LAST_ERROR_MODEL_FAILED = 'Model call failed or returned invalid output';
+export const NODE_ID_RE = /^[A-Za-z0-9_]{1,32}$/;
+/** EC-7: exact text; the client matches `meta.degraded_reason` against it. */
+export const REASON_MODEL_NOT_CONFIGURED = 'Model not configured';

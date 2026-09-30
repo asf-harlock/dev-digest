@@ -39,6 +39,11 @@
       "detail": "Stale — the index changed since this tour was generated"
     },
     "noIndex": "No index yet",
+    "configureModel": "Configure a model in Settings → Feature Models",
+    "regenFailed": "Last regeneration failed · {time}",
+    "regenFailedOlder": "Last regeneration failed · showing the tour from {time}",
+    "regenFailedNoTime": "Last regeneration failed",
+    "modelHint": "Uses {model}",
     "toggle": {
       "expand": "Expand {section}",
       "collapse": "Collapse {section}"

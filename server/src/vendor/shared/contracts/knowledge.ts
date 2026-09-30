@@ -131,6 +131,7 @@ export const TourMeta = z.object({
   provider: z.string().nullish(),
   generated_at: z.string().nullish(),
   last_error: z.string().nullish(),
+  last_error_at: z.string().nullish(), // ISO time of the failure recorded in `last_error`
   dropped_count: z.number().int().default(0),
   truncated: z.boolean().default(false),
   ranking_fallback: z.string().nullish(), // why activity mode fell back to import graph

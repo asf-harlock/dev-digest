@@ -51,6 +51,38 @@ describe("TourHeader", () => {
     expect(screen.getByRole("button", { name: "Generating…" })).toBeDisabled();
   });
 
+  it("AC-17/29: llm tour shows 'Written by <model>' and the model hint; Regenerate label when stored", () => {
+    setup(
+      {
+        stored: true,
+        model_hint: { provider: "openai", model: "gpt-x" },
+        tour: { sections: [], meta: { source: "llm", model: "gpt-x", generated_at: new Date().toISOString() } },
+      },
+      "sha1",
+    );
+    expect(screen.getByText("Written by gpt-x")).toBeInTheDocument();
+    expect(screen.getByText("Uses openai / gpt-x")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toHaveAccessibleDescription("Uses openai / gpt-x");
+  });
+
+  it("EC-7: 'Model not configured' keeps the reason and adds a Settings link", () => {
+    setup({ tour: { sections: [], meta: { source: "skeleton", degraded_reason: "Model not configured" } } }, "sha1");
+    expect(screen.getByText("Skeleton — Model not configured")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Feature Models/ })).toHaveAttribute("href", "/settings/models");
+  });
+
+  it("EC-3: failed regeneration on a stored llm tour shows the notice; not on a skeleton", () => {
+    const meta = { source: "llm" as const, last_error: "Tour generation failed", generated_at: new Date().toISOString() };
+    setup({ stored: true, tour: { sections: [], meta } }, "sha1");
+    expect(screen.getByText(/Last regeneration failed · showing the tour from/)).toBeInTheDocument();
+    cleanup();
+    setup({ stored: true, tour: { sections: [], meta: { ...meta, last_error_at: new Date().toISOString() } } }, "sha1");
+    expect(screen.getByText(/^Last regeneration failed · (now|in|.*ago)/)).toBeInTheDocument();
+    cleanup();
+    setup({ stored: true, tour: { sections: [], meta: { ...meta, source: "skeleton" } } }, "sha1");
+    expect(screen.queryByText(/Last regeneration failed/)).toBeNull();
+  });
+
   it("freshnessState: unknown index never claims 'No index yet'", () => {
     expect(freshnessState(false, undefined)).toBe("none");
     expect(freshnessState(true, "")).toBe("noIndex");

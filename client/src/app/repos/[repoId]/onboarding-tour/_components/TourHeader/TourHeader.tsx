@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { Badge, Button } from "@devdigest/ui";
 import type { OnboardingTourResponse } from "@devdigest/shared";
-import { freshnessState, statusBadgeKey } from "./helpers";
+import { SETTINGS_MODELS_HREF } from "../../constants";
+import { freshnessState, hasFailedRegeneration, isModelNotConfigured, modelHintLabel, statusBadgeKey } from "./helpers";
 import { s } from "./styles";
 
 /**
@@ -32,6 +34,8 @@ export function TourHeader({
   const key = statusBadgeKey(meta);
   const freshness = freshnessState(data.stale, lastIndexedSha);
   const generatedAt = meta?.generated_at;
+  const hint = modelHintLabel(data.model_hint);
+  const failed = hasFailedRegeneration(data.stored, meta);
   const ranking =
     meta?.ranking_mode === "activity"
       ? t("tour.meta.rankedActivity", { days: meta.window_days ?? "" })
@@ -63,11 +67,26 @@ export function TourHeader({
               {t("tour.stale.detail")}
             </Badge>
           )}
+          {isModelNotConfigured(meta) && (
+            <Link href={SETTINGS_MODELS_HREF} style={s.link}>
+              {t("tour.configureModel")}
+            </Link>
+          )}
+          {failed && (
+            <Badge icon="AlertTriangle" color="var(--warn)" bg="var(--warn-bg)">
+              {meta?.last_error_at
+                ? t("tour.regenFailed", { time: format.relativeTime(new Date(meta.last_error_at)) })
+                : generatedAt
+                  ? t("tour.regenFailedOlder", { time: format.relativeTime(new Date(generatedAt)) })
+                  : t("tour.regenFailedNoTime")}
+            </Badge>
+          )}
           {freshness === "noIndex" && <Badge icon="Info">{t("tour.noIndex")}</Badge>}
         </div>
       </div>
       <div style={s.actions}>
         <Button
+          aria-describedby={hint ? "tour-model-hint" : undefined}
           kind="secondary"
           icon="RefreshCw"
           disabled={generating}
@@ -76,6 +95,11 @@ export function TourHeader({
         >
           {generating ? t("tour.generating") : data.stored ? t("tour.regenerate") : t("tour.generate")}
         </Button>
+        {hint && (
+          <span id="tour-model-hint" style={s.hint}>
+            {t("tour.modelHint", { model: hint })}
+          </span>
+        )}
       </div>
     </div>
   );

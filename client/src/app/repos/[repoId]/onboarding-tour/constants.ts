@@ -18,3 +18,8 @@ export const SECTION_DEFS: readonly SectionDef[] = [
   { kind: "reading_path", id: "reading-path", titleKey: "readingPath", icon: "ListChecks" },
   { kind: "first_tasks", id: "first-tasks", titleKey: "firstTasks", icon: "Target" },
 ];
+
+/** `meta.degraded_reason` the server writes when no provider key is configured (EC-7). */
+export const REASON_MODEL_NOT_CONFIGURED = "Model not configured";
+/** Settings → Feature Models. */
+export const SETTINGS_MODELS_HREF = "/settings/models";

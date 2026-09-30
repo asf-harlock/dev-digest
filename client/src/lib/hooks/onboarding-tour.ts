@@ -20,6 +20,8 @@ export function useOnboardingTour(repoId: string | null | undefined) {
   const qc = useQueryClient();
   const [pollSince, setPollSince] = React.useState<number | null>(null);
   const [gaveUp, setGaveUp] = React.useState(false);
+  /** `generated_at` when the POST was accepted; a different value means a new tour landed (Q4). */
+  const baseline = React.useRef<string | null>(null);
 
   const query = useQuery({
     queryKey: tourKey(repoId),
@@ -34,10 +36,12 @@ export function useOnboardingTour(repoId: string | null | undefined) {
   const serverGenerating = query.data?.generating === true;
   const waiting = !gaveUp && (pollSince != null || serverGenerating);
 
-  // Done: a read completed after the POST and the server is no longer generating.
+  // Done (Q4): `generated_at` changed, or a read taken after the POST says the
+  // server is no longer generating (covers failures, which keep `generated_at`).
   React.useEffect(() => {
     if (pollSince == null || !query.data) return;
-    if (!query.data.generating && query.dataUpdatedAt >= pollSince) setPollSince(null);
+    const landed = (query.data.tour.meta?.generated_at ?? null) !== baseline.current;
+    if (landed || (!query.data.generating && query.dataUpdatedAt >= pollSince)) setPollSince(null);
   }, [pollSince, query.data, query.dataUpdatedAt]);
 
   // The generation landed (or was never running) — clear a previous give-up.
@@ -56,6 +60,7 @@ export function useOnboardingTour(repoId: string | null | undefined) {
   }, [waiting]);
 
   const start = React.useCallback(() => {
+    baseline.current = qc.getQueryData<OnboardingTourResponse>(tourKey(repoId))?.tour.meta?.generated_at ?? null;
     setGaveUp(false);
     setPollSince(Date.now());
     void qc.invalidateQueries({ queryKey: tourKey(repoId) });

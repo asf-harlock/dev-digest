@@ -8,13 +8,62 @@ import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
+import { MockGitClient, MockGitHubClient, MockSecretsProvider } from '../src/adapters/mocks.js';
+import type { LLMProvider, StructuredRequest, StructuredResult, CompletionResult, ModelInfo } from '@devdigest/shared';
+import { OnboardingTourService } from '../src/modules/onboarding-tour/service.js';
 import type { RepoIntel, IndexState } from '../src/modules/repo-intel/types.js';
 import * as t from '../src/db/schema.js';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
 if (!hasDocker) console.warn('[onboarding-tour] Docker not available — skipping integration tests.');
+
+/** Scripted structured-output LLM: ok fixture, schema-invalid, throwing, or never answering. */
+class ScriptedLLM implements LLMProvider {
+  readonly id = 'openrouter' as unknown as LLMProvider['id'];
+  mode: 'ok' | 'invalid' | 'throw' | 'hang' = 'ok';
+  fixture: unknown = {};
+  calls: StructuredRequest<unknown>[] = [];
+  async listModels(): Promise<ModelInfo[]> {
+    return [];
+  }
+  async complete(): Promise<CompletionResult> {
+    throw new Error('not used');
+  }
+  async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+    this.calls.push(req as StructuredRequest<unknown>);
+    if (this.mode === 'hang') return new Promise(() => undefined);
+    if (this.mode === 'throw') throw new Error('provider exploded PROMPT-LEAK');
+    const data = this.mode === 'invalid' ? { nonsense: true } : this.fixture;
+    const parsed = (req.schema as { safeParse(v: unknown): { success: boolean; data?: T } }).safeParse(data);
+    if (!parsed.success) throw new Error('schema validation failed');
+    return { data: parsed.data as T, model: req.model, tokensIn: 1, tokensOut: 1, costUsd: 0, raw: '', attempts: 1 };
+  }
+  async embed(): Promise<number[][]> {
+    return [];
+  }
+}
+
+const GOOD_FIXTURE = {
+  architecture: {
+    body: 'Engine behind the API.',
+    nodes: [
+      { id: 'api', label: 'API', path: 'src/api' },
+      { id: 'ghost', label: 'Ghost', path: 'src/ghost' },
+    ],
+    edges: [{ from: 'api', to: 'ghost' }],
+  },
+  critical_paths: [
+    { path: 'src/core/engine.ts', reason: 'The engine.' },
+    { path: 'src/ghost.ts', reason: 'Invented.' },
+  ],
+  run_locally: [
+    { command: 'npm run dev', description: 'Start it' },
+    { command: 'rm -rf /', description: 'Invented' },
+  ],
+  reading_path: [{ path: 'README.md', why: 'Overview' }],
+  first_tasks: [{ title: 'Harden engine', description: 'Do it.', paths: ['src/core/engine.ts'], complexity: 'high' }],
+};
 
 /** Mutable RepoIntel stub: the test controls the index SHA and can gate the ranking read. */
 function makeIntel() {
@@ -57,12 +106,18 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
   let otherRepoId: string;
   let app: Awaited<ReturnType<typeof buildApp>>;
   const { ctl, intel } = makeIntel();
+  const llm = new ScriptedLLM();
 
   const makeApp = () =>
     buildApp({
       config: loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv),
       db: pg.handle.db,
-      overrides: { git: new MockGitClient(), github: new MockGitHubClient(), repoIntel: intel },
+      overrides: {
+        git: new MockGitClient(),
+        github: new MockGitHubClient(),
+        repoIntel: intel,
+        llm: { openrouter: llm },
+      },
     });
   const get = (id = repoId) => app.inject({ method: 'GET', url: `/repos/${id}/onboarding-tour` });
   const post = (payload?: unknown, id = repoId) =>
@@ -98,6 +153,7 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
       .returning();
     otherRepoId = other!.id;
     await pg.handle.db.insert(t.onboarding).values({ repoId: otherRepoId, json: { sections: [], meta: {} } });
+    llm.fixture = GOOD_FIXTURE;
     app = await makeApp();
   });
   afterAll(async () => {
@@ -157,13 +213,13 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
     }
   });
 
-  it('POST persists the skeleton: 202 running, then stored:true with generated_at', async () => {
+  it('POST persists a model tour: 202 running, then stored:true with generated_at', async () => {
     const res = await post({});
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ status: 'running' });
     const body = await settled();
     expect(body.stored).toBe(true);
-    expect(body.tour.meta.source).toBe('skeleton');
+    expect(body.tour.meta.source).toBe('llm');
     expect(body.tour.meta.generated_at).toBeTruthy();
     expect(body.tour.meta.index_sha).toBe('sha1');
     expect(body.stale).toBe(false);
@@ -207,5 +263,128 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
     expect(done.generating).toBe(false);
     expect((await post({})).statusCode).toBe(202);
     await settled();
+  });
+
+  describe('model enrichment (slice 3)', () => {
+    const reset = () => pg.handle.db.delete(t.onboarding).where(eq(t.onboarding.repoId, repoId));
+    const run = async (payload: unknown = {}) => {
+      expect((await post(payload)).statusCode).toBe(202);
+      return settled();
+    };
+
+    it('one model call per generation; grounding drops unknown paths/commands/nodes; meta populated', async () => {
+      await reset();
+      llm.mode = 'ok';
+      llm.calls = [];
+      const body = await run();
+      expect(llm.calls).toHaveLength(1);
+      expect(llm.calls[0]!.model).toBe('deepseek/deepseek-v4-flash');
+      const prompt = llm.calls[0]!.messages.map((m) => m.content).join('\n');
+      expect(prompt).toContain('<untrusted source="repository-facts">');
+      expect(prompt).toContain('API_KEY');
+      expect(prompt).not.toContain('hunter2');
+      const tour = body.tour;
+      expect(tour.meta).toMatchObject({
+        source: 'llm',
+        provider: 'openrouter',
+        model: 'deepseek/deepseek-v4-flash',
+        truncated: false,
+        last_error: null,
+        dropped_count: 4, // ghost node, dangling edge, ghost path, invented command
+      });
+      const json = JSON.stringify(tour);
+      expect(json).not.toContain('ghost');
+      expect(json).not.toContain('rm -rf');
+      expect(tour.sections[4].items[0].complexity).toBe('high');
+    });
+
+    it('EC-3: a failing regeneration keeps the stored model tour and records last_error with time', async () => {
+      const before = (await get()).json().tour;
+      expect(before.meta.source).toBe('llm');
+      llm.mode = 'throw';
+      const after = (await run()).tour;
+      expect(after.meta.source).toBe('llm');
+      expect(after.meta.generated_at).toBe(before.meta.generated_at);
+      expect(after.sections).toEqual(before.sections);
+      expect(after.meta.last_error).toBe('Model call failed or returned invalid output');
+      expect(after.meta.last_error_at).toMatch(/^\d{4}-\d\d-\d\dT/);
+      expect(after.meta.last_error).not.toContain('PROMPT-LEAK');
+      llm.mode = 'ok';
+      const healed = (await run()).tour;
+      expect(healed.meta.last_error).toBeNull();
+      expect(healed.meta.last_error_at).toBeNull();
+    });
+
+    it('EC-2: no stored model tour + failure stores the skeleton with last_error', async () => {
+      await reset();
+      llm.mode = 'throw';
+      const body = await run();
+      expect(body.stored).toBe(true);
+      expect(body.tour.meta.source).toBe('skeleton');
+      expect(body.tour.meta.last_error).toBe('Model call failed or returned invalid output');
+    });
+
+    it('schema-invalid output is discarded (skeleton kept)', async () => {
+      await reset();
+      llm.mode = 'invalid';
+      const body = await run();
+      expect(body.tour.meta.source).toBe('skeleton');
+      expect(body.tour.meta.last_error).toBe('Model call failed or returned invalid output');
+    });
+
+    it('a model call that never answers times out', async () => {
+      await reset();
+      llm.mode = 'hang';
+      const svc = new OnboardingTourService(app.container, { llmTimeoutMs: 50 });
+      await svc.startGenerate(workspaceId, repoId, { mode: 'import_graph' });
+      const body = await settled();
+      expect(body.tour.meta.source).toBe('skeleton');
+      expect(body.tour.meta.last_error).toBe('Model call timed out');
+      expect(body.tour.meta.last_error_at).toMatch(/^\d{4}-/);
+      llm.mode = 'ok';
+    });
+
+    it('EC-1: a degraded index skips the model entirely and stores a skeleton', async () => {
+      await reset();
+      llm.mode = 'ok';
+      llm.calls = [];
+      ctl.degraded = true;
+      try {
+        const body = await run();
+        expect(llm.calls).toHaveLength(0);
+        expect(body.tour.meta.source).toBe('skeleton');
+        expect(body.tour.meta.degraded_reason).toBe('No index yet');
+      } finally {
+        ctl.degraded = false;
+      }
+    });
+
+    it('EC-7: no provider key gives a skeleton with reason "Model not configured"', async () => {
+      await reset();
+      const noKey = await buildApp({
+        config: loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv),
+        db: pg.handle.db,
+        overrides: {
+          git: new MockGitClient(),
+          github: new MockGitHubClient(),
+          repoIntel: intel,
+          secrets: new MockSecretsProvider({}),
+        },
+      });
+      try {
+        const res = await noKey.inject({ method: 'POST', url: `/repos/${repoId}/onboarding-tour/generate`, payload: {} });
+        expect(res.statusCode).toBe(202);
+        let body = (await noKey.inject({ method: 'GET', url: `/repos/${repoId}/onboarding-tour` })).json();
+        for (let i = 0; i < 100 && body.generating; i++) {
+          await new Promise((r) => setTimeout(r, 25));
+          body = (await noKey.inject({ method: 'GET', url: `/repos/${repoId}/onboarding-tour` })).json();
+        }
+        expect(body.stored).toBe(true);
+        expect(body.tour.meta.source).toBe('skeleton');
+        expect(body.tour.meta.degraded_reason).toBe('Model not configured');
+      } finally {
+        await noKey.close();
+      }
+    });
   });
 });

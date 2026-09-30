@@ -1,11 +1,14 @@
 import {
   FEATURE_MODELS,
+  type ChatMessage,
+  type Provider,
   Onboarding,
   type OnboardingTourGenerateRequest,
   type OnboardingTourResponse,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { ConflictError, NotFoundError } from '../../platform/errors.js';
+import { ConfigError, ConflictError, NotFoundError } from '../../platform/errors.js';
+import { loadPromptTemplate, renderTemplate } from '../../platform/prompts.js';
 import { cloneDirExists } from '../_shared/project-context.js';
 import { scanClone } from './clone-files.js';
 import {
@@ -13,17 +16,54 @@ import {
   ERROR_REPO_NOT_FOUND,
   FALLBACK_ACTIVITY_UNAVAILABLE,
   GENERATE_FAILED_MESSAGE,
+  LAST_ERROR_MODEL_FAILED,
+  LAST_ERROR_NOT_CONFIGURED,
+  LAST_ERROR_TIMEOUT,
+  TOUR_FEATURE_ID,
+  TOUR_LANGUAGE,
+  TOUR_LLM_MAX_RETRIES,
+  TOUR_LLM_TIMEOUT_MS,
+  TOUR_PROMPT_FILE,
+  TOUR_SCHEMA_NAME,
+  TOUR_TOKEN_BUDGET,
   RANKED_FILES_LIMIT,
   REASON_BY_INDEX,
   REASON_INDEX_UNAVAILABLE,
+  REASON_MODEL_NOT_CONFIGURED,
   REASON_NOT_CLONED,
   REASON_NO_INDEX,
 } from './constants.js';
+import { buildFactsPrompt, mergeGrounded } from './enrichment.js';
 import { buildSkeleton, computeStale } from './helpers.js';
+import { RawTour } from './tour-schema.js';
 import { OnboardingTourRepository, type TourRepoRow } from './repository.js';
 import type { RankedFile, TourFacts } from './types.js';
 
-export type TourLogger = { warn: (obj: unknown, msg?: string) => void };
+export type TourLogger = {
+  info?: (obj: unknown, msg?: string) => void;
+  warn: (obj: unknown, msg?: string) => void;
+};
+
+class TourTimeoutError extends Error {}
+
+/** Race `p` against a timer; the timer is always cleared. */
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TourTimeoutError('timeout')), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Record a failure: the plain message in `last_error`, its ISO time in `last_error_at`. */
+function setFailure(meta: Onboarding['meta'], message: string, at: Date): void {
+  meta.last_error = message;
+  meta.last_error_at = at.toISOString();
+}
 
 /**
  * Per-repo in-memory generation lock. Valid only for a SINGLE API instance per
@@ -38,7 +78,10 @@ type GenerateOptions = Pick<OnboardingTourGenerateRequest, 'mode' | 'window_days
 export class OnboardingTourService {
   private repo: OnboardingTourRepository;
 
-  constructor(private container: Container) {
+  constructor(
+    private container: Container,
+    private opts: { llmTimeoutMs?: number } = {},
+  ) {
     this.repo = new OnboardingTourRepository(container.db);
   }
 
@@ -54,9 +97,9 @@ export class OnboardingTourService {
 
   /** `{provider, model}` for the tour: the workspace override, else the registry default. No key, no call (Q7). */
   private async modelHint(workspaceId: string): Promise<{ provider: string; model: string }> {
-    const override = await this.repo.getFeatureModelOverride(workspaceId, 'onboarding');
+    const override = await this.repo.getFeatureModelOverride(workspaceId, TOUR_FEATURE_ID);
     if (override) return override;
-    const def = FEATURE_MODELS.find((f) => f.id === 'onboarding');
+    const def = FEATURE_MODELS.find((f) => f.id === TOUR_FEATURE_ID);
     return { provider: def?.defaultProvider ?? '', model: def?.defaultModel ?? '' };
   }
 
@@ -104,7 +147,7 @@ export class OnboardingTourService {
     const repo = await this.requireRepo(workspaceId, repoId);
     if (generating.has(repoId)) throw new ConflictError(ERROR_ALREADY_GENERATING);
     generating.add(repoId);
-    void this.generate(workspaceId, repo, opts)
+    void this.generate(workspaceId, repo, opts, log)
       .catch(async (err: unknown) => {
         log?.warn({ repoId, err: err instanceof Error ? err.message : String(err) }, 'onboarding tour generation failed');
         await this.recordFailure(workspaceId, repoId).catch(() => undefined);
@@ -112,24 +155,133 @@ export class OnboardingTourService {
       .finally(() => generating.delete(repoId));
   }
 
-  /** Skeleton only in slice 2. Slice 3 enriches this tour; slice 4 feeds it activity facts. */
-  private async generate(workspaceId: string, repo: TourRepoRow, opts: GenerateOptions): Promise<void> {
+  /**
+   * Skeleton first, then at most ONE model call to enrich it. A degraded index
+   * (EC-1) stores the skeleton without calling the model. Failures never throw
+   * past here: see `storeFailure` for the EC-2 / EC-3 / EC-7 rules.
+   */
+  private async generate(
+    workspaceId: string,
+    repo: TourRepoRow,
+    opts: GenerateOptions,
+    log?: TourLogger,
+  ): Promise<void> {
+    const started = Date.now();
     const cloned = await this.cloned(repo);
     const facts = await this.collectFacts(repo, cloned, opts);
-    const tour = buildSkeleton(facts);
+    const skeleton = buildSkeleton(facts);
+
+    if (facts.degradedReason) {
+      await this.storeSkeleton(workspaceId, repo.id, skeleton);
+      log?.info?.({ repoId: repo.id, outcome: 'skeleton_degraded', ms: Date.now() - started }, 'onboarding tour generated');
+      return;
+    }
+
+    const hint = await this.modelHint(workspaceId);
+    const provider = hint.provider as Provider;
+    const system = renderTemplate(await loadPromptTemplate(TOUR_PROMPT_FILE), { language: TOUR_LANGUAGE });
+    const prompt = buildFactsPrompt(facts, (text) => this.container.tokenizer.count(text), TOUR_TOKEN_BUDGET);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: system },
+      { role: 'user', content: prompt.text },
+    ];
+    const tokens = this.container.tokenizer.count(messages.map((m) => m.content).join('\n'));
+
+    let raw: RawTour;
+    try {
+      const llm = await this.container.llm(provider);
+      const result = await withTimeout(
+        llm.completeStructured({
+          model: hint.model,
+          schema: RawTour,
+          schemaName: TOUR_SCHEMA_NAME,
+          messages,
+          maxRetries: TOUR_LLM_MAX_RETRIES,
+          timeoutMs: TOUR_LLM_TIMEOUT_MS,
+        }),
+        this.opts.llmTimeoutMs ?? TOUR_LLM_TIMEOUT_MS,
+      );
+      raw = result.data;
+    } catch (err) {
+      const message = this.failureMessage(err);
+      // NFR-12: no prompt text, no raw provider message (it can echo request content).
+      log?.warn(
+        { repoId: repo.id, provider, model: hint.model, tokens, truncated: prompt.truncated, outcome: message, ms: Date.now() - started },
+        'onboarding tour model call failed',
+      );
+      await this.storeFailure(workspaceId, repo.id, skeleton, message);
+      return;
+    }
+
     const now = new Date();
-    tour.meta.generated_at = now.toISOString();
+    const tour = mergeGrounded(skeleton, raw, facts, {
+      provider,
+      model: hint.model,
+      generatedAt: now.toISOString(),
+      truncated: prompt.truncated,
+    });
     await this.repo.upsert(workspaceId, repo.id, tour, now);
+    log?.info?.(
+      {
+        repoId: repo.id,
+        provider,
+        model: hint.model,
+        tokens,
+        truncated: prompt.truncated,
+        dropped: tour.meta.dropped_count,
+        outcome: 'llm',
+        ms: Date.now() - started,
+      },
+      'onboarding tour generated',
+    );
   }
 
-  /** A failed run keeps the previous tour and records why in its meta. */
-  private async recordFailure(workspaceId: string, repoId: string): Promise<void> {
+  private failureMessage(err: unknown): string {
+    if (err instanceof TourTimeoutError) return LAST_ERROR_TIMEOUT;
+    if (err instanceof ConfigError) return LAST_ERROR_NOT_CONFIGURED;
+    return LAST_ERROR_MODEL_FAILED;
+  }
+
+  private async storeSkeleton(workspaceId: string, repoId: string, skeleton: Onboarding): Promise<void> {
+    const now = new Date();
+    skeleton.meta.generated_at = now.toISOString();
+    await this.repo.upsert(workspaceId, repoId, skeleton, now);
+  }
+
+  private async storedTour(workspaceId: string, repoId: string) {
     const row = await this.repo.getStored(workspaceId, repoId);
     const parsed = row ? Onboarding.safeParse(row.json) : undefined;
-    if (!row || !parsed?.success) return;
-    const tour = parsed.data;
-    tour.meta.last_error = GENERATE_FAILED_MESSAGE;
-    await this.repo.upsert(workspaceId, repoId, tour, row.generatedAt);
+    return row && parsed?.success ? { row, tour: parsed.data } : undefined;
+  }
+
+  /**
+   * EC-3: a stored model tour is kept untouched except `last_error` (and its
+   * own generated time stays). EC-2 / EC-7: otherwise the skeleton is stored
+   * with `last_error` so the page can explain why it is not model-written.
+   */
+  private async storeFailure(workspaceId: string, repoId: string, skeleton: Onboarding, message: string): Promise<void> {
+    const at = new Date();
+    const existing = await this.storedTour(workspaceId, repoId);
+    if (existing?.tour.meta.source === 'llm') {
+      setFailure(existing.tour.meta, message, at);
+      await this.repo.upsert(workspaceId, repoId, existing.tour, existing.row.generatedAt);
+      return;
+    }
+    if (message === LAST_ERROR_NOT_CONFIGURED) {
+      // EC-7: the skeleton itself says why it is not model-written.
+      skeleton.meta.degraded_reason = REASON_MODEL_NOT_CONFIGURED;
+    } else {
+      setFailure(skeleton.meta, message, at);
+    }
+    await this.storeSkeleton(workspaceId, repoId, skeleton);
+  }
+
+  /** An unexpected error keeps the previous tour and records why in its meta. */
+  private async recordFailure(workspaceId: string, repoId: string): Promise<void> {
+    const existing = await this.storedTour(workspaceId, repoId);
+    if (!existing) return;
+    setFailure(existing.tour.meta, GENERATE_FAILED_MESSAGE, new Date());
+    await this.repo.upsert(workspaceId, repoId, existing.tour, existing.row.generatedAt);
   }
 
   /** Gather the deterministic facts. Every source degrades to empty; none throws. */

@@ -15,11 +15,13 @@ describe('Onboarding tour contract (server copy)', () => {
     expect(r.meta.model).toBe('gpt-4.1');
     expect(r.meta.source).toBe('skeleton');
     expect(r.meta.last_error).toBeUndefined();
+    expect(r.meta.last_error_at).toBeUndefined();
   });
 
   it('accepts null for persisted nullish meta fields', () => {
-    const r = Onboarding.parse({ sections: [], meta: { last_error: null, model: null } });
+    const r = Onboarding.parse({ sections: [], meta: { last_error: null, last_error_at: null, model: null } });
     expect(r.meta.last_error).toBeNull();
+    expect(r.meta.last_error_at).toBeNull();
   });
 
   it('round-trips a typed document', () => {

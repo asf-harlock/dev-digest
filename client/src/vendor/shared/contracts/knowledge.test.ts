@@ -10,10 +10,11 @@ describe("Onboarding tour contract (client copy)", () => {
   it("parses a partial meta and accepts null nullish fields", () => {
     const r = Onboarding.parse({
       sections: [],
-      meta: { source: "llm", last_error: null, window_days: null },
+      meta: { source: "llm", last_error: null, last_error_at: null, window_days: null },
     });
     expect(r.meta?.source).toBe("llm");
     expect(r.meta?.last_error).toBeNull();
+    expect(r.meta?.last_error_at).toBeNull();
     expect(r.meta?.dropped_count).toBeUndefined();
   });
 

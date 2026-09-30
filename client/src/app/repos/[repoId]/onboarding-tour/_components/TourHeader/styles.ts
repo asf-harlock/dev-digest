@@ -15,5 +15,7 @@ export const s = {
   } satisfies CSSProperties,
   sep: { color: "var(--text-muted)" } satisfies CSSProperties,
   badges: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 8 } satisfies CSSProperties,
-  actions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } satisfies CSSProperties,
+  actions: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 } satisfies CSSProperties,
+  hint: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  link: { fontSize: 13, color: "var(--accent-text)", textDecoration: "underline", minHeight: 24 } satisfies CSSProperties,
 } as const;

@@ -320,6 +320,7 @@ export function buildSkeleton(facts: TourFacts): Onboarding {
       provider: null,
       generated_at: null,
       last_error: null,
+      last_error_at: null,
       dropped_count: 0,
       truncated: false,
       ranking_fallback: facts.rankingFallback,
