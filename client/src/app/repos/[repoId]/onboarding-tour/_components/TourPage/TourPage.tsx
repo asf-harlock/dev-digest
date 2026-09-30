@@ -108,6 +108,8 @@ export function TourPage() {
           <ReadingPathSection
             section={sec?.kind === "reading_path" ? sec : undefined}
             activityRanked={meta?.ranking_mode === "activity"}
+            repoFullName={activeRepo?.full_name}
+            sha={meta?.index_sha || activeRepo?.default_branch}
           />
         );
       case "first_tasks":

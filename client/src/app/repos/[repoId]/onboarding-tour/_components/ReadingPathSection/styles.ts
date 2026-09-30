@@ -17,6 +17,12 @@ export const s = {
     flexShrink: 0,
   } satisfies CSSProperties,
   path: { color: "var(--text-primary)", fontSize: 13, overflowWrap: "anywhere" } satisfies CSSProperties,
+  link: {
+    color: "inherit",
+    textDecoration: "underline",
+    textDecorationColor: "var(--border-strong)",
+    textUnderlineOffset: 3,
+  } satisfies CSSProperties,
   active: { fontFamily: "inherit", fontWeight: 650 } satisfies CSSProperties,
   why: { margin: "2px 0 0", color: "var(--text-secondary)" } satisfies CSSProperties,
   empty: { fontSize: 13, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
