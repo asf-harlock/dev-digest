@@ -13,5 +13,66 @@
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
+  },
+  "tour": {
+    "heading": "Onboarding for {repo}",
+    "generate": "Generate",
+    "regenerate": "Regenerate",
+    "generating": "Generating…",
+    "retry": "Retry",
+    "timedOut": "Generation is taking longer than expected",
+    "pollFailed": "Couldn’t check on the generation",
+    "status": {
+      "skeleton": "Skeleton",
+      "skeletonReason": "Skeleton — {reason}",
+      "writtenBy": "Written by {model}"
+    },
+    "meta": {
+      "files": "~{count} files",
+      "generated": "generated {time}",
+      "notGenerated": "not generated yet",
+      "rankedImport": "Ranked by import graph",
+      "rankedActivity": "Ranked by import graph + activity, last {days} days"
+    },
+    "stale": {
+      "label": "Stale",
+      "detail": "Stale — the index changed since this tour was generated"
+    },
+    "noIndex": "No index yet",
+    "toggle": {
+      "expand": "Expand {section}",
+      "collapse": "Collapse {section}"
+    },
+    "onThisPage": "On this page",
+    "sections": {
+      "architecture": "Architecture overview",
+      "criticalPaths": "Critical paths",
+      "runLocally": "How to run locally",
+      "readingPath": "Guided reading path",
+      "firstTasks": "First tasks"
+    },
+    "empty": {
+      "architecture": "No architecture summary yet — index the repo and generate the tour.",
+      "criticalPaths": "No critical files found — the repo has no import graph yet.",
+      "runLocally": "No run commands found — no manifest scripts were detected.",
+      "readingPath": "No reading path yet — the repo has no import graph yet.",
+      "firstTasks": "No first tasks suggested yet."
+    },
+    "architecture": {
+      "diagramLabel": "Architecture diagram"
+    },
+    "open": "Open",
+    "openLabel": "Open {path} on GitHub",
+    "copyLabel": "Copy command: {command}",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "envKeys": "Environment variables: {keys}",
+    "suggestion": "Suggestion",
+    "complexity": {
+      "low": "Low complexity",
+      "medium": "Medium complexity",
+      "high": "High complexity"
+    },
+    "suggestedComplexity": "{level} (suggested)"
   }
 }

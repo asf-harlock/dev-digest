@@ -37,4 +37,14 @@ describe("Onboarding tour contract (client copy)", () => {
       ).toBe(true);
     }
   });
+
+  it("first task complexity is optional and validated", () => {
+    const task = { title: "t", description: "d", paths: [] };
+    const parse = (t: object) =>
+      Onboarding.safeParse({ sections: [{ kind: "first_tasks", items: [t] }] });
+    expect(parse(task).success).toBe(true);
+    expect(parse({ ...task, complexity: null }).success).toBe(true);
+    expect(parse({ ...task, complexity: "low" }).success).toBe(true);
+    expect(parse({ ...task, complexity: "huge" }).success).toBe(false);
+  });
 });

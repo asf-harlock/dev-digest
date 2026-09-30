@@ -11,3 +11,21 @@ describe("Project Context nav", () => {
     expect(activeKeyFor("/repos/r1/pulls")).toBe("pulls");
   });
 });
+
+describe("Onboarding Tour nav (SPEC-05)", () => {
+  it("AC-1: sits in WORKSPACE between Pull Requests and Project Context", () => {
+    const keys = NAV.find((g) => g.section === "WORKSPACE")?.items.map((i) => i.key);
+    expect(keys).toEqual(["pulls", "onboarding-tour", "context"]);
+    const item = NAV.flatMap((g) => g.items).find((i) => i.key === "onboarding-tour");
+    expect(item?.href).toBe("/repos/:repoId/onboarding-tour");
+  });
+
+  it("AC-2: active on the tour route, including a hash-free subpath", () => {
+    expect(activeKeyFor("/repos/r1/onboarding-tour")).toBe("onboarding-tour");
+    expect(activeKeyFor("/repos/r1/onboarding-tour/")).toBe("onboarding-tour");
+  });
+
+  it("AC-2: not active on /onboarding (Add repository)", () => {
+    expect(activeKeyFor("/onboarding")).toBe("");
+  });
+});

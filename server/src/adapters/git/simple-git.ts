@@ -159,7 +159,7 @@ export class SimpleGitClient implements GitClient {
       }
       return counts;
     } catch (err) {
-      if (controller.signal.aborted) throw new Error('git history timed out after 60s');
+      if (controller.signal.aborted) throw new Error('git history timed out after 60s', { cause: err });
       throw err instanceof Error ? err : new Error(String(err));
     } finally {
       clearTimeout(timer);

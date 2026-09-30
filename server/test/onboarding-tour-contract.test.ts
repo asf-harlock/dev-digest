@@ -55,4 +55,14 @@ describe('Onboarding tour contract (server copy)', () => {
   it('defaults the request mode', () => {
     expect(OnboardingTourGenerateRequest.parse({}).mode).toBe('import_graph');
   });
+
+  it('first task complexity is optional and validated', () => {
+    const task = { title: 't', description: 'd', paths: [] };
+    const parse = (t: object) =>
+      Onboarding.safeParse({ sections: [{ kind: 'first_tasks', items: [t] }] });
+    expect(parse(task).success).toBe(true);
+    expect(parse({ ...task, complexity: null }).success).toBe(true);
+    expect(parse({ ...task, complexity: 'high' }).success).toBe(true);
+    expect(parse({ ...task, complexity: 'huge' }).success).toBe(false);
+  });
 });

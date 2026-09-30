@@ -100,6 +100,8 @@ export const TourFirstTask = z.object({
   title: z.string(),
   description: z.string(),
   paths: z.array(z.string()),
+  // Suggested effort, rendered as text; absent on rows stored before it existed.
+  complexity: z.enum(['low', 'medium', 'high']).nullish(),
 });
 export type TourFirstTask = z.infer<typeof TourFirstTask>;
 

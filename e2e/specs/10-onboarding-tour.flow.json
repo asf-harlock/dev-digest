@@ -1,0 +1,19 @@
+{
+  "name": "Onboarding tour renders its deterministic skeleton with the On this page menu",
+  "description": "From the seeded repo's PR list, navigate to /repos/<id>/onboarding-tour (the repo id is resolved from the home redirect, never hardcoded) and confirm the five section headings, the skeleton status badge and the 'On this page' menu render, then click a menu item and confirm the URL hash updates. The seeded repo acme/payments-api has no clone (clonePath: null in seed.ts), so the tour is always the live-built skeleton. It NEVER clicks Generate/Regenerate: flows stay read-only and nothing may trigger a model call. Assumes a freshly-seeded DB where acme/payments-api is the first repo (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the seeded repo's PR list (resolves the repo id)" },
+    { "cmd": ["eval", "window.location.assign(window.location.pathname.replace(/\\/pulls.*$/, '/onboarding-tour'))"], "label": "navigate to the same repo's onboarding tour route" },
+    { "cmd": ["wait", "--url", "/onboarding-tour"], "label": "onboarding tour route reached" },
+    { "cmd": ["wait", "--text", "Architecture overview"], "label": "Architecture overview section renders" },
+    { "cmd": ["wait", "--text", "Critical paths"], "label": "Critical paths section renders" },
+    { "cmd": ["wait", "--text", "How to run locally"], "label": "How to run locally section renders" },
+    { "cmd": ["wait", "--text", "Guided reading path"], "label": "Guided reading path section renders" },
+    { "cmd": ["wait", "--text", "First tasks"], "label": "First tasks section renders" },
+    { "cmd": ["wait", "--text", "Skeleton"], "label": "the status badge reports the skeleton source (degraded seeded repo)" },
+    { "cmd": ["wait", "nav[aria-label=\"On this page\"]"], "label": "the On this page nav renders (structural locator: the visible label is CSS-uppercased)" },
+    { "cmd": ["find", "first", "a[href^=\"#\"]", "click"], "label": "click the first On this page menu item" },
+    { "cmd": ["wait", "--url", "#"], "label": "the URL hash updates" }
+  ]
+}
