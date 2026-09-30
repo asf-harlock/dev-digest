@@ -82,6 +82,17 @@ needed none of those and cannot drift.
   `container.repoIntel.…()` call in `service.ts`. That call site is the only
   place drift is caught, so never cast it. `server/src/modules/blast/helpers.ts`
   (`BlastFacadeResult`), `server/.dependency-cruiser.cjs`
+  **2026-09-30** — moved to `server/src/modules/_shared/blast-map.ts` (SPEC-06),
+  so `brief/` can reuse it too. `blast/helpers.ts` no longer exists, but comments
+  in `repo-intel/service.ts:530,768` still cite it.
+
+- **2026-09-30** — A `ProjectContextEntry` that can be used has
+  `status: 'attached'`. There is no `'ok'` status, and a plan assumed one. When
+  the repo is not cloned, `resolveProjectContext` does not return `[]`. It
+  returns entries marked `unreadable` with empty `text` (`failAll()`). Before
+  building a prompt section, filter to `attached` entries with non-empty text,
+  or an empty `wrapUntrusted` block gets emitted.
+  `server/src/modules/_shared/project-context.ts:310,340`
 
 
 - **2026-09-26** — `repoIntel.getBlastRadius` returns a thinner result than its
@@ -163,6 +174,10 @@ needed none of those and cannot drift.
   `server/test/reviews-helpers.test.ts` (`INTENT_FALLBACK_PROVIDER/MODEL
   mirrors FEATURE_MODELS`) — copy that pattern for any other feature-model
   fallback constant.
+  **2026-09-30** — `brief/repository.ts` is a fourth copy: SPEC-06's plan
+  first called `resolveFeatureModel` from `settings/feature-models.ts`, and the
+  cross-model review caught it as a `no-cross-module-import` blocker before
+  code was written. A shared `_shared/` resolver is now overdue.
 
 - **2026-09-20** — Same `no-cross-module-import` rule, other escape hatch: when
   the thing two modules need is a PURE FUNCTION over data both already hold
@@ -283,6 +298,18 @@ needed none of those and cannot drift.
 
 ## Tool & Library Notes
 
+- **2026-09-30** — An LLM call cannot be cancelled. `StructuredRequest` has
+  `timeoutMs` but no `signal` (`vendor/shared/adapters.ts:55-62`). The
+  adapters apply `timeoutMs` per attempt, through a non-cancelling
+  `withTimeout` race inside the `maxRetries+1` loop (`adapters/llm/openai.ts:88-110`),
+  so one `completeStructured` can run for about 3 × `timeoutMs` plus transport
+  retries. A `Promise.race` deadline on top frees the caller, not the HTTP
+  request. For an in-memory per-key lock, this means releasing the lock when
+  the deadline fires lets a second paid call start while the first is still
+  running. Hold the lock until the underlying promise settles, and discard a
+  late result with an expired flag (`brief/service.ts` `withDeadline`).
+  `onboarding-tour/service.ts:48-58` still releases at the deadline.
+
 - **2026-09-18** — Two dependency-cruiser settings decide whether `pnpm arch`
   (`server/.dependency-cruiser.cjs`) checks anything at all, and both fail
   SILENTLY with a green "no dependency violations found". (1) Listing
@@ -313,6 +340,12 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-09-30** — SPEC-06 PR Brief built via `/run-plan`. It added the
+  `brief/` module (GET/POST `/pulls/:id/brief`, atomic jsonb-merge cache in
+  `pr_brief.json`). It moved `linked-issue`, `smart-diff-roles`, `blast-map`
+  and `hunk-headers` into `_shared/`. There are no brief tests yet
+  (test-writer was off). See Tool & Library Notes and Codebase Patterns.
 
 - **2026-09-23** — Built the full Intent Layer feature (`specs/03-intent-layer.md`):
   `pr_intent`/`findings` schema extension (migration `0015`), the

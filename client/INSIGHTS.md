@@ -151,6 +151,21 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Recurring Errors & Fixes
 
+- **2026-09-30** — `next build`/`next dev` fails with `Module not found: Can't
+  resolve './contracts/findings.js'` when any client file imports a runtime
+  VALUE (a function or const, not a type) from `@devdigest/shared`. That pulls
+  `vendor/shared/index.ts` into webpack, and webpack cannot resolve its `.js`
+  re-exports. `typecheck`, `lint`, `arch` and vitest all stay green, so only
+  a real build catches it. SPEC-06 hit this with `parseFileRef`/`formatFileRef`.
+  Fix: import only `import type` from shared, and mirror the value in `src/lib/`
+  with a drift test against the shared copy (`lib/file-ref.ts` +
+  `file-ref.test.ts`, the same shape as `lib/feature-models.ts:6-10`).
+  **Same day:** do not run `next build` while `next dev` is running. Both
+  write `client/.next`, and `next.config.mjs` has no `distDir` override, so an
+  env var like `NEXT_DIST_DIR` is ignored. The dev server then 500s with
+  `Cannot find module './vendor-chunks/…'`. Fix: stop dev, `rm -rf client/.next`,
+  and start it again.
+
 - **2026-09-20** — An RTL test that does `fireEvent.change(select, …)` then
   immediately `fireEvent.click(actionButton)` in the next line can silently
   no-op the click if the button's `disabled` depends on a query that becomes
