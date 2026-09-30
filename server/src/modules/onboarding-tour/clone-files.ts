@@ -27,13 +27,23 @@ async function listDir(path: string): Promise<{ name: string; isDir: boolean }[]
   }
 }
 
-async function readManifests(clonePath: string, dir: string, present: Set<string>): Promise<ManifestFact[]> {
+function lockfileManager(files: ReadonlySet<string>): string | undefined {
+  return LOCKFILE_MANAGERS.find(([file]) => files.has(file))?.[1];
+}
+
+async function readManifests(
+  clonePath: string,
+  dir: string,
+  present: Set<string>,
+  rootPm: string,
+): Promise<ManifestFact[]> {
   const out: ManifestFact[] = [];
+  const own = lockfileManager(present);
   for (const name of MANIFEST_NAMES) {
     if (!present.has(name)) continue;
     const path = dir ? `${dir}/${name}` : name;
     const read = await readContextFile(clonePath, path, MAX_MANIFEST_BYTES);
-    if (read.status === 'ok') out.push({ path, dir, name, text: read.text });
+    if (read.status === 'ok') out.push({ path, dir, name, text: read.text, pm: own ?? rootPm, ownLockfile: own !== undefined });
   }
   return out;
 }
@@ -47,7 +57,8 @@ export interface CloneScan {
 export async function scanClone(clonePath: string): Promise<CloneScan> {
   const root = await listDir(clonePath);
   const rootFiles = new Set(root.filter((e) => !e.isDir).map((e) => e.name));
-  const manifests = await readManifests(clonePath, '', rootFiles);
+  const pm = lockfileManager(rootFiles) ?? DEFAULT_PACKAGE_MANAGER;
+  const manifests = await readManifests(clonePath, '', rootFiles, pm);
 
   const pkgDirs: string[] = [];
   const rootDirs = new Set(root.filter((e) => e.isDir).map((e) => e.name));
@@ -64,10 +75,9 @@ export async function scanClone(clonePath: string): Promise<CloneScan> {
   }
   for (const dir of pkgDirs.slice(0, MAX_PACKAGE_DIRS)) {
     const files = new Set((await listDir(`${clonePath}/${dir}`)).filter((e) => !e.isDir).map((e) => e.name));
-    manifests.push(...(await readManifests(clonePath, dir, files)));
+    manifests.push(...(await readManifests(clonePath, dir, files, pm)));
   }
 
-  const pm = LOCKFILE_MANAGERS.find(([file]) => rootFiles.has(file))?.[1] ?? DEFAULT_PACKAGE_MANAGER;
   const hasReadme = rootFiles.has('README.md');
   return { manifests, packageManager: pm, hasReadme };
 }

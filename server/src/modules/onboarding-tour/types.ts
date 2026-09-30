@@ -14,6 +14,10 @@ export interface ManifestFact {
   dir: string;
   name: string;
   text: string;
+  /** Package manager for this manifest's directory (own lockfile, else the root's). */
+  pm?: string;
+  /** True when the directory has its own lockfile, so it needs its own install step. */
+  ownLockfile?: boolean;
 }
 
 /** Everything the skeleton (and, later, the model prompt) is built from. */

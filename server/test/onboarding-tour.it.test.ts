@@ -87,6 +87,7 @@ function makeIntel() {
     degraded: false,
     gate: null as Promise<void> | null,
     rankCalls: 0,
+    paths: ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'],
   };
   const intel = {
     getIndexState: async (repoId: string): Promise<IndexState> => ({
@@ -104,7 +105,7 @@ function makeIntel() {
     getTopFilesByRank: async () => {
       ctl.rankCalls++;
       if (ctl.gate) await ctl.gate;
-      return ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'];
+      return ctl.paths;
     },
     getFileRank: async (_id: string, paths: string[]) =>
       paths.map((path, i) => ({ path, percentile: 1 - i * 0.1 })),
@@ -169,6 +170,13 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
       .returning();
     otherRepoId = other!.id;
     await pg.handle.db.insert(t.onboarding).values({ repoId: otherRepoId, json: { sections: [], meta: {} } });
+    await pg.handle.db.insert(t.fileRank).values(
+      [
+        ['src/core/engine.ts', 1.0],
+        ['src/api/routes.ts', 0.9],
+        ['src/util/log.ts', 0.8],
+      ].map(([filePath, rank]) => ({ repoId, filePath: filePath as string, pagerank: rank as number, hotness: 0, rank: rank as number, percentile: 99 })),
+    );
     llm.fixture = GOOD_FIXTURE;
     app = await makeApp();
   });
@@ -415,11 +423,6 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
 
     it('AC-26: ranks by rank x (1 + hotness); persists mode, window and per-file hotness; file_rank untouched', async () => {
       await reset();
-      await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
-      await pg.handle.db.insert(t.fileRank).values([
-        { repoId, filePath: 'src/core/engine.ts', pagerank: 0.5, hotness: 0, rank: 0.5, percentile: 99 },
-        { repoId, filePath: 'src/util/log.ts', pagerank: 0.1, hotness: 0, rank: 0.1, percentile: 50 },
-      ]);
       const before = await pg.handle.db.select().from(t.fileRank).where(eq(t.fileRank.repoId, repoId));
       llm.mode = 'throw'; // keep the deterministic skeleton ordering visible
       git.mode = 'ok';
@@ -440,7 +443,6 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
         expect(after).toEqual(before);
       } finally {
         llm.mode = 'ok';
-        await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
       }
     });
 
@@ -515,6 +517,165 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
       expect((await post({}, r!.id)).statusCode).toBe(202);
       await settled(r!.id);
     });
+  });
+});
+
+d('SPEC-05 verification fixes (ranking source, budget, logging)', () => {
+  let pg: PgFixture;
+  let workspaceId: string;
+  let repoId: string;
+  let base: string;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  const { ctl, intel } = makeIntel();
+  const llm = new ScriptedLLM();
+  const git = new HistoryGit();
+  const logs: { ctx: Record<string, unknown>; msg?: string }[] = [];
+  const log = {
+    info: (ctx: unknown, msg?: string) => void logs.push({ ctx: ctx as Record<string, unknown>, msg }),
+    warn: (ctx: unknown, msg?: string) => void logs.push({ ctx: ctx as Record<string, unknown>, msg }),
+  };
+
+  const reset = () => pg.handle.db.delete(t.onboarding).where(eq(t.onboarding.repoId, repoId));
+  const setRanks = async (rows: [string, number][]) => {
+    await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+    await pg.handle.db
+      .insert(t.fileRank)
+      .values(rows.map(([filePath, rank]) => ({ repoId, filePath, pagerank: rank, hotness: 0, rank, percentile: 99 })));
+  };
+  async function generate(payload: { mode: 'import_graph' | 'activity'; window_days?: number | null }) {
+    const svc = new OnboardingTourService(app.container);
+    await svc.startGenerate(workspaceId, repoId, payload, log);
+    for (let i = 0; i < 200; i++) {
+      const res = await app.inject({ method: 'GET', url: `/repos/${repoId}/onboarding-tour` });
+      const body = res.json();
+      if (!body.generating) return body;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error('did not settle');
+  }
+  const section = (tour: { sections: { kind: string }[] }, kind: string) =>
+    tour.sections.find((x) => x.kind === kind) as unknown as { items: { path: string; hotness?: number | null }[] };
+
+  beforeAll(async () => {
+    pg = await startPg();
+    await seed(pg.handle.db);
+    const [ws] = await pg.handle.db.select({ id: t.workspaces.id }).from(t.workspaces).where(eq(t.workspaces.name, 'default'));
+    workspaceId = ws!.id;
+    base = await mkdtemp(join(tmpdir(), 'devdigest-tour-fix-'));
+    await mkdir(join(base, 'clone'), { recursive: true });
+    await writeFile(join(base, 'clone', 'package.json'), JSON.stringify({ scripts: { test: 'y' } }));
+    const [repo] = await pg.handle.db
+      .insert(t.repos)
+      .values({ workspaceId, owner: 'acme', name: 'fixes', fullName: 'acme/fixes', clonePath: join(base, 'clone') })
+      .returning();
+    repoId = repo!.id;
+    llm.fixture = GOOD_FIXTURE;
+    app = await buildApp({
+      config: loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv),
+      db: pg.handle.db,
+      overrides: { git, github: new MockGitHubClient(), repoIntel: intel, llm: { openrouter: llm } },
+    });
+  });
+  afterAll(async () => {
+    await app?.close();
+    await pg?.stop();
+    if (base) await rm(base, { recursive: true, force: true });
+  });
+
+  it('AC-10/AC-26: orders by stored rank, not percentile (distinct ranks with equal percentile)', async () => {
+    await setRanks([
+      ['src/core/engine.ts', 0.501],
+      ['src/api/routes.ts', 0.5],
+      ['src/util/log.ts', 0.499],
+    ]);
+    llm.mode = 'throw';
+    await reset();
+    const plain = await generate({ mode: 'import_graph' });
+    expect(section(plain.tour, 'critical_paths').items.map((i) => i.path)).toEqual([
+      'src/core/engine.ts',
+      'src/api/routes.ts',
+      'src/util/log.ts',
+    ]);
+    git.counts = { 'src/util/log.ts': 10, 'src/api/routes.ts': 5 };
+    await reset();
+    const act = await generate({ mode: 'activity', window_days: 30 });
+    // engine .501, routes .5 x 1.5 = .75, log .499 x 2 = .998
+    expect(section(act.tour, 'critical_paths').items.map((i) => i.path)).toEqual([
+      'src/util/log.ts',
+      'src/api/routes.ts',
+      'src/core/engine.ts',
+    ]);
+    llm.mode = 'ok';
+  });
+
+  it('AC-8: the reading path lists at most 5 files', async () => {
+    const paths = Array.from({ length: 12 }, (_, i) => `src/m${String(i).padStart(2, '0')}.ts`);
+    ctl.paths = paths;
+    await setRanks(paths.map((p, i) => [p, 1 - i / 100] as [string, number]));
+    try {
+      llm.mode = 'throw';
+      await reset();
+      const skel = await generate({ mode: 'import_graph' });
+      expect(section(skel.tour, 'reading_path').items.length).toBeLessThanOrEqual(5);
+      // model output with many files is capped too
+      llm.mode = 'ok';
+      llm.fixture = { ...GOOD_FIXTURE, reading_path: paths.map((p) => ({ path: p, why: 'w' })) };
+      await reset();
+      const enriched = await generate({ mode: 'import_graph' });
+      expect(enriched.tour.meta.source).toBe('llm');
+      expect(section(enriched.tour, 'reading_path').items).toHaveLength(5);
+    } finally {
+      llm.fixture = GOOD_FIXTURE;
+      ctl.paths = ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'];
+    }
+  });
+
+  it('NFR-6: system prompt + facts stay within 24 000 tokens and truncation is recorded', async () => {
+    const paths = Array.from({ length: 2500 }, (_, i) => `src/generated/module-${i}/some-longer-file-name-${i}.ts`);
+    ctl.paths = paths;
+    await setRanks(paths.map((p, i) => [p, 1 - i / 10000] as [string, number]));
+    llm.mode = 'ok';
+    llm.calls = [];
+    try {
+      await reset();
+      const body = await generate({ mode: 'import_graph' });
+      expect(body.tour.meta.truncated).toBe(true);
+      const all = llm.calls[0]!.messages.map((m) => m.content).join('\n');
+      expect(app.container.tokenizer.count(all)).toBeLessThanOrEqual(24_000);
+      expect(all).toContain('src/generated/module-0/'); // highest rank kept
+      expect(all).not.toContain('module-2499/'); // lowest rank truncated first
+    } finally {
+      ctl.paths = ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'];
+    }
+  });
+
+  it('NFR-12: every generation log carries ranking mode, window and model; none carries prompt text', async () => {
+    await setRanks([['src/core/engine.ts', 1], ['src/api/routes.ts', 0.9], ['src/util/log.ts', 0.8]]);
+    git.counts = { 'src/util/log.ts': 3 };
+    llm.mode = 'ok';
+    logs.length = 0;
+    await reset();
+    await generate({ mode: 'activity', window_days: 45 });
+    ctl.degraded = true;
+    await reset();
+    await generate({ mode: 'import_graph' });
+    ctl.degraded = false;
+    llm.mode = 'throw';
+    await reset();
+    await generate({ mode: 'import_graph' });
+    llm.mode = 'ok';
+    const gen = logs.filter((l) => l.msg?.startsWith('onboarding tour'));
+    expect(gen.map((l) => l.ctx.outcome)).toEqual(['llm', 'skeleton_degraded', 'Model call failed or returned invalid output']);
+    for (const l of gen) {
+      expect(l.ctx).toHaveProperty('ranking_mode');
+      expect(l.ctx).toHaveProperty('window_days');
+      expect(l.ctx.provider).toBe('openrouter');
+      expect(l.ctx.model).toBe('deepseek/deepseek-v4-flash');
+    }
+    expect(gen[0]!.ctx).toMatchObject({ ranking_mode: 'activity', window_days: 45 });
+    const text = JSON.stringify(logs);
+    expect(text).not.toContain('repository-facts');
+    expect(text).not.toContain('src/core/engine.ts');
   });
 });
 

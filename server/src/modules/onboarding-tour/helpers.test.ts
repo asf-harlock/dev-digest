@@ -236,3 +236,50 @@ describe('activity ranking', () => {
     expect(plain.items.every((i) => i.hotness === null)).toBe(true);
   });
 });
+
+describe('reading path size (AC-8)', () => {
+  it('lists at most 5 files', () => {
+    const ranked = Array.from({ length: 20 }, (_, i) => ({ path: `src/f${i}.ts`, rank: 1 - i / 100 }));
+    const s = buildSkeleton(facts({ ranked, chains: [ranked.map((r) => r.path)] }));
+    const rp = s.sections[3];
+    if (rp?.kind !== 'reading_path') throw new Error('x');
+    expect(rp.items).toHaveLength(5);
+    expect(rp.items[0]!.path).toBe('README.md');
+  });
+});
+
+describe('per-package commands (EC-16)', () => {
+  const pkg = (path: string, pm: string, ownLockfile: boolean, scripts: object = { dev: 'x' }): ManifestFact => {
+    const i = path.lastIndexOf('/');
+    return { path, dir: i < 0 ? '' : path.slice(0, i), name: path.slice(i + 1), text: JSON.stringify({ scripts }), pm, ownLockfile };
+  };
+
+  it('each package with its own lockfile gets its own install and runs, using its own manager', () => {
+    const cmds = collectCommands(
+      [pkg('server/package.json', 'pnpm', true), pkg('e2e/package.json', 'npm', true), pkg('client/package.json', 'pnpm', true)],
+      'npm',
+    ).map((c) => c.command);
+    expect(cmds).toEqual([
+      'cd client && pnpm install',
+      'cd client && pnpm run dev',
+      'cd e2e && npm install',
+      'cd e2e && npm run dev',
+      'cd server && pnpm install',
+      'cd server && pnpm run dev',
+    ]);
+  });
+
+  it('workspace members without their own lockfile are installed from the root only', () => {
+    const cmds = collectCommands([pkg('package.json', 'pnpm', true), pkg('packages/a/package.json', 'pnpm', false)], 'pnpm').map(
+      (c) => c.command,
+    );
+    expect(cmds).toContain('pnpm install');
+    expect(cmds).not.toContain('cd packages/a && pnpm install');
+    expect(cmds).toContain('cd packages/a && pnpm run dev');
+  });
+
+  it('without a root package.json a lockfile-less package still gets an install step', () => {
+    const cmds = collectCommands([pkg('app/package.json', 'npm', false)], 'npm').map((c) => c.command);
+    expect(cmds[0]).toBe('cd app && npm install');
+  });
+});

@@ -124,7 +124,7 @@ export class OnboardingTourService {
       tour = parsed.data;
       stored = true;
     } else {
-      tour = buildSkeleton(await this.collectFacts(repo, cloned, {}));
+      tour = buildSkeleton(await this.collectFacts(workspaceId, repo, cloned, {}));
     }
     return {
       stored,
@@ -175,19 +175,30 @@ export class OnboardingTourService {
   ): Promise<void> {
     const started = Date.now();
     const cloned = await this.cloned(repo);
-    const facts = await this.collectFacts(repo, cloned, opts);
+    const facts = await this.collectFacts(workspaceId, repo, cloned, opts);
     const skeleton = buildSkeleton(facts);
+    const hint = await this.modelHint(workspaceId);
+    const provider = hint.provider as Provider;
+    // NFR-12: identifying context for every log line. Never prompt text.
+    const logCtx = {
+      repoId: repo.id,
+      provider,
+      model: hint.model,
+      ranking_mode: facts.mode,
+      window_days: facts.windowDays,
+      ranking_fallback: facts.rankingFallback !== null,
+    };
 
     if (facts.degradedReason) {
       await this.storeSkeleton(workspaceId, repo.id, skeleton);
-      log?.info?.({ repoId: repo.id, outcome: 'skeleton_degraded', ms: Date.now() - started }, 'onboarding tour generated');
+      log?.info?.({ ...logCtx, outcome: 'skeleton_degraded', ms: Date.now() - started }, 'onboarding tour generated');
       return;
     }
 
-    const hint = await this.modelHint(workspaceId);
-    const provider = hint.provider as Provider;
+    const count = (text: string) => this.container.tokenizer.count(text);
     const system = renderTemplate(await loadPromptTemplate(TOUR_PROMPT_FILE), { language: TOUR_LANGUAGE });
-    const prompt = buildFactsPrompt(facts, (text) => this.container.tokenizer.count(text), TOUR_TOKEN_BUDGET);
+    // NFR-6: the budget covers the WHOLE model input, so the facts get what the system prompt leaves.
+    const prompt = buildFactsPrompt(facts, count, Math.max(0, TOUR_TOKEN_BUDGET - count(system)));
     const messages: ChatMessage[] = [
       { role: 'system', content: system },
       { role: 'user', content: prompt.text },
@@ -213,7 +224,7 @@ export class OnboardingTourService {
       const message = this.failureMessage(err);
       // NFR-12: no prompt text, no raw provider message (it can echo request content).
       log?.warn(
-        { repoId: repo.id, provider, model: hint.model, tokens, truncated: prompt.truncated, outcome: message, ms: Date.now() - started },
+        { ...logCtx, tokens, truncated: prompt.truncated, outcome: message, ms: Date.now() - started },
         'onboarding tour model call failed',
       );
       await this.storeFailure(workspaceId, repo.id, skeleton, message);
@@ -230,9 +241,7 @@ export class OnboardingTourService {
     await this.repo.upsert(workspaceId, repo.id, tour, now);
     log?.info?.(
       {
-        repoId: repo.id,
-        provider,
-        model: hint.model,
+        ...logCtx,
         tokens,
         truncated: prompt.truncated,
         dropped: tour.meta.dropped_count,
@@ -292,7 +301,12 @@ export class OnboardingTourService {
   }
 
   /** Gather the deterministic facts. Every source degrades to empty; none throws. */
-  private async collectFacts(repo: TourRepoRow, cloned: boolean, opts: Partial<GenerateOptions>): Promise<TourFacts> {
+  private async collectFacts(
+    workspaceId: string,
+    repo: TourRepoRow,
+    cloned: boolean,
+    opts: Partial<GenerateOptions>,
+  ): Promise<TourFacts> {
     const intel = this.container.repoIntel;
     const state = await intel.getIndexState(repo.id).catch(() => null);
 
@@ -300,9 +314,8 @@ export class OnboardingTourService {
     let chains: string[][] = [];
     if (state && !state.degraded && state.status !== 'failed') {
       const paths = await intel.getTopFilesByRank(repo.id, RANKED_FILES_LIMIT).catch(() => []);
-      const ranks = await intel.getFileRank(repo.id, paths).catch(() => []);
-      const pct = new Map(ranks.map((r) => [r.path, r.percentile]));
-      ranked = paths.map((path) => ({ path, rank: pct.get(path) ?? 0 }));
+      const ranks = await this.repo.getRanks(workspaceId, repo.id, paths).catch(() => new Map<string, number>());
+      ranked = paths.map((path) => ({ path, rank: ranks.get(path) ?? 0 }));
       chains = await intel.getCriticalPaths(repo.id).catch(() => []);
     }
 

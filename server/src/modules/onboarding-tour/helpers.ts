@@ -128,14 +128,21 @@ function withDir(dir: string, cmd: string): string {
   return dir && SAFE_DIR_RE.test(dir) ? `cd ${dir} && ${cmd}` : cmd;
 }
 
-export function commandsFromManifest(m: ManifestFact, pm: string): TourCommand[] {
+/**
+ * `needsInstall`: a package.json gets its own install step when it is the root,
+ * has its own lockfile, or the repo has no root package.json to install it from.
+ */
+export function commandsFromManifest(m: ManifestFact, defaultPm: string, rootInstalls = true): TourCommand[] {
+  const pm = m.pm ?? defaultPm;
   const cmd = (command: string, description: string): TourCommand => ({ command, description, source: m.path });
   if (m.dir && !SAFE_DIR_RE.test(m.dir)) return [];
   switch (m.name) {
     case 'package.json': {
       const names = new Set(parseScriptNames(m.text));
       const out: TourCommand[] = [];
-      if (!m.dir) out.push(cmd(`${pm} install`, 'Install dependencies'));
+      if (!m.dir || m.ownLockfile || !rootInstalls) {
+        out.push(cmd(withDir(m.dir, `${pm} install`), 'Install dependencies'));
+      }
       for (const s of SCRIPT_ORDER) {
         if (names.has(s)) out.push(cmd(withDir(m.dir, `${pm} run ${s}`), SCRIPT_DESCRIPTIONS[s]));
       }
@@ -170,8 +177,9 @@ export function collectCommands(manifests: readonly ManifestFact[], pm: string):
   const sorted = [...manifests].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const out: TourCommand[] = [];
   const seen = new Set<string>();
+  const rootInstalls = manifests.some((m) => !m.dir && m.name === 'package.json');
   for (const m of sorted) {
-    for (const c of commandsFromManifest(m, pm)) {
+    for (const c of commandsFromManifest(m, pm, rootInstalls)) {
       if (seen.has(c.command)) continue;
       seen.add(c.command);
       out.push(c);

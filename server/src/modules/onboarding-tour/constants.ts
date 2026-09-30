@@ -6,7 +6,7 @@
 /** Files fetched from the rank table to build facts (post junk-filter). */
 export const RANKED_FILES_LIMIT = 2000;
 export const CRITICAL_PATHS_LIMIT = 10;
-export const READING_PATH_LIMIT = 8;
+export const READING_PATH_LIMIT = 5; // AC-8
 export const ARCHITECTURE_NODE_LIMIT = 8;
 export const FIRST_TASKS_LIMIT = 3;
 /** Directory depth (segments) a diagram node collapses a file path to. */

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { FeatureModelChoice, type FeatureModelId } from '@devdigest/shared';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -48,6 +48,20 @@ export class OnboardingTourRepository {
     const fm = row?.value as Record<string, unknown> | undefined;
     const parsed = FeatureModelChoice.safeParse(fm?.[id]);
     return parsed.success ? parsed.data : undefined;
+  }
+
+  /**
+   * Stored PageRank (`file_rank.rank`) for the given files. Read-only and
+   * scoped through the workspace's repo. Not `percentile`: that collapses
+   * distinct ranks into ties (AC-10).
+   */
+  async getRanks(workspaceId: string, repoId: string, paths: string[]): Promise<Map<string, number>> {
+    if (paths.length === 0 || !(await this.getRepo(workspaceId, repoId))) return new Map();
+    const rows = await this.db
+      .select({ path: t.fileRank.filePath, rank: t.fileRank.rank })
+      .from(t.fileRank)
+      .where(and(eq(t.fileRank.repoId, repoId), inArray(t.fileRank.filePath, paths)));
+    return new Map(rows.map((r) => [r.path, r.rank]));
   }
 
   /** Insert or replace the repo's single tour. Returns false when the repo is not in the workspace. */
