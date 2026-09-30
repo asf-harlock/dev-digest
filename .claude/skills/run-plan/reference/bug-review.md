@@ -33,6 +33,6 @@ demonstrate; otherwise WARNING. Confidence < 0.6 → drop it.
 
 Reply: a short table (severity | file:line | defect | failing input), then
 the findings-json block defined in
-.claude/skills/implement/reference/findings.md with "reviewer": "bug".
+.claude/skills/run-plan/reference/findings.md with "reviewer": "bug".
 An empty result is valid — say so.
 ```

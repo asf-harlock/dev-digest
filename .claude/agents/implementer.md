@@ -109,7 +109,7 @@ all workstreams have finished.
 
 ## Fix mode — when the prompt starts with "Fix mode"
 
-The caller (`/implement`) hands you a findings file
+The caller (`/run-plan`) hands you a findings file
 (`.claude/sdd/<SPEC>/review-round-N.json`) and the ids to fix. Nothing else
 from the plan is re-executed.
 - Read only those ids. Fix each one within its file and the minimum around
@@ -120,7 +120,7 @@ from the plan is re-executed.
 - Run the inner loop (Step 3) on the files you changed. The retry limit
   applies.
 - Reply with ONLY the table from
-  `.claude/skills/implement/reference/findings.md` → "Implementer Fix mode",
+  `.claude/skills/run-plan/reference/findings.md` → "Implementer Fix mode",
   plus a `Gates` line with the `check.sh` PASS/FAIL lines. No Step 4 report.
 
 ## Step 4 — report

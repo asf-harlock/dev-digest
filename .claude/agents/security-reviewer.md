@@ -120,8 +120,8 @@ hunk alone. Produce a standalone report as your final message:
 An empty Findings table is a valid result — say so plainly rather than
 padding it with low-confidence notes.
 
-When run by `/implement`, append after the report the `findings-json` block
-defined in `.claude/skills/implement/reference/findings.md` (`"reviewer":
+When run by `/run-plan`, append after the report the `findings-json` block
+defined in `.claude/skills/run-plan/reference/findings.md` (`"reviewer":
 "security"`), one entry per Findings row. A re-review prompt from that file
 narrows your scope to the fix diff — follow it over Step 0.
 

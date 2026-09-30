@@ -23,8 +23,8 @@ Typical order: `spec-creator` → (user approves the spec) → `implementation-p
 `test-writer` → `architecture-reviewer` + `security-reviewer` +
 `plan-verifier` → `doc-writer`. The three reviewers are read-only and never
 decide a merge — `/pr-self-review`'s gate does.
-From an approved plan onward, `/implement SPEC-NN`
-(`.claude/skills/implement/`) runs this chain for you: implementer(s) →
+From an approved plan onward, `/run-plan SPEC-NN`
+(`.claude/skills/run-plan/`) runs this chain for you: implementer(s) →
 plan-verifier → architecture ∥ security ∥ bug review → a fix loop of at most
 3 rounds (re-review limited to the fix diff) → plan-verifier. `spec-creator`
 and `implementation-planner` stay manual; save the plan to

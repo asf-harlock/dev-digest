@@ -1,16 +1,16 @@
 ---
-name: implement
+name: run-plan
 description: >-
   Runs the build half of DevDigest's Spec-Driven Development from an
   already-written Implementation Plan: implementer(s) → plan-verifier →
   architecture/security/bug review → fix loop → final plan-verifier. Spec
   writing (spec-creator) and planning (implementation-planner) are NOT part of
-  it — they are run by hand before. Use only when the user types /implement.
+  it — they are run by hand before. Use only when the user types /run-plan.
 argument-hint: "<SPEC-NN | path/to/plan.md> [--tests] [notes…] [design paths…]"
 disable-model-invocation: true
 ---
 
-# /implement
+# /run-plan
 
 The main session is the orchestrator: subagents cannot spawn subagents or ask
 the user, so every agent below is launched from here with the `Agent` tool.

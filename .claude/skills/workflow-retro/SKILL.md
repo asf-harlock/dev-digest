@@ -2,7 +2,7 @@
 name: workflow-retro
 description: >-
   Retrospective of a multi-agent run in this session — spec-creator →
-  researcher fan-out, /implement, a Workflow script, or any chain of Agent
+  researcher fan-out, /run-plan, a Workflow script, or any chain of Agent
   calls. Measures it from the transcripts (tokens per agent and model, agent
   count, launch order, parallelism, active vs idle time, tool errors,
   duplicated reads) and then judges each agent: what was hard, what was easy,
@@ -76,7 +76,7 @@ What the fields mean, and their limits:
   lint|arch`, `scripts/check.sh`, `pr-self-review` scripts, …, detected only
   where a command segment executes it — only the first gate of a chained
   `a && b` command; a pass/fail read from a piped output
-  is a heuristic), `sdd` (every `/implement` state touched this session:
+  is a heuristic), `sdd` (every `/run-plan` state touched this session:
   phase, verify rounds with Pass/Fail/Blocked/Unverified counts, review rounds
   with findings by severity), `resumes`, `errorsByKind`
   (`denied` / `exit` / `missing-path` / `other`).

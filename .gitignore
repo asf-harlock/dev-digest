@@ -28,7 +28,7 @@ test-results/
 # scripts/check.sh gate logs (implementer inner loop)
 .claude/implementer/
 
-# /implement run state: plan, findings rounds, verifier matrices
+# /run-plan run state: plan, findings rounds, verifier matrices
 .claude/sdd/
 
 # emdash worktree config (local)

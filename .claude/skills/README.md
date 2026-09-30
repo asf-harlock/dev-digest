@@ -20,7 +20,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Workflow | Reads and records the per-module `INSIGHTS.md` log (authored here, not vendored) |
 | [pr-self-review](pr-self-review/SKILL.md) | Workflow | Pre-PR gate: routes the open diff to the skills that own those files, runs the matching gates, blocks on any CRITICAL (authored here, not vendored) |
-| [implement](implement/SKILL.md) | Workflow | `/implement SPEC-NN` — runs an approved Implementation Plan: implementer(s) → plan-verifier → architecture/security/bug review → bounded fix loop → final plan-verifier. Spec and plan are written by hand first (authored here, not vendored) |
+| [run-plan](run-plan/SKILL.md) | Workflow | `/run-plan SPEC-NN` — runs an approved Implementation Plan: implementer(s) → plan-verifier → architecture/security/bug review → bounded fix loop → final plan-verifier. Spec and plan are written by hand first (authored here, not vendored) |
 | [spec-authoring](spec-authoring/SKILL.md) | Workflow | SPEC-NN spec template, EARS with КОЛИ/ПОКИ/ЯКЩО/ДЕ, design-analysis lenses, and the `spec:lint` form check (authored here, not vendored) |
 | [workflow-retro](workflow-retro/SKILL.md) | Workflow | `/workflow-retro` — retrospective of a multi-agent run: tokens per agent/model, launch order, parallelism, errors, duplicated reads (script), then per-agent hard/easy/duplicated/missed verdicts and proposals for agent definitions (authored here, not vendored) |
 

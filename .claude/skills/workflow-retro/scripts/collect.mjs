@@ -300,7 +300,7 @@ for (const g of allGates) {
   row.finalPass = g.pass;
 }
 
-// /implement state touched during this session.
+// /run-plan state touched during this session.
 const sdd = [];
 const sddDir = join(process.cwd(), '.claude', 'sdd');
 if (existsSync(sddDir)) {

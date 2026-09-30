@@ -48,7 +48,7 @@ Orchestrator share of fresh tokens: <orchestratorShareFresh>.
 |---|---|---|---|---|
 <one row per quality.gates entry, or "No gate ran">
 
-<`/implement` only: verify rounds (Pass/Fail/Blocked/Unverified per round) and review rounds (findings by severity)>
+<`/run-plan` only: verify rounds (Pass/Fail/Blocked/Unverified per round) and review rounds (findings by severity)>
 Resumes: <quality.resumes> · errors: <errorsByKind>
 
 ## Trend
