@@ -4,7 +4,8 @@ import React from "react";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { Badge, Button } from "@devdigest/ui";
-import type { OnboardingTourResponse } from "@devdigest/shared";
+import type { OnboardingTourGenerateRequest, OnboardingTourResponse, TourRankingMode } from "@devdigest/shared";
+import { DEFAULT_WINDOW_DAYS, parseWindowDays, RankingToggle } from "../RankingToggle";
 import { SETTINGS_MODELS_HREF } from "../../constants";
 import { freshnessState, hasFailedRegeneration, isModelNotConfigured, modelHintLabel, statusBadgeKey } from "./helpers";
 import { s } from "./styles";
@@ -12,7 +13,7 @@ import { s } from "./styles";
 /**
  * Page header: title, status badge, "~N files", age, ranking label, Stale /
  * "No index yet", and the Generate button. Slice 3 adds the model hint and
- * failure notices; slice 4 adds the ranking toggle next to Generate.
+ * failure notices; the ranking toggle sits next to Generate (slice 4).
  */
 export function TourHeader({
   repoName,
@@ -26,9 +27,13 @@ export function TourHeader({
   /** Repo's current index SHA; undefined while unknown, "" when never indexed. */
   lastIndexedSha: string | undefined;
   generating: boolean;
-  onGenerate: () => void;
+  onGenerate: (req: OnboardingTourGenerateRequest) => void;
 }) {
   const t = useTranslations("onboarding");
+  const [mode, setMode] = React.useState<TourRankingMode>("import_graph");
+  const [days, setDays] = React.useState(String(DEFAULT_WINDOW_DAYS));
+  const activityMode = mode === "activity" && data.can_use_activity;
+  const windowDays = parseWindowDays(days);
   const format = useFormatter();
   const meta = data.tour.meta;
   const key = statusBadgeKey(meta);
@@ -58,6 +63,11 @@ export function TourHeader({
           <span style={s.sep} aria-hidden="true">·</span>
           <span>{ranking}</span>
         </p>
+        {meta?.ranking_fallback && (
+          <p style={s.fallback} role="status" title={meta.ranking_fallback}>
+            {t("tour.ranking.fallback")}
+          </p>
+        )}
         <div style={s.badges}>
           <Badge icon={key === "writtenBy" ? "Sparkles" : "Layers"}>
             {t(`tour.status.${key}`, { reason: meta?.degraded_reason ?? "", model: meta?.model ?? "" })}
@@ -85,13 +95,23 @@ export function TourHeader({
         </div>
       </div>
       <div style={s.actions}>
+        <RankingToggle
+          mode={activityMode ? "activity" : "import_graph"}
+          onModeChange={setMode}
+          days={days}
+          onDaysChange={setDays}
+          canUseActivity={data.can_use_activity}
+          disabled={generating}
+        />
         <Button
           aria-describedby={hint ? "tour-model-hint" : undefined}
           kind="secondary"
           icon="RefreshCw"
-          disabled={generating}
+          disabled={generating || (activityMode && windowDays === null)}
           loading={generating}
-          onClick={onGenerate}
+          onClick={() =>
+            onGenerate(activityMode && windowDays !== null ? { mode: "activity", window_days: windowDays } : { mode: "import_graph" })
+          }
         >
           {generating ? t("tour.generating") : data.stored ? t("tour.regenerate") : t("tour.generate")}
         </Button>

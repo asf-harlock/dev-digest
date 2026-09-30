@@ -94,12 +94,18 @@ export function TourPage() {
             section={sec?.kind === "critical_paths" ? sec : undefined}
             repoFullName={activeRepo?.full_name}
             sha={meta?.index_sha || activeRepo?.default_branch}
+            activityRanked={meta?.ranking_mode === "activity"}
           />
         );
       case "run_locally":
         return <RunLocallySection section={sec?.kind === "run_locally" ? sec : undefined} />;
       case "reading_path":
-        return <ReadingPathSection section={sec?.kind === "reading_path" ? sec : undefined} />;
+        return (
+          <ReadingPathSection
+            section={sec?.kind === "reading_path" ? sec : undefined}
+            activityRanked={meta?.ranking_mode === "activity"}
+          />
+        );
       case "first_tasks":
         return <FirstTasksSection section={sec?.kind === "first_tasks" ? sec : undefined} />;
     }
@@ -113,7 +119,7 @@ export function TourPage() {
           data={data}
           lastIndexedSha={intel.data ? intel.data.lastIndexedSha : undefined}
           generating={tour.generating || tour.isStarting}
-          onGenerate={() => tour.generate()}
+          onGenerate={(req) => tour.generate(req)}
         />
 
         {(tour.timedOut || tour.pollFailed) && (

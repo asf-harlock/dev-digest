@@ -6,7 +6,7 @@ import {
   NODE_ID_RE,
   READING_PATH_LIMIT,
 } from './constants.js';
-import { collectCommands, collectEnvKeys, firstTaskComplexity, indexedDirs, isGroundedPath, packageDirsOf } from './helpers.js';
+import { orderByRank, collectCommands, collectEnvKeys, firstTaskComplexity, indexedDirs, isGroundedPath, packageDirsOf } from './helpers.js';
 import type { RawTour } from './tour-schema.js';
 import type { TourFacts } from './types.js';
 
@@ -68,7 +68,7 @@ export function buildFactsPrompt(facts: TourFacts, count: (text: string) => numb
   }
 
   if (facts.ranked.length > 0 && add('## Files by importance (most important first)')) {
-    facts.ranked.forEach((f, i) => add(`${i + 1}. ${f.path}`));
+    orderByRank(facts.ranked, facts.mode).forEach((f, i) => add(`${i + 1}. ${f.path}`));
   }
 
   return { text: wrapUntrusted('repository-facts', lines.join('\n')), truncated };
@@ -187,7 +187,11 @@ export function mergeGrounded(skeleton: Onboarding, raw: RawTour, facts: TourFac
     read.kept.length > 0
       ? {
           kind: 'reading_path',
-          items: read.kept.slice(0, READING_PATH_LIMIT).map((r) => ({ path: r.path, why: redact(r.why) })),
+          items: read.kept.slice(0, READING_PATH_LIMIT).map((r) => ({
+            path: r.path,
+            why: redact(r.why),
+            hotness: facts.mode === 'activity' ? (factRank.get(r.path)?.hotness ?? 0) : null,
+          })),
         }
       : (skRead ?? { kind: 'reading_path', items: [] });
 

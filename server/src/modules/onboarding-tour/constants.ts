@@ -65,8 +65,13 @@ export const REASON_BY_INDEX: Record<string, string> = {
 };
 export const REASON_INDEX_UNAVAILABLE = 'The repository index is unavailable';
 
-/** Slice 2 has no activity ranking yet; the request is accepted and recorded honestly. */
-export const FALLBACK_ACTIVITY_UNAVAILABLE = 'Activity ranking is not available yet';
+/** EC-9: exact text, shown in the tour status when history could not be read. */
+export const FALLBACK_ACTIVITY_UNAVAILABLE = 'Activity ranking unavailable — ranked by import graph';
+/** EC-8: exact text; activity mode needs a local clone and is refused (422) without one. */
+export const ERROR_ACTIVITY_NO_CLONE = 'No local clone — activity ranking unavailable';
+/** History fetch + read budget (EC-9). */
+export const HISTORY_BUDGET_MS = 60_000;
+export const DEFAULT_WINDOW_DAYS = 180;
 
 export const ARCHITECTURE_EMPTY_BODY = 'No structural facts are available for this repository yet.';
 export const GENERATE_FAILED_MESSAGE = 'Tour generation failed';

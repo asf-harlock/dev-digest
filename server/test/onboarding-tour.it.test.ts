@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import { MockGitClient, MockGitHubClient, MockSecretsProvider } from '../src/adapters/mocks.js';
 import type { LLMProvider, StructuredRequest, StructuredResult, CompletionResult, ModelInfo } from '@devdigest/shared';
+import { SimpleGitClient } from '../src/adapters/git/simple-git.js';
 import { OnboardingTourService } from '../src/modules/onboarding-tour/service.js';
 import type { RepoIntel, IndexState } from '../src/modules/repo-intel/types.js';
 import * as t from '../src/db/schema.js';
@@ -65,6 +67,19 @@ const GOOD_FIXTURE = {
   first_tasks: [{ title: 'Harden engine', description: 'Do it.', paths: ['src/core/engine.ts'], complexity: 'high' }],
 };
 
+/** Mock git whose history is scripted: counts, an error, or never answering. */
+class HistoryGit extends MockGitClient {
+  counts: Record<string, number> = {};
+  mode: 'ok' | 'throw' | 'hang' = 'ok';
+  calls: { days: number }[] = [];
+  async historyCounts(_repo: unknown, sinceDays: number): Promise<Record<string, number>> {
+    this.calls.push({ days: sinceDays });
+    if (this.mode === 'hang') return new Promise(() => undefined);
+    if (this.mode === 'throw') throw new Error('git history exploded');
+    return this.counts;
+  }
+}
+
 /** Mutable RepoIntel stub: the test controls the index SHA and can gate the ranking read. */
 function makeIntel() {
   const ctl = {
@@ -107,13 +122,14 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   const { ctl, intel } = makeIntel();
   const llm = new ScriptedLLM();
+  const git = new HistoryGit();
 
   const makeApp = () =>
     buildApp({
       config: loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv),
       db: pg.handle.db,
       overrides: {
-        git: new MockGitClient(),
+        git,
         github: new MockGitHubClient(),
         repoIntel: intel,
         llm: { openrouter: llm },
@@ -386,5 +402,156 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
         await noKey.close();
       }
     });
+  });
+
+  describe('activity ranking (slice 4)', () => {
+    const reset = () => pg.handle.db.delete(t.onboarding).where(eq(t.onboarding.repoId, repoId));
+    const run = async (payload: unknown) => {
+      expect((await post(payload)).statusCode).toBe(202);
+      return settled();
+    };
+    const critical = (tour: { sections: { kind: string; items?: { path: string; hotness?: number | null }[] }[] }) =>
+      tour.sections.find((s) => s.kind === 'critical_paths')!.items!;
+
+    it('AC-26: ranks by rank x (1 + hotness); persists mode, window and per-file hotness; file_rank untouched', async () => {
+      await reset();
+      await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+      await pg.handle.db.insert(t.fileRank).values([
+        { repoId, filePath: 'src/core/engine.ts', pagerank: 0.5, hotness: 0, rank: 0.5, percentile: 99 },
+        { repoId, filePath: 'src/util/log.ts', pagerank: 0.1, hotness: 0, rank: 0.1, percentile: 50 },
+      ]);
+      const before = await pg.handle.db.select().from(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+      llm.mode = 'throw'; // keep the deterministic skeleton ordering visible
+      git.mode = 'ok';
+      git.calls = [];
+      git.counts = { 'src/util/log.ts': 10, 'src/api/routes.ts': 5, 'elsewhere/not-indexed.ts': 500 };
+      try {
+        const body = await run({ mode: 'activity', window_days: 30 });
+        expect(git.calls).toEqual([{ days: 30 }]);
+        expect(body.tour.meta).toMatchObject({ ranking_mode: 'activity', window_days: 30, ranking_fallback: null });
+        const items = critical(body.tour);
+        expect(items.map((i) => i.path)).toEqual(['src/util/log.ts', 'src/api/routes.ts', 'src/core/engine.ts']);
+        expect(items.map((i) => i.hotness)).toEqual([1, 0.5, 0]);
+        const reading = body.tour.sections.find((x: { kind: string }) => x.kind === 'reading_path').items;
+        const hot = Object.fromEntries(reading.map((i: { path: string; hotness: number }) => [i.path, i.hotness]));
+        expect(hot['src/util/log.ts']).toBe(1);
+        expect(hot['src/api/routes.ts']).toBe(0.5);
+        const after = await pg.handle.db.select().from(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+        expect(after).toEqual(before);
+      } finally {
+        llm.mode = 'ok';
+        await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+      }
+    });
+
+    it('defaults the window to 180 days when omitted', async () => {
+      await reset();
+      llm.mode = 'throw';
+      git.calls = [];
+      try {
+        const body = await run({ mode: 'activity' });
+        expect(git.calls).toEqual([{ days: 180 }]);
+        expect(body.tour.meta.window_days).toBe(180);
+      } finally {
+        llm.mode = 'ok';
+      }
+    });
+
+    it('EC-9: a failing history read falls back to import graph with the exact status line', async () => {
+      await reset();
+      llm.mode = 'throw';
+      git.mode = 'throw';
+      try {
+        const body = await run({ mode: 'activity', window_days: 30 });
+        expect(body.tour.meta).toMatchObject({
+          ranking_mode: 'import_graph',
+          window_days: null,
+          ranking_fallback: 'Activity ranking unavailable — ranked by import graph',
+        });
+        expect(critical(body.tour).map((i) => i.path)[0]).toBe('src/core/engine.ts');
+        expect(critical(body.tour).every((i) => !i.hotness)).toBe(true);
+      } finally {
+        git.mode = 'ok';
+        llm.mode = 'ok';
+      }
+    });
+
+    it('EC-9: history that exceeds its budget also falls back', async () => {
+      await reset();
+      llm.mode = 'throw';
+      git.mode = 'hang';
+      try {
+        const svc = new OnboardingTourService(app.container, { historyTimeoutMs: 50 });
+        await svc.startGenerate(workspaceId, repoId, { mode: 'activity', window_days: 30 });
+        const body = await settled();
+        expect(body.tour.meta.ranking_mode).toBe('import_graph');
+        expect(body.tour.meta.ranking_fallback).toBe('Activity ranking unavailable — ranked by import graph');
+      } finally {
+        git.mode = 'ok';
+        llm.mode = 'ok';
+      }
+    });
+
+    it('import_graph requests never read history', async () => {
+      await reset();
+      git.calls = [];
+      await run({});
+      expect(git.calls).toEqual([]);
+    });
+
+    it('EC-8: activity on a repo without a clone is refused (422) and can_use_activity is false', async () => {
+      const [r] = await pg.handle.db
+        .insert(t.repos)
+        .values({ workspaceId, owner: 'acme', name: 'noclone-act', fullName: 'acme/noclone-act' })
+        .returning();
+      git.calls = [];
+      const res = await post({ mode: 'activity' }, r!.id);
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe('validation_error');
+      expect(res.json().error.message).toBe('No local clone — activity ranking unavailable');
+      expect(git.calls).toEqual([]);
+      expect((await get(r!.id)).json().can_use_activity).toBe(false);
+      // import-graph generation on the same repo is still accepted
+      expect((await post({}, r!.id)).statusCode).toBe(202);
+      await settled(r!.id);
+    });
+  });
+});
+
+d('SimpleGitClient.historyCounts against a real local repository', () => {
+  it('deepens a depth-1 file:// clone and counts commits per path inside the window', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'devdigest-hist-'));
+    try {
+      const origin = join(base, 'origin');
+      await mkdir(origin, { recursive: true });
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], {
+          cwd,
+          encoding: 'utf8',
+        });
+      git(origin, 'init', '-q', '-b', 'main');
+      const commit = async (file: string, body: string) => {
+        await writeFile(join(origin, file), body);
+        git(origin, 'add', file);
+        git(origin, 'commit', '-q', '-m', `edit ${file} ${body}`);
+      };
+      await commit('a.txt', '1');
+      await commit('a.txt', '2');
+      await commit('b.txt', '1');
+      await commit('a.txt', '3');
+
+      const client = new SimpleGitClient(join(base, 'clones'));
+      const repo = { owner: 'acme', name: 'hist' };
+      await client.clone(repo, `file://${origin}`, { depth: 1 });
+      const shallow = git(client.clonePathFor(repo), 'rev-list', '--count', 'HEAD').trim();
+      expect(shallow).toBe('1');
+
+      const counts = await client.historyCounts(repo, 30);
+      expect(counts).toEqual({ 'a.txt': 3, 'b.txt': 1 });
+      await expect(client.historyCounts(repo, 0)).rejects.toThrow(RangeError);
+      await expect(client.historyCounts({ owner: 'acme', name: 'missing' }, 30)).rejects.toThrow(/not cloned/);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
   });
 });

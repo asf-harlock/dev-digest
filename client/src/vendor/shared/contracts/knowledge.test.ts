@@ -25,6 +25,14 @@ describe("Onboarding tour contract (client copy)", () => {
     expect(Onboarding.parse(doc)).toEqual(doc);
   });
 
+  it("reading-path hotness is optional, nullable and bounded to 0..1", () => {
+    const doc = (items: unknown[]) => Onboarding.safeParse({ sections: [{ kind: "reading_path", items }] });
+    expect(doc([{ path: "a", why: "w" }]).success).toBe(true);
+    expect(doc([{ path: "a", why: "w", hotness: null }]).success).toBe(true);
+    expect(doc([{ path: "a", why: "w", hotness: 0.5 }]).success).toBe(true);
+    expect(doc([{ path: "a", why: "w", hotness: 1.1 }]).success).toBe(false);
+  });
+
   it.each([6, 731, 7.5])("rejects window_days %s", (w) => {
     expect(
       OnboardingTourGenerateRequest.safeParse({ mode: "activity", window_days: w }).success,

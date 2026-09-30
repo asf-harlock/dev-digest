@@ -38,6 +38,17 @@
       "label": "Stale",
       "detail": "Stale — the index changed since this tour was generated"
     },
+    "activeRecently": "Active recently",
+    "ranking": {
+      "legend": "Ranking",
+      "importGraph": "Import graph only",
+      "activity": "Include recent activity (hotness)",
+      "noClone": "No local clone — activity ranking unavailable",
+      "days": "Days of history",
+      "daysError": "Enter a whole number of days from {min} to {max}.",
+      "warning": "The local clone will grow on disk as history for this window is fetched, and the first generation can take longer on large repos.",
+      "fallback": "Activity ranking unavailable — ranked by import graph"
+    },
     "noIndex": "No index yet",
     "configureModel": "Configure a model in Settings → Feature Models",
     "regenFailed": "Last regeneration failed · {time}",

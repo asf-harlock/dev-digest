@@ -20,15 +20,33 @@ import {
   SCRIPT_DESCRIPTIONS,
   SCRIPT_ORDER,
 } from './constants.js';
+import type { TourRankingMode } from '@devdigest/shared';
 import type { ManifestFact, RankedFile, TourFacts } from './types.js';
 
 /** Pure transforms only: no IO, no clock, no randomness (NFR-3 determinism). */
 
 // ---- Ranking --------------------------------------------------------------
 
-/** Rank DESC, path ASC as the deterministic tie-break. Does not mutate. */
-export function orderByRank(files: readonly RankedFile[]): RankedFile[] {
-  return [...files].sort((a, b) => b.rank - a.rank || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+/** Tour ordering score: `rank × (1 + hotness)` in activity mode, plain `rank` otherwise. */
+export function tourScore(f: RankedFile, mode: TourRankingMode): number {
+  return mode === 'activity' ? f.rank * (1 + (f.hotness ?? 0)) : f.rank;
+}
+
+/** Score DESC, path ASC as the deterministic tie-break. Does not mutate. */
+export function orderByRank(files: readonly RankedFile[], mode: TourRankingMode = 'import_graph'): RankedFile[] {
+  return [...files].sort(
+    (a, b) => tourScore(b, mode) - tourScore(a, mode) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+  );
+}
+
+/**
+ * Normalised hotness: a file's commit count divided by the highest count of any
+ * INDEXED file (history paths that are not ranked files do not set the maximum).
+ * Files with no commits, or an all-zero window, get 0. Tour-only: `file_rank` is never written.
+ */
+export function applyHotness(ranked: readonly RankedFile[], counts: Readonly<Record<string, number>>): RankedFile[] {
+  const max = Math.max(0, ...ranked.map((f) => counts[f.path] ?? 0));
+  return ranked.map((f) => ({ ...f, hotness: max > 0 ? (counts[f.path] ?? 0) / max : 0 }));
 }
 
 // ---- Paths / grounding ----------------------------------------------------
@@ -242,10 +260,11 @@ function buildRunLocally(facts: TourFacts): TourRunLocally {
 function buildReadingPath(facts: TourFacts, ordered: readonly RankedFile[]): TourReadingPath {
   const items: TourReadingPath['items'] = [];
   const seen = new Set<string>();
+  const hot = new Map(ordered.map((f) => [f.path, f.hotness ?? null]));
   const push = (path: string, why: string) => {
     if (seen.has(path) || items.length >= READING_PATH_LIMIT) return;
     seen.add(path);
-    items.push({ path, why });
+    items.push({ path, why, hotness: facts.mode === 'activity' ? (hot.get(path) ?? 0) : null });
   };
   if (facts.hasReadme) push('README.md', 'Start with the project overview');
   const chain = [...facts.chains].sort((a, b) => b.length - a.length)[0] ?? [];
@@ -301,7 +320,7 @@ function buildFirstTasks(facts: TourFacts, ordered: readonly RankedFile[]): Tour
  * so this stays pure; the output has no model and no clock.
  */
 export function buildSkeleton(facts: TourFacts): Onboarding {
-  const ordered = orderByRank(facts.ranked);
+  const ordered = orderByRank(facts.ranked, facts.mode);
   return {
     sections: [
       buildArchitecture(facts, ordered),
@@ -314,7 +333,7 @@ export function buildSkeleton(facts: TourFacts): Onboarding {
       source: 'skeleton',
       degraded_reason: facts.degradedReason,
       index_sha: facts.indexSha,
-      ranking_mode: 'import_graph',
+      ranking_mode: facts.mode,
       window_days: facts.windowDays,
       model: null,
       provider: null,

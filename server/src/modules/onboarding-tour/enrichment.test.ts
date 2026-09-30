@@ -132,6 +132,32 @@ describe('mergeGrounded', () => {
   });
 });
 
+describe('mergeGrounded reading-path hotness', () => {
+  it('takes hotness from facts in activity mode and ignores the model', () => {
+    const f = facts({
+      mode: 'activity',
+      ranked: [
+        { path: 'src/core/engine.ts', rank: 0.9, hotness: 0.8 },
+        { path: 'src/api/routes.ts', rank: 0.7, hotness: 0 },
+      ],
+    });
+    const modelSaid = raw({
+      reading_path: [{ path: 'src/core/engine.ts', why: 'x', hotness: 0.1 } as never, { path: 'README.md', why: 'y' }],
+    });
+    const t = merge(modelSaid, f);
+    const rp = t.sections[3];
+    if (rp?.kind !== 'reading_path') throw new Error('x');
+    expect(rp.items.map((i) => i.hotness)).toEqual([0.8, 0]);
+  });
+
+  it('is null in import-graph mode', () => {
+    const t = merge(raw());
+    const rp = t.sections[3];
+    if (rp?.kind !== 'reading_path') throw new Error('x');
+    expect(rp.items.every((i) => i.hotness === null)).toBe(true);
+  });
+});
+
 describe('buildFactsPrompt', () => {
   const count = (s: string) => Math.ceil(s.length / 4);
 

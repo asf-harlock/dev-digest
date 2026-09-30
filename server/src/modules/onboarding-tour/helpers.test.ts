@@ -9,6 +9,7 @@ import {
   groupByPackage,
   indexedDirs,
   isGroundedPath,
+  applyHotness,
   orderByRank,
   parseEnvKeys,
 } from './helpers.js';
@@ -176,5 +177,62 @@ describe('firstTaskComplexity', () => {
   });
   it('is medium when any target is a source file', () => {
     expect(firstTaskComplexity(['README.md', 'src/a.ts'])).toBe('medium');
+  });
+});
+
+describe('activity ranking', () => {
+  it('hotness is count / max count over indexed files only, 0..1', () => {
+    const ranked = [
+      { path: 'a.ts', rank: 1 },
+      { path: 'b.ts', rank: 1 },
+      { path: 'c.ts', rank: 1 },
+    ];
+    // `x.ts` is not indexed, so its 100 commits must not set the maximum.
+    const out = applyHotness(ranked, { 'a.ts': 10, 'b.ts': 5, 'x.ts': 100 });
+    expect(out.map((f) => f.hotness)).toEqual([1, 0.5, 0]);
+  });
+
+  it('an all-zero window gives hotness 0 everywhere (no NaN)', () => {
+    expect(applyHotness([{ path: 'a.ts', rank: 1 }], {}).map((f) => f.hotness)).toEqual([0]);
+  });
+
+  it('orders by rank x (1 + hotness) with path-ascending tie-break', () => {
+    const files = applyHotness(
+      [
+        { path: 'engine.ts', rank: 1.0 },
+        { path: 'routes.ts', rank: 0.9 },
+        { path: 'log.ts', rank: 0.8 },
+        { path: 'b-tie.ts', rank: 0.5 },
+        { path: 'a-tie.ts', rank: 0.5 },
+      ],
+      { 'log.ts': 10, 'routes.ts': 5 },
+    );
+    expect(orderByRank(files, 'activity').map((f) => f.path)).toEqual([
+      'log.ts', // 0.8 * 2 = 1.6
+      'routes.ts', // 0.9 * 1.5 = 1.35
+      'engine.ts', // 1.0
+      'a-tie.ts',
+      'b-tie.ts',
+    ]);
+    // import-graph mode ignores hotness
+    expect(orderByRank(files, 'import_graph').map((f) => f.path).slice(0, 3)).toEqual(['engine.ts', 'routes.ts', 'log.ts']);
+  });
+
+  it('skeleton in activity mode carries mode, window and per-file hotness', () => {
+    const f = facts({ mode: 'activity', windowDays: 30, ranked: applyHotness(facts().ranked, { 'src/api/routes.ts': 4 }) });
+    const s = buildSkeleton(f);
+    expect(s.meta.ranking_mode).toBe('activity');
+    expect(s.meta.window_days).toBe(30);
+    const cp = s.sections[1];
+    if (cp?.kind !== 'critical_paths') throw new Error('x');
+    expect(cp.items[0]!.path).toBe('src/api/routes.ts');
+    expect(cp.items[0]!.hotness).toBe(1);
+    const rp = s.sections[3];
+    if (rp?.kind !== 'reading_path') throw new Error('x');
+    expect(rp.items.find((i) => i.path === 'src/api/routes.ts')?.hotness).toBe(1);
+    expect(rp.items.find((i) => i.path === 'README.md')?.hotness).toBe(0);
+    const plain = buildSkeleton(facts()).sections[3];
+    if (plain?.kind !== 'reading_path') throw new Error('x');
+    expect(plain.items.every((i) => i.hotness === null)).toBe(true);
   });
 });

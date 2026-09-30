@@ -13,6 +13,7 @@ export const s = {
   } satisfies CSSProperties,
   path: { color: "var(--text-primary)", fontSize: 13, overflowWrap: "anywhere" } satisfies CSSProperties,
   reason: { flex: 1, minWidth: 0, color: "var(--text-secondary)" } satisfies CSSProperties,
+  active: { color: "var(--text-primary)", fontWeight: 650 } satisfies CSSProperties,
   open: {
     display: "inline-flex",
     alignItems: "center",

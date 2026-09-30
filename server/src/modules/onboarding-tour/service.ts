@@ -7,14 +7,17 @@ import {
   type OnboardingTourResponse,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { ConfigError, ConflictError, NotFoundError } from '../../platform/errors.js';
+import { ConfigError, ConflictError, NotFoundError, ValidationError } from '../../platform/errors.js';
 import { loadPromptTemplate, renderTemplate } from '../../platform/prompts.js';
 import { cloneDirExists } from '../_shared/project-context.js';
 import { scanClone } from './clone-files.js';
 import {
   ERROR_ALREADY_GENERATING,
   ERROR_REPO_NOT_FOUND,
+  DEFAULT_WINDOW_DAYS,
+  ERROR_ACTIVITY_NO_CLONE,
   FALLBACK_ACTIVITY_UNAVAILABLE,
+  HISTORY_BUDGET_MS,
   GENERATE_FAILED_MESSAGE,
   LAST_ERROR_MODEL_FAILED,
   LAST_ERROR_NOT_CONFIGURED,
@@ -34,7 +37,7 @@ import {
   REASON_NO_INDEX,
 } from './constants.js';
 import { buildFactsPrompt, mergeGrounded } from './enrichment.js';
-import { buildSkeleton, computeStale } from './helpers.js';
+import { applyHotness, buildSkeleton, computeStale } from './helpers.js';
 import { RawTour } from './tour-schema.js';
 import { OnboardingTourRepository, type TourRepoRow } from './repository.js';
 import type { RankedFile, TourFacts } from './types.js';
@@ -80,7 +83,7 @@ export class OnboardingTourService {
 
   constructor(
     private container: Container,
-    private opts: { llmTimeoutMs?: number } = {},
+    private opts: { llmTimeoutMs?: number; historyTimeoutMs?: number } = {},
   ) {
     this.repo = new OnboardingTourRepository(container.db);
   }
@@ -145,6 +148,10 @@ export class OnboardingTourService {
     log?: TourLogger,
   ): Promise<void> {
     const repo = await this.requireRepo(workspaceId, repoId);
+    // EC-8: activity ranking reads the clone's git history, so it needs a clone.
+    if (opts.mode === 'activity' && !(await this.cloned(repo))) {
+      throw new ValidationError(ERROR_ACTIVITY_NO_CLONE);
+    }
     if (generating.has(repoId)) throw new ConflictError(ERROR_ALREADY_GENERATING);
     generating.add(repoId);
     void this.generate(workspaceId, repo, opts, log)
@@ -299,6 +306,25 @@ export class OnboardingTourService {
       chains = await intel.getCriticalPaths(repo.id).catch(() => []);
     }
 
+    // Activity mode (AC-26): history counts feed hotness for the TOUR only.
+    let mode: TourFacts['mode'] = 'import_graph';
+    let windowDays: number | null = null;
+    let rankingFallback: string | null = null;
+    if (opts.mode === 'activity' && cloned && ranked.length > 0) {
+      const days = opts.window_days ?? DEFAULT_WINDOW_DAYS;
+      try {
+        const counts = await withTimeout(
+          this.container.git.historyCounts({ owner: repo.owner, name: repo.name }, days),
+          this.opts.historyTimeoutMs ?? HISTORY_BUDGET_MS,
+        );
+        ranked = applyHotness(ranked, counts);
+        mode = 'activity';
+        windowDays = days;
+      } catch {
+        rankingFallback = FALLBACK_ACTIVITY_UNAVAILABLE; // EC-9: fall back to import graph
+      }
+    }
+
     const scan = cloned ? await scanClone(repo.clonePath!).catch(() => null) : null;
 
     let degradedReason: string | null = null;
@@ -316,9 +342,9 @@ export class OnboardingTourService {
       hasReadme: scan?.hasReadme ?? false,
       degradedReason,
       indexSha: state?.lastIndexedSha || null,
-      mode: 'import_graph',
-      windowDays: null,
-      rankingFallback: opts.mode === 'activity' ? FALLBACK_ACTIVITY_UNAVAILABLE : null,
+      mode,
+      windowDays,
+      rankingFallback,
     };
   }
 }

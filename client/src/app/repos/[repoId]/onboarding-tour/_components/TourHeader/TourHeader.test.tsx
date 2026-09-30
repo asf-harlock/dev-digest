@@ -1,6 +1,6 @@
 import React from "react";
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../../../../../messages/en/onboarding.json";
 import type { OnboardingTourResponse } from "@devdigest/shared";
@@ -18,10 +18,10 @@ const base: OnboardingTourResponse = {
   can_use_activity: false,
 };
 
-function setup(over: Partial<OnboardingTourResponse>, sha: string | undefined, generating = false) {
+function setup(over: Partial<OnboardingTourResponse>, sha: string | undefined, generating = false, onGenerate: (r: unknown) => void = () => {}) {
   render(
     <NextIntlClientProvider locale="en" now={new Date()} messages={{ onboarding: messages }}>
-      <TourHeader repoName="acme/app" data={{ ...base, ...over }} lastIndexedSha={sha} generating={generating} onGenerate={() => {}} />
+      <TourHeader repoName="acme/app" data={{ ...base, ...over }} lastIndexedSha={sha} generating={generating} onGenerate={onGenerate} />
     </NextIntlClientProvider>,
   );
 }
@@ -81,6 +81,26 @@ describe("TourHeader", () => {
     cleanup();
     setup({ stored: true, tour: { sections: [], meta: { ...meta, source: "skeleton" } } }, "sha1");
     expect(screen.queryByText(/Last regeneration failed/)).toBeNull();
+  });
+
+  it("AC-18/EC-9: activity ranking label with window; fallback line when meta carries one", () => {
+    setup({ tour: { sections: [], meta: { source: "skeleton", ranking_mode: "activity", window_days: 90 } } }, "sha1");
+    expect(screen.getByText("Ranked by import graph + activity, last 90 days")).toBeInTheDocument();
+    cleanup();
+    setup({ tour: { sections: [], meta: { source: "skeleton", ranking_fallback: "git failed" } } }, "sha1");
+    expect(screen.getByText("Activity ranking unavailable — ranked by import graph")).toBeInTheDocument();
+  });
+
+  it("AC-20/24: Generate posts {mode, window_days}; invalid days disables it", () => {
+    const onGenerate = vi.fn();
+    setup({ can_use_activity: true }, "sha1", false, onGenerate);
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(onGenerate).toHaveBeenLastCalledWith({ mode: "import_graph" });
+    fireEvent.click(screen.getByRole("radio", { name: "Include recent activity (hotness)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(onGenerate).toHaveBeenLastCalledWith({ mode: "activity", window_days: 180 });
+    fireEvent.change(screen.getByLabelText("Days of history"), { target: { value: "5" } });
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
   });
 
   it("freshnessState: unknown index never claims 'No index yet'", () => {

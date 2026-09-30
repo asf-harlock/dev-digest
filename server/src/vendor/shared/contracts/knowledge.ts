@@ -87,6 +87,7 @@ export type TourRunLocally = z.infer<typeof TourRunLocally>;
 export const TourReadingStep = z.object({
   path: z.string(),
   why: z.string(),
+  hotness: z.number().min(0).max(1).nullish(), // activity mode only; always from facts
 });
 export type TourReadingStep = z.infer<typeof TourReadingStep>;
 

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { TourCriticalPaths } from "@devdigest/shared";
 import { githubBlobUrl } from "@/lib/github-urls";
+import { isActiveRecently } from "../ReadingPathSection/helpers";
 import { s } from "./styles";
 
 /** One row per critical file with its reason and an Open link (AC-6, AC-31). */
@@ -12,11 +13,14 @@ export function CriticalPathsSection({
   section,
   repoFullName,
   sha,
+  activityRanked = false,
 }: {
   section: TourCriticalPaths | undefined;
   repoFullName: string | undefined;
   /** `index_sha`, or the default branch when the SHA is empty. */
   sha: string | undefined;
+  /** The tour was generated in activity mode (AC-27). */
+  activityRanked?: boolean;
 }) {
   const t = useTranslations("onboarding");
   const items = section?.items ?? [];
@@ -27,7 +31,10 @@ export function CriticalPathsSection({
         <li key={item.path} style={s.row}>
           <Icon.FileText size={14} aria-hidden="true" />
           <span className="mono" style={s.path}>{item.path}</span>
-          <span style={s.reason}>— {item.reason}</span>
+          <span style={s.reason}>
+            — {item.reason}
+            {activityRanked && isActiveRecently(item.hotness) && <span style={s.active}> · {t("tour.activeRecently")}</span>}
+          </span>
           {repoFullName && sha && (
             <a
               href={githubBlobUrl(repoFullName, sha, item.path)}
