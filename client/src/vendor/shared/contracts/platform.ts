@@ -298,6 +298,10 @@ export const SpecFile = z.object({
   unattachable_reason: SpecFileUnattachableReason.nullish(),
   injection_flagged: z.boolean().nullish(),
   injection_patterns: z.array(z.string()).nullish(),
+  /** Preview only: where each pattern hit, with the offending line. */
+  injection_matches: z
+    .array(z.object({ pattern: z.string(), line: z.number().int(), excerpt: z.string() }))
+    .nullish(),
   /** Distinct agents in the workspace that would receive this document. */
   used_by: z.number().int().nullish(),
 });

@@ -303,7 +303,7 @@ export async function resolveProjectContext(
       return;
     }
     used += tokens;
-    const injection = detectInjectionPatterns(read.text);
+    const injection = detectInjectionPatterns(read.text, { ignoreCode: true });
     if (injection.detected) {
       notes.push({ kind: 'injection', path: l.path, patterns: injection.patterns });
     }

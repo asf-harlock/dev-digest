@@ -33,7 +33,7 @@
     "viaSkill": "via {skill}",
     "moveUpNamed": "Move {path} up",
     "moveDownNamed": "Move {path} down",
-    "injection": "Injection patterns detected",
+    "injection": "Injection detected",
     "injectionNamed": "Injection patterns: {patterns}",
     "unattachable": {
       "too_large": "Too large (over 32 KB)",
@@ -42,6 +42,10 @@
   },
   "preview": {
     "title": "Document preview",
+    "injectionTitle": "Prompt injection detected",
+    "injectionBody": "This document contains text that looks like instructions to an AI model. If attached, it could try to override an agent’s instructions.",
+    "injectionPatterns": "Matched patterns:",
+    "injectionLine": "line {line}",
     "select": "Select a document’s Preview to read it here.",
     "loadError": "Couldn’t load this document"
   },

@@ -47,9 +47,7 @@ export function ContextDocPreview({ repoId, path, layout, onClose, action }: Con
           </Badge>
           {file.injection_flagged && (
             <Badge color="var(--crit)" bg="var(--crit-bg)" icon="Shield">
-              {(file.injection_patterns ?? []).length > 0
-                ? t("row.injectionNamed", { patterns: (file.injection_patterns ?? []).join(", ") })
-                : t("row.injection")}
+              {t("row.injection")}
             </Badge>
           )}
         </div>
@@ -59,6 +57,33 @@ export function ContextDocPreview({ repoId, path, layout, onClose, action }: Con
           {action}
         </div>
       </div>
+      {file.injection_flagged && (
+        <div role="alert" style={s.alert}>
+          <strong>{t("preview.injectionTitle")}</strong>
+          <span>{t("preview.injectionBody")}</span>
+          {(file.injection_matches ?? []).length > 0 ? (
+            <ul style={s.matchList}>
+              {(file.injection_matches ?? []).map((m) => (
+                <li key={m.pattern} style={s.match}>
+                  <span>
+                    <code className="mono">{m.pattern}</code> · {t("preview.injectionLine", { line: m.line })}
+                  </span>
+                  <pre className="mono" style={s.excerpt}>
+                    {m.excerpt}
+                  </pre>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            (file.injection_patterns ?? []).length > 0 && (
+              <span>
+                {t("preview.injectionPatterns")}{" "}
+                <code className="mono">{(file.injection_patterns ?? []).join(", ")}</code>
+              </span>
+            )
+          )}
+        </div>
+      )}
       <div style={s.body}>
         <SafeMarkdown>{file.content ?? ""}</SafeMarkdown>
       </div>

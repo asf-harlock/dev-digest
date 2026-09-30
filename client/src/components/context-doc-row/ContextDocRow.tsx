@@ -134,9 +134,11 @@ export function ContextDocRow({
         </Badge>
       )}
       {file.injection_flagged && (
-        <Badge color="var(--crit)" bg="var(--crit-bg)" icon="Shield">
-          {patterns.length > 0 ? t("row.injectionNamed", { patterns: patterns.join(", ") }) : t("row.injection")}
-        </Badge>
+        <span title={patterns.length > 0 ? t("row.injectionNamed", { patterns: patterns.join(", ") }) : undefined}>
+          <Badge color="var(--crit)" bg="var(--crit-bg)" icon="Shield">
+            {t("row.injection")}
+          </Badge>
+        </span>
       )}
       {!attachMode && file.used_by != null && <span style={s.meta}>{t("row.usedBy", { count: file.used_by })}</span>}
       <div style={s.actions}>

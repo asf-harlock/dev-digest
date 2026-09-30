@@ -1,5 +1,5 @@
 import type { SpecFile } from '@devdigest/shared';
-import { detectInjectionPatterns } from '../_shared/injection-detection.js';
+import { detectInjectionPatterns, findInjectionMatches } from '../_shared/injection-detection.js';
 import { kindForPath } from '../_shared/context-paths.js';
 import type { ContextFileRead, ScannedContextFile } from '../_shared/project-context.js';
 
@@ -48,11 +48,14 @@ export function buildSpecFile(
   if (read.status === 'too_large') file.unattachable_reason = 'too_large';
   if (read.status === 'not_utf8') file.unattachable_reason = 'not_utf8';
   if (read.status === 'ok') {
-    const injection = detectInjectionPatterns(read.text);
+    const injection = detectInjectionPatterns(read.text, { ignoreCode: true });
     file.tokens = opts.tokens;
     file.injection_flagged = injection.detected;
     file.injection_patterns = injection.patterns;
-    if (opts.includeContent) file.content = read.text;
+    if (opts.includeContent) {
+      file.content = read.text;
+      if (injection.detected) file.injection_matches = findInjectionMatches(read.text, { ignoreCode: true });
+    }
   }
   return file;
 }

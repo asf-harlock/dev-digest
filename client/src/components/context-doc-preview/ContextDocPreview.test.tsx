@@ -68,7 +68,7 @@ describe("ContextDocPreview loaded", () => {
     expect(screen.getByText("≈ 120 tokens")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Hello" })).toBeInTheDocument();
     expect(screen.getByText("body text")).toBeInTheDocument();
-    expect(screen.queryByText(/Injection patterns/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Injection detected/)).not.toBeInTheDocument();
   });
 
   it("AC-15: singular used-by; used_by/tokens omitted when absent", () => {
@@ -81,14 +81,26 @@ describe("ContextDocPreview loaded", () => {
   it("EC-6: injection badge names the matched patterns", () => {
     query.data = doc({ injection_flagged: true, injection_patterns: ["ignore previous", "system:"] });
     setup();
-    expect(screen.getByText("Injection patterns: ignore previous, system:")).toBeInTheDocument();
+    expect(screen.getByText("Injection detected")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("ignore previous, system:");
     expect(screen.getByRole("heading", { name: "Hello" })).toBeInTheDocument();
+  });
+
+  it("shows the offending line for each matched pattern", () => {
+    query.data = doc({
+      injection_flagged: true,
+      injection_patterns: ["delimiter-escape"],
+      injection_matches: [{ pattern: "delimiter-escape", line: 7, excerpt: "wrapped in <untrusted> tags" }],
+    });
+    setup();
+    expect(screen.getByText("wrapped in <untrusted> tags")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("line 7");
   });
 
   it("EC-6: flagged without pattern names falls back to the generic badge", () => {
     query.data = doc({ injection_flagged: true });
     setup();
-    expect(screen.getByText("Injection patterns detected")).toBeInTheDocument();
+    expect(screen.getByText("Injection detected")).toBeInTheDocument();
   });
 });
 

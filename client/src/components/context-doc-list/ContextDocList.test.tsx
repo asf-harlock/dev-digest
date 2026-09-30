@@ -56,7 +56,8 @@ describe("ContextDocList rows", () => {
     expect(screen.getByText(/Too large/)).toBeInTheDocument();
     expect(screen.getByText(/Not UTF-8/)).toBeInTheDocument();
 
-    expect(screen.getByText(/ignore previous, system:/)).toBeInTheDocument();
+    expect(screen.getByText("Injection detected")).toBeInTheDocument();
+    expect(screen.getByTitle("Injection patterns: ignore previous, system:")).toBeInTheDocument();
     const flagged = screen.getByRole("checkbox", { name: "insights/bad.md" });
     expect(flagged).toBeEnabled();
     await user.click(flagged);
