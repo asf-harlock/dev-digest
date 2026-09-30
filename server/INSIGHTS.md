@@ -383,6 +383,13 @@ needed none of those and cannot drift.
 
 ## Open Questions
 
+- **2026-09-30** — `test/onboarding-tour.it.test.ts` passes 27/27 alone but
+  1–3 different cases fail per run inside the full parallel `pnpm test`
+  ("generation did not settle"). The bug reviewer found no service defect: its
+  `settled()` helper polls only 100 × 25 ms = 2.5 s while several testcontainers
+  start at once. Unconfirmed fix: a time-based poll budget (~15 s) in that
+  helper. Until then, run it alone: `pnpm exec vitest run onboarding-tour.it.test`.
+
 - **2026-09-25** — On a clean `L04-lab` HEAD (`main` plus nothing), 5 cases in
   `test/skills.it.test.ts` and `test/skills-stats.it.test.ts` fail: they get
   422 from `GET /skills/:id/stats[?days=]` and `/skills/:id/stats/:version`

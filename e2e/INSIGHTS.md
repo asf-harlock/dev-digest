@@ -41,7 +41,9 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   1. `wait --text` matches **rendered** text, so a string styled with
      `text-transform: uppercase` (e.g. `SectionLabel` titles such as
      "Reviewer-ordered diff") never matches its source casing. Anchor on
-     untransformed text, like a button label.
+     untransformed text, like a button label, or wait on a structural
+     selector: `wait 'nav[aria-label="On this page"]'` (flow 10, 2026-09-30,
+     hit a second time on the uppercased "ON THIS PAGE" label).
   2. `find text <X> click` straight after `wait --url /pulls` races the list
      render and fails intermittently (flows 04/05/08 failed on different runs).
      Put `wait --text <X>` before the click, as flow 02 does.

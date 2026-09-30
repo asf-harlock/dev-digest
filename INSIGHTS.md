@@ -52,6 +52,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## What Doesn't Work
 
+- **2026-09-30** — Relaying a user's approval to a subagent does not let it edit
+  `*/src/vendor/**`. The implementer's Edit on both `contracts/knowledge.ts`
+  copies was denied by the permission system even with "the user authorised
+  this" in the orchestrator's message, because an agent's word is not user
+  approval. What worked: ask the user with `AskUserQuestion` in the main
+  session, then resume the implementer, quoting that answer. Budget for this
+  whenever a mid-run fix needs a contract field the plan didn't list (SPEC-05
+  needed 3: `complexity`, `last_error_at`, `TourReadingStep.hotness`).
+
 - **2026-09-24** — A realistic-looking fake secret in a fixture breaks the push,
   not the tests. `sk_live_51Hxxxx…` in a seed demo patch passed every gate and
   `/pr-self-review`. Then GitHub push protection rejected `git push`, because it
