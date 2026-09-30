@@ -46,6 +46,28 @@ describe('RepoIntel facade — degraded contract (flag off)', () => {
     await expect(svc.getUnresolvedReferences('r1', ['a.ts'])).resolves.toEqual([]);
   });
 
+  it('getTopRanked → [] when repoIntelEnabled=false', async () => {
+    const svc = buildDegradedService({ flag: false });
+    await expect(svc.getTopRanked('r1', 5)).resolves.toEqual([]);
+  });
+
+  it('getTopRanked filters junk paths and orders rank desc, path asc', async () => {
+    const svc = buildDegradedService({ flag: true });
+    (svc as unknown as { repo: Record<string, unknown> }).repo.getRankedPaths = async () => [
+      { path: 'src/b.ts', rank: 0.5 },
+      { path: 'src/a.test.ts', rank: 0.9 },
+      { path: 'src/a.ts', rank: 0.5 },
+      { path: 'src/top.ts', rank: 0.7 },
+    ];
+    await expect(svc.getTopRanked('r1', 10)).resolves.toEqual([
+      { path: 'src/top.ts', rank: 0.7 },
+      { path: 'src/a.ts', rank: 0.5 },
+      { path: 'src/b.ts', rank: 0.5 },
+    ]);
+    await expect(svc.getTopRanked('r1', 2)).resolves.toHaveLength(2);
+    await expect(svc.getTopRanked('r1', 0)).resolves.toEqual([]);
+  });
+
   it('getCallerSignatures → [] when repoIntelEnabled=false', async () => {
     const svc = buildDegradedService({ flag: false });
     await expect(svc.getCallerSignatures('r1', ['a.ts'])).resolves.toEqual([]);

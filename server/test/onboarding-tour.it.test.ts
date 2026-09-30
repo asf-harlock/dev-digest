@@ -88,6 +88,8 @@ function makeIntel() {
     gate: null as Promise<void> | null,
     rankCalls: 0,
     paths: ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'],
+    /** Stored PageRank per path, as repo-intel's `getTopRanked` would return it. */
+    ranks: { 'src/core/engine.ts': 1.0, 'src/api/routes.ts': 0.9, 'src/util/log.ts': 0.8 } as Record<string, number>,
   };
   const intel = {
     getIndexState: async (repoId: string): Promise<IndexState> => ({
@@ -102,13 +104,13 @@ function makeIntel() {
       degraded: ctl.degraded,
       degradedReason: ctl.degraded ? 'no_data' : undefined,
     }),
-    getTopFilesByRank: async () => {
+    getTopRanked: async () => {
       ctl.rankCalls++;
       if (ctl.gate) await ctl.gate;
-      return ctl.paths;
+      return ctl.paths
+        .map((path) => ({ path, rank: ctl.ranks[path] ?? 0 }))
+        .sort((a, b) => b.rank - a.rank || (a.path < b.path ? -1 : 1));
     },
-    getFileRank: async (_id: string, paths: string[]) =>
-      paths.map((path, i) => ({ path, percentile: 1 - i * 0.1 })),
     getCriticalPaths: async () => [['src/api/routes.ts', 'src/core/engine.ts']],
   } as unknown as RepoIntel;
   return { ctl, intel };
@@ -383,6 +385,26 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
       }
     });
 
+    it('B1: a degraded index keeps a stored model tour and records the reason in last_error', async () => {
+      await reset();
+      llm.mode = 'ok';
+      const good = await run();
+      expect(good.tour.meta.source).toBe('llm');
+      llm.calls = [];
+      ctl.degraded = true;
+      try {
+        const body = await run();
+        expect(llm.calls).toHaveLength(0);
+        expect(body.tour.meta.source).toBe('llm');
+        expect(body.tour.meta.generated_at).toBe(good.tour.meta.generated_at);
+        expect(body.tour.sections).toEqual(good.tour.sections);
+        expect(body.tour.meta.last_error).toBe('No index yet');
+        expect(body.tour.meta.last_error_at).toMatch(/^\d{4}-/);
+      } finally {
+        ctl.degraded = false;
+      }
+    });
+
     it('EC-7: no provider key gives a skeleton with reason "Model not configured"', async () => {
       await reset();
       const noKey = await buildApp({
@@ -537,6 +559,7 @@ d('SPEC-05 verification fixes (ranking source, budget, logging)', () => {
 
   const reset = () => pg.handle.db.delete(t.onboarding).where(eq(t.onboarding.repoId, repoId));
   const setRanks = async (rows: [string, number][]) => {
+    ctl.ranks = Object.fromEntries(rows);
     await pg.handle.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
     await pg.handle.db
       .insert(t.fileRank)
@@ -627,6 +650,7 @@ d('SPEC-05 verification fixes (ranking source, budget, logging)', () => {
     } finally {
       llm.fixture = GOOD_FIXTURE;
       ctl.paths = ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'];
+      ctl.ranks = { 'src/core/engine.ts': 1.0, 'src/api/routes.ts': 0.9, 'src/util/log.ts': 0.8 };
     }
   });
 
@@ -646,6 +670,7 @@ d('SPEC-05 verification fixes (ranking source, budget, logging)', () => {
       expect(all).not.toContain('module-2499/'); // lowest rank truncated first
     } finally {
       ctl.paths = ['src/core/engine.ts', 'src/api/routes.ts', 'src/util/log.ts'];
+      ctl.ranks = { 'src/core/engine.ts': 1.0, 'src/api/routes.ts': 0.9, 'src/util/log.ts': 0.8 };
     }
   });
 

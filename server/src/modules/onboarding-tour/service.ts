@@ -124,7 +124,7 @@ export class OnboardingTourService {
       tour = parsed.data;
       stored = true;
     } else {
-      tour = buildSkeleton(await this.collectFacts(workspaceId, repo, cloned, {}));
+      tour = buildSkeleton(await this.collectFacts(repo, cloned, {}));
     }
     return {
       stored,
@@ -175,7 +175,7 @@ export class OnboardingTourService {
   ): Promise<void> {
     const started = Date.now();
     const cloned = await this.cloned(repo);
-    const facts = await this.collectFacts(workspaceId, repo, cloned, opts);
+    const facts = await this.collectFacts(repo, cloned, opts);
     const skeleton = buildSkeleton(facts);
     const hint = await this.modelHint(workspaceId);
     const provider = hint.provider as Provider;
@@ -190,7 +190,14 @@ export class OnboardingTourService {
     };
 
     if (facts.degradedReason) {
-      await this.storeSkeleton(workspaceId, repo.id, skeleton);
+      // B1: a stored model tour is never replaced by a skeleton; the reason is recorded instead.
+      const existing = await this.storedTour(workspaceId, repo.id);
+      if (existing?.tour.meta.source === 'llm') {
+        setFailure(existing.tour.meta, facts.degradedReason, new Date());
+        await this.repo.upsert(workspaceId, repo.id, existing.tour, existing.row.generatedAt);
+      } else {
+        await this.storeSkeleton(workspaceId, repo.id, skeleton);
+      }
       log?.info?.({ ...logCtx, outcome: 'skeleton_degraded', ms: Date.now() - started }, 'onboarding tour generated');
       return;
     }
@@ -302,7 +309,6 @@ export class OnboardingTourService {
 
   /** Gather the deterministic facts. Every source degrades to empty; none throws. */
   private async collectFacts(
-    workspaceId: string,
     repo: TourRepoRow,
     cloned: boolean,
     opts: Partial<GenerateOptions>,
@@ -313,9 +319,7 @@ export class OnboardingTourService {
     let ranked: RankedFile[] = [];
     let chains: string[][] = [];
     if (state && !state.degraded && state.status !== 'failed') {
-      const paths = await intel.getTopFilesByRank(repo.id, RANKED_FILES_LIMIT).catch(() => []);
-      const ranks = await this.repo.getRanks(workspaceId, repo.id, paths).catch(() => new Map<string, number>());
-      ranked = paths.map((path) => ({ path, rank: ranks.get(path) ?? 0 }));
+      ranked = await intel.getTopRanked(repo.id, RANKED_FILES_LIMIT).catch(() => []);
       chains = await intel.getCriticalPaths(repo.id).catch(() => []);
     }
 

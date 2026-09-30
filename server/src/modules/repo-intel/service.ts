@@ -656,6 +656,25 @@ export class RepoIntelService implements RepoIntel {
   }
 
   /**
+   * `getTopFilesByRank` with the rank value attached. Deterministic order: rank
+   * DESC, path ASC (the DB orders by rank only, so ties are settled here).
+   */
+  async getTopRanked(
+    repoId: string,
+    n: number,
+    opts?: { exclude?: string[] },
+  ): Promise<Array<{ path: string; rank: number }>> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    if (n <= 0) return [];
+    const exclude = opts?.exclude ?? [];
+    const rows = await this.repo.getRankedPaths(repoId, Math.max(n * 10, 100));
+    return rows
+      .filter((r) => !isJunkPath(r.path) && !exclude.some((e) => r.path.includes(e)))
+      .sort((a, b) => b.rank - a.rank || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+      .slice(0, n);
+  }
+
+  /**
    * Dependency chains from the highest-ranked files (onboarding reading-path).
    * For each of the top roots, greedily follow the highest-ranked import target
    * up to BFS_DEPTH hops. Pure read over `file_edges` + `file_rank`.
