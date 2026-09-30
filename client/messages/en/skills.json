@@ -46,7 +46,7 @@
       "evals": "Evals",
       "stats": "Stats",
       "versions": "Versions",
-      "context": "Project context to use"
+      "context": "Context"
     }
   },
   "card": {
@@ -198,7 +198,7 @@
     "version": "v{version}"
   },
   "context": {
-    "title": "Project context to use",
+    "title": "Context",
     "hint": "Attach repository documents this skill needs. Every agent that has this skill enabled receives them too. Order matters — earlier documents are added to the prompt first."
   }
 }

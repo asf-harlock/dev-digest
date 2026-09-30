@@ -7,7 +7,7 @@ import { ContextAttachPanel } from "@/components/context-attach-panel";
 import { useSaveSkillContext } from "@/lib/hooks/skills";
 import { useActiveRepo } from "@/lib/repo-context";
 
-/** Skill editor's "Project context to use" tab — attach repo documents to the
+/** Skill editor's "Context" tab — attach repo documents to the
  *  skill; every agent that links the skill inherits them (AC-12, AC-21).
  *  Saves on every change; the skill's version is not bumped. */
 export function ContextTab({ skill }: { skill: Skill }) {
