@@ -1,9 +1,12 @@
 # Spec: PR Context
 Spec ID: SPEC-07
 Status: draft
-Supersedes: —
+Supersedes: [SPEC-06](06-pr-brief.md) (D5, AC-7, EC-13, EC-26 — partial), [SPEC-04](04-project-context.md) (two Non-goals — partial), [SPEC-03](03-intent-layer.md) (D1 — partial)
 
 ## Проблема й користувач
+
+Every `file:line` reference in this spec is at branch `L05-homework`, commit
+`97b8614`, the branch whose code lands on `main` together with this spec.
 
 A reviewer running DevDigest on a pull request knows what that PR is supposed
 to do — its spec, PRD or plan is a markdown file in the repo — but has no way to
@@ -61,7 +64,7 @@ document that says what it is for, and the reviewer has no place to supply it.
   description and branch name.
 - A context fingerprint stored on every brief, intent and run, so a result
   produced with different PR context is shown as stale.
-- Amendments to approved specs, made here rather than by superseding them:
+- Partial amendments to approved specs (also listed in `Supersedes:`):
   - SPEC-06 D5, AC-7, EC-13, EC-26 — the brief's spec documents are the PR
     context when the PR has any attached; the D5 union applies only to a PR
     with an empty attached list;
@@ -140,7 +143,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 - **AC-4** (US-1) КОЛИ the user toggles a checkbox, removes a row or moves a row, the system (shall) persist the full ordered list of attached paths for that PR through `PUT /pulls/:id/context` without a separate Save action.
 - **AC-5** (US-1) The system (shall) store PR-context attachments as an ordered list of repo-relative path strings on the pull request and never store document text on it.
 - **AC-6** (US-1, US-2) КОЛИ a client calls `GET /pulls/:id/context`, the system (shall) return the attached entries (path, kind, origin badge, status, tokens, head SHA read at), the suggestions, the attachable list, the PR-context budget and the current context fingerprint.
-- **AC-7** (US-1) КОЛИ the user opens a document's Preview from the Context tab, the system (shall) show a drawer with the path, `kind` chip, origin badge, token estimate and an Attach / Attached toggle above the document text read at the PR head SHA and rendered as markdown.
+- **AC-7** (US-1) КОЛИ the user opens a document's Preview from the Context tab, the system (shall) show a drawer with the path, `kind` chip, origin badge, token estimate and an Attach / Attached toggle above the text returned by `GET /pulls/:id/context/preview?path=<path>`, rendered as markdown.
 - **AC-8** (US-2) The system (shall) show in the Context tab footer the total `≈ N of 10,000 tokens` over the attached documents and the line that agent and skill documents keep at least 6,000 tokens per review call.
 - **AC-9** (US-2) ДЕ at least one enabled agent of the workspace uses the `map-reduce` strategy, the system (shall) show in the Context tab footer that PR context is sent on each per-file call of those agents.
 
@@ -183,7 +186,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 
 ### Intent
 
-- **AC-32** (US-8) КОЛИ an intent classification runs for a PR with resolved PR-context documents, the system (shall) send them to the classifier as `pr-context:<path>` untrusted blocks under a `## PR context` heading.
+- **AC-32** (US-8) КОЛИ an intent classification runs for a PR with resolved PR-context documents, the system (shall) send them to the classifier under a `## PR context` heading as `pr-context:<path>` blocks produced by `reviewer-core`'s `wrapUntrusted` (UI-5).
 - **AC-33** (US-8) The system (shall) send the intent classifier no agent or skill documents.
 - **AC-34** (US-8) КОЛИ an intent classification used PR context, the system (shall) store a `spec` source with status `used` whose note lists the paths used.
 - **AC-35** (US-8) КОЛИ an intent classification used PR context and the PR description holds external links, the system (shall) store the "not fetched" link note as a separate `spec` source entry with status `unreachable`.
@@ -196,6 +199,10 @@ document that says what it is for, and the reviewer has no place to supply it.
 - **AC-39** (US-9) КОЛИ the stored fingerprint of the intent differs from the current fingerprint, the system (shall) show the note "Classified with different PR context" on the Intent card next to its classify action.
 - **AC-40** (US-9) КОЛИ a run's stored fingerprint differs from the current fingerprint, the system (shall) show "Project context changed since this run" on that run's row in Agent runs.
 - **AC-41** (US-9) КОЛИ the PR's attached list changes, the system (shall) start no brief generation, intent classification or review run.
+
+### Preview contract
+
+- **AC-42** (US-1, US-4) КОЛИ a client calls `GET /pulls/:id/context/preview?path=<path>`, the system (shall) return the path, `kind`, origin badge, token estimate, the commit read at and a status from the PR-context status set (`attached`, `missing`, `too_large`, `unreadable`) with the document text when the status is `attached`, reading at the PR head SHA when the path is attached to the PR or among its changed files and at the default branch otherwise.
 
 ## Edge cases
 
@@ -220,20 +227,21 @@ document that says what it is for, and the reviewer has no place to supply it.
 - **EC-19** ЯКЩО the attachable list is empty, ТОДІ the system (shall) show an empty state explaining that a `.md` file under `specs/`, `docs/` or `insights/` committed to the PR or the default branch becomes attachable.
 - **EC-20** ЯКЩО the filter text matches no document, ТОДІ the system (shall) show "No documents match" with a Clear filter action.
 - **EC-21** ЯКЩО a stored brief, intent or run trace was written before the context fingerprint existed, ТОДІ the system (shall) read its fingerprint as null.
-- **EC-22** ЯКЩО the PR id does not belong to the caller's workspace, ТОДІ the system (shall) respond `404` to `GET` and `PUT /pulls/:id/context`.
+- **EC-22** ЯКЩО the PR id does not belong to the caller's workspace, ТОДІ the system (shall) respond `404` to `GET /pulls/:id/context`, `PUT /pulls/:id/context` and `GET /pulls/:id/context/preview`.
 - **EC-23** ЯКЩО a save request holds more than 20 paths, ТОДІ the system (shall) reject it with 422 and `error.code: "validation_error"`.
 - **EC-24** ЯКЩО `pull_requests.head_sha` is not 40 lowercase hexadecimal characters, ТОДІ the system (shall) run no git command and record every PR-context entry as `unreadable`.
 - **EC-25** ЯКЩО `detectInjectionPatterns` matches a PR-context document, ТОДІ the system (shall) show a warning badge naming the patterns on its row and write a run-log line, keeping it attached.
 - **EC-26** ЯКЩО a `SPEC-NN` or `specs/NN-…` reference resolves to no attachable path, ТОДІ the system (shall) add no suggestion for it and show no error.
 - **EC-27** ЯКЩО the PR is closed or merged, ТОДІ the system (shall) keep the Context tab operable and read documents at the stored head SHA.
+- **EC-28** ЯКЩО a PR-context document contains a case- or whitespace-variant closing tag (for example `</UNTRUSTED >`) or a forged opening `<untrusted …>` tag, or its path contains `"`, `<` or `>`, ТОДІ the system (shall) send that document's text and label so that they stay inside its own `pr-context:` block in the run, brief and intent prompts.
 
 ## Non-functional requirements
 
 - **NFR-1** The system (shall) make zero additional LLM calls for PR context in any run, brief generation, intent classification or Context-tab request.
 - **NFR-2** The system (shall) answer `GET /pulls/:id/context` within 3 s for 20 attached paths and a 500-file listing on a local clone that already holds the head commit.
 - **NFR-3** The system (shall) run at most one git fetch per clone at a time and give every concurrent reader the result of that fetch.
-- **NFR-4** The system (shall) scope every read and write of PR context to the caller's `workspace_id` through `getContext()` and `pull_requests.workspace_id`.
-- **NFR-5** The system (shall) answer an invalid attachment path in a save request with 422 and `error.code: "validation_error"`.
+- **NFR-4** The system (shall) scope every read and write of PR context, including previews, to the caller's `workspace_id` through `getContext()` and `pull_requests.workspace_id`.
+- **NFR-5** The system (shall) answer an invalid path in a save request body or in the preview `path` query with 422 and `error.code: "validation_error"`.
 - **NFR-6** The system (shall) make every Context-tab row operable by keyboard, with Move up and Move down buttons as the alternative to drag, a checkbox whose accessible name is the path, targets of at least 24×24 px and visible focus (WCAG 2.1 AA).
 - **NFR-7** The system (shall) announce a change of the footer token total and of a save failure through an `aria-live="polite"` region.
 - **NFR-8** The system (shall) serve every new user-facing string from `client/messages/<locale>/prContext.json`, with the tab label in `prReview.json` and the stale notes in `brief.json`, `intent.json` and `runs.json`.
@@ -247,9 +255,10 @@ document that says what it is for, and the reviewer has no place to supply it.
 | Value | Source | Trusted? | Design source |
 |---|---|---|---|
 | Attached PR-context paths | stored ordered list on `pull_requests` (new column), written by `PUT /pulls/:id/context` | user input | user idea; F10 |
-| Document text | `GitClient` read of `<head_sha>:<path>` from the local clone | no — author-controlled at head | agreed direction 4; researcher R2 |
+| Document text | `GitClient` read by blob id (`git cat-file blob <oid>`) from the local clone, after the entry is resolved at the head SHA | no — author-controlled at head | agreed direction 4; researcher R2 |
+| Preview path | `path` query of `GET /pulls/:id/context/preview` | no — client-controlled | coordinator review item 2 |
 | Head SHA | `pull_requests.head_sha` (updated by PR sync, `pulls/routes.ts:89`) | yes (GitHub API) but validated as 40-hex | SPEC-06 Inputs table |
-| Tree entry mode, type, size, blob id | `git ls-tree -l <sha> -- <path>` | yes (git) | researcher R2 |
+| Tree entry mode, type, size, blob id | `git ls-tree -l --literal-pathspecs <sha> -- <path>` | yes (git) | researcher R2 |
 | Head commit availability | fetch by SHA, else `+pull/<n>/head:pr-<n>` | yes | researcher R2 (`fetchPullHead` refspec lacks `+`) |
 | Origin badge (added / modified / default branch) | `pr_files` paths of the PR | yes (GitHub API); paths untrusted text | F8 |
 | Attachable list | SPEC-04 listing (default-branch clone) ∪ PR changed `.md` files passing UI-1 | no — repo content | SPEC-04 AC-1; F8 |
@@ -267,12 +276,12 @@ document that says what it is for, and the reviewer has no place to supply it.
 
 ## Untrusted inputs
 
-- **UI-1** Attachment path in a `PUT /pulls/:id/context` body → stored list and git reads: the system (shall) accept only a relative path without empty, `.` or `..` segments, without backslash, NUL or control characters, ending in `.md`, at most 512 characters, matching the SPEC-04 globs and outside the excluded directories, and reject any other with 422 (OWASP A01 path traversal).
-- **UI-2** Stored path → git argument list: the system (shall) pass it as one argument after `--` in an argument array with no shell, and refuse any path whose POSIX-normalised form differs from the stored string (OWASP A03 injection).
-- **UI-3** Head SHA → git argument list: the system (shall) pass it to git only when it matches `^[0-9a-f]{40}$` (OWASP A03 argument injection).
+- **UI-1** Every client-supplied path (each entry of a `PUT /pulls/:id/context` body and the `path` query of `GET /pulls/:id/context/preview`) → stored list and git reads: the system (shall) accept only a relative path whose first character is not `:`, without empty, `.` or `..` segments, without backslash, NUL or control characters, ending in `.md`, at most 512 characters, matching the SPEC-04 globs and outside the excluded directories, and reject any other with 422 (OWASP A01 path traversal).
+- **UI-2** Stored or previewed path → git commands: the system (shall) resolve the tree entry with `git ls-tree -l --literal-pathspecs <sha> -- <path>` (the only call that carries the path, passed after `--` in an argument array with no shell, refused when its POSIX-normalised form differs from the input), then read the content only by blob id with `git cat-file blob <oid>`, never through the `<sha>:<path>` form (OWASP A03 injection).
+- **UI-3** Head SHA and default-branch commit → every git command of this spec, the preview included: the system (shall) pass a commit to git only when it matches `^[0-9a-f]{40}$` (OWASP A03 argument injection).
 - **UI-4** Tree entry at the head SHA → file read: the system (shall) read only regular-file blobs within the 64 KB cap and refuse symlinks and submodules without resolving their targets (OWASP A01).
-- **UI-5** PR-context document text → run, brief and intent prompts: the system (shall) pass it only through `wrapUntrusted()` with the `pr-context:<path>` label, the closing delimiter escaped, and the injection-guard sentence of AC-23 (OWASP LLM01).
-- **UI-6** Document path → `<untrusted source="…">` label: the system (shall) escape `"`, `<` and `>` in the label so a file name cannot close or forge a delimiter (OWASP LLM01).
+- **UI-5** PR-context document text → agent-run, brief and intent prompts: the system (shall) wrap it in all three consumers only with `reviewer-core`'s `wrapUntrusted` in its hardened form (`reviewer-core/src/prompt.ts:37-46`: neutralises case- and whitespace-variant closing tags and forged opening tags, escapes the label), with the `pr-context:<path>` label and the injection-guard sentence of AC-23, replacing the intent classifier's private copy (`server/src/modules/reviews/intent-classifier.ts:75-78`, which escapes only the exact `</untrusted>` and leaves the label raw) (OWASP LLM01).
+- **UI-6** Document path → `<untrusted source="…">` label: the system (shall) escape `"`, `<` and `>` in the label through the same `wrapUntrusted` so a file name cannot close or forge a delimiter (OWASP LLM01).
 - **UI-7** Document text → Preview drawer: the system (shall) render markdown with raw HTML disabled and `javascript:` and `data:` URLs stripped from links and images (OWASP A03 XSS).
 - **UI-8** Document text stored in the trace → Trace drawer: the system (shall) render it as plain preformatted text (OWASP A03 XSS).
 - **UI-9** Document path → run-log line and server log: the system (shall) replace control characters and newlines through `sanitizePathForLog` before logging (OWASP A09 log injection).
