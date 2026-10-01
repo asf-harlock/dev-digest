@@ -65,6 +65,14 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Codebase Patterns
 
+- **2026-09-29** — There are **five** packages, not four: `mcp/`
+  (`@devdigest/mcp`, npm, wired to `GET /pulls/:id/blast`) arrived in L04 with
+  its own `CLAUDE.md` and `INSIGHTS.md`, but root `CLAUDE.md`'s module table
+  and the `engineering-insights` "Which file" table did not list it. Anything
+  that enumerates modules — spec placement, `routing.json`, insights lookup —
+  must include `mcp/`, or `mcp/` work silently falls into the root bucket.
+  `mcp/package.json`, `.claude/skills/pr-self-review/reference/routing.json`
+
 - **2026-09-18** — All seven `<module>/docs/*.md` are deliberate 10-line stubs
   with one shape: `> **Stub.** Not written yet.` + **Purpose** + **What belongs
   here** + **What does not belong here**, each linked from a module `CLAUDE.md`
@@ -85,6 +93,14 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `server/src/vendor/shared/contracts/trace.ts`
 
 ## Tool & Library Notes
+
+- **2026-09-29** — On the local Node (v26), `node --test <directory>` does not
+  discover tests: it treats the directory as a module and fails with
+  `MODULE_NOT_FOUND`, reported as one failing "test". Pass the file path
+  (`node --test .claude/skills/spec-authoring/scripts/lint-spec.test.mjs`) or
+  a glob. The `.claude/` skill scripts sit outside every package, so no
+  `package.json` test script covers them; the command in the skill's
+  `SKILL.md` is the only entry point.
 
 - **2026-09-20** — Widening a `Provider`-shaped enum touches ~9 spots across
   both packages, and `pnpm --filter server exec tsc --noEmit` right after

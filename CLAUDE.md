@@ -30,6 +30,8 @@ Packages are linked ONLY through tsconfig path aliases pointing at a sibling's
 - **Adding or changing an API route** → read `server/README.md` for route contracts.
 - **Writing or fixing tests** → read `TESTING.md`.
 - **Starting a lesson task** → read `specs/lessons/<Lxx>.md`.
+- **Writing or revising a feature spec** → use the `spec-creator` agent; the
+  format lives in `.claude/skills/spec-authoring/`.
 - **Hitting behaviour that looks like a known trap** → read the nearest
   `INSIGHTS.md` (module-level first, then this directory).
 

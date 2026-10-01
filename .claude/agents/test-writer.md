@@ -26,7 +26,7 @@ make it pass.
 Before writing anything, confirm you know:
 1. Which file(s) or behavior need test coverage, and whether this is
    `client/` (UI), `server/` (backend), or both.
-2. Whether a Development Plan (from `planner`/`implementer`) already names
+2. Whether an Implementation Plan (from `implementation-planner`/`implementer`) already names
    the test file(s) to add — if so, treat that as binding scope, not a
    suggestion.
 

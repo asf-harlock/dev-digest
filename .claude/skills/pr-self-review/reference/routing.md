@@ -19,6 +19,7 @@ gets its CRITICAL even though it also sits in a bucket.
 | `workflow` | `e2e/**`, `.github/**`, `scripts/**`, `*.sh` | `security` | `sh:syntax`, `yaml:parse`, `e2e:typecheck` |
 | `deps` | any `package.json` / lockfile | `security` | the owning typecheck |
 | `meta` | `.claude/**`, `skills-lock.json` | — | — |
+| `spec` | `specs/NN-*.md`, `{server,client,reviewer-core,mcp}/specs/NN-*.md` | `spec-authoring` | `spec:lint` (legacy specs without `Spec ID:` are skipped) |
 | `docs` | `**/*.md`, `docs/`, `specs/` | `engineering-insights`, `mermaid-diagram` | — |
 | `config` | `*.cjs`, `*.mjs`, `tsconfig*.json`, `*.config.*` | `typescript-expert` | the owning typecheck |
 | `unrouted` | anything else | `typescript-expert`, `security` | — |
@@ -43,7 +44,7 @@ merge:
 
 ```
 db-migrations + db-schema                  → database
-workflow + config + meta + docs + deps + unrouted → workflow-docs
+workflow + config + meta + spec + docs + deps + unrouted → workflow-docs
 contracts                                  → always its own agent
 vendor                                     → no agent at all
 ```

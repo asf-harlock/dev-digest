@@ -48,6 +48,7 @@ answer from source.
 | `client/**` | `client/INSIGHTS.md` |
 | `reviewer-core/**` | `reviewer-core/INSIGHTS.md` |
 | `e2e/**`, `scripts/e2e.sh` | `e2e/INSIGHTS.md` |
+| `mcp/**` | `mcp/INSIGHTS.md` |
 | `scripts/`, `.github/`, `docker-compose.yml`, root docs, or **two or more packages** | `INSIGHTS.md` (root) |
 
 Three cases that get misfiled:
