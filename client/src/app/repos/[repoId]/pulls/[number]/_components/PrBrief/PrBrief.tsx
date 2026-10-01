@@ -132,7 +132,11 @@ export function PrBrief({
               {t("missingTitle")}
               <ul style={s.missingList}>
                 {missing.map((m, i) => (
-                  <li key={i}>{t(`missing.${m.kind}`)}</li>
+                  <li key={i}>
+                    {m.kind === "specs_missing" && m.reason
+                      ? t("missing.specs_over_budget", { paths: m.reason })
+                      : t(`missing.${m.kind}`)}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -163,13 +167,13 @@ export function PrBrief({
         )}
       </div>
 
-      <div style={s.twoCol}>
+      <div style={s.blocks}>
         <IntentCard prId={prId} intent={intent} headSha={headSha} />
         <BlastRadiusCard prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={headSha} />
       </div>
 
       {(isGenerating || brief) && (
-        <div style={s.twoCol}>
+        <div style={s.blocks}>
           <RiskAreas risks={brief?.risks ?? []} loading={isGenerating} onOpenFile={onOpenFile} />
 
           <section style={s.card} aria-label={t("reviewFocus")}>

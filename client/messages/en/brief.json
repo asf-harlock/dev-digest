@@ -42,6 +42,7 @@
     "intent_other_sha": "The intent was classified for an older commit.",
     "blast_degraded": "The blast radius map is incomplete.",
     "specs_missing": "No spec documents were available — attach Project Context docs in an agent or skill Context tab.",
+    "specs_over_budget": "Attached spec documents were skipped — each is larger than the brief's spec token budget: {paths}",
     "description_empty": "The PR description is empty.",
     "issue_not_referenced": "No linked issue is referenced.",
     "issue_unreachable": "The linked issue could not be reached.",

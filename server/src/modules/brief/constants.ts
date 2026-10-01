@@ -16,8 +16,12 @@ export const MAX_FILES = 200;
 
 /** NFR-3: the whole model input. */
 export const PROMPT_TOKEN_CAP = 16_000;
-/** Spec documents get a smaller share than the cap (PROJECT_CONTEXT_TOKEN_BUDGET is the cap itself). */
-export const SPEC_DOCS_TOKEN_BUDGET = 4_000;
+/**
+ * Spec documents get a smaller share than the cap (PROJECT_CONTEXT_TOKEN_BUDGET
+ * is the cap itself). A document that does not fit is skipped whole, so this
+ * must hold one real spec: this repo's SPEC-04..06 run 6–10k tokens (D8).
+ */
+export const SPEC_DOCS_TOKEN_BUDGET = 10_000;
 
 /** Per-input character caps so one huge author text cannot eat the budget. */
 export const MAX_TITLE_CHARS = 500;

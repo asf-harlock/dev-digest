@@ -61,12 +61,8 @@ export const s = {
   hintTitle: { fontWeight: 600, color: "var(--text-secondary)" } satisfies CSSProperties,
   hintLinks: { display: "flex", flexWrap: "wrap", gap: 14, marginTop: 6 } satisfies CSSProperties,
   hintLink: { color: "var(--accent-text)", minHeight: 24, display: "inline-flex", alignItems: "center" } satisfies CSSProperties,
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-    gap: 16,
-    alignItems: "start",
-  } satisfies CSSProperties,
+  /** AC-6: Intent, Blast radius, Risk areas and Review focus stack full width, one per row. */
+  blocks: { display: "flex", flexDirection: "column", gap: 16, minWidth: 0 } satisfies CSSProperties,
   focusList: { margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
   /** File ref on top, the reason underneath at full row width. */
   focusRow: {

@@ -275,6 +275,8 @@ export interface MissingInputFacts {
   blast: { degraded?: boolean | undefined; reason?: string | undefined } | null;
   /** Spec documents that are attached and non-empty. */
   specCount: number;
+  /** Attached spec documents skipped for the spec token budget. */
+  specsOverBudget?: readonly string[];
   totalFiles: number;
   promptTrimmed: boolean;
 }
@@ -289,7 +291,12 @@ export function computeMissingInputs(f: MissingInputFacts): BriefMissingInput[] 
   else if (f.blast.degraded) {
     out.push({ kind: 'blast_degraded', ...(f.blast.reason ? { reason: f.blast.reason } : {}) });
   }
-  if (f.specCount === 0) out.push({ kind: 'specs_missing' });
+  if (f.specCount === 0) {
+    // Docs were attached but none fit: name them, so the UI does not ask the
+    // user to attach what they already attached.
+    const skipped = f.specsOverBudget ?? [];
+    out.push(skipped.length > 0 ? { kind: 'specs_missing', reason: skipped.join(', ') } : { kind: 'specs_missing' });
+  }
   if (!f.description || f.description.trim().length === 0) out.push({ kind: 'description_empty' });
   if (f.issue.status === 'none') out.push({ kind: 'issue_not_referenced' });
   if (f.issue.status === 'unreachable') out.push({ kind: 'issue_unreachable' });

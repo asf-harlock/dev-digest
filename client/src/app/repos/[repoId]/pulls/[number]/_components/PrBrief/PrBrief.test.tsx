@@ -143,6 +143,14 @@ describe("PrBrief", () => {
     expect(screen.getByText("The PR description is empty.")).toBeInTheDocument();
   });
 
+  it("SPEC-06 AC-26: names attached spec documents the budget skipped instead of asking to attach", async () => {
+    mockNet(response({ missing_inputs: [{ kind: "specs_missing", reason: "specs/04-project-context.md" }] }));
+    renderBrief();
+
+    expect(await screen.findByText(/were skipped .* specs\/04-project-context\.md/)).toBeInTheDocument();
+    expect(screen.queryByText(/No spec documents were available/)).not.toBeInTheDocument();
+  });
+
   it("SPEC-06 AC-12: Review focus rows show file:line, a count, and open the file on click", async () => {
     mockNet(
       response({

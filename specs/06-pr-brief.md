@@ -40,7 +40,7 @@ sent to paths that do not exist.
 - A **PR Brief** section on the Overview tab of `/repos/:repoId/pulls/:number`:
   - a Generate brief button while no brief exists;
   - a summary of what the PR does and why;
-  - the existing Intent and Blast radius cards side by side;
+  - the existing Intent and Blast radius cards, stacked full width;
   - **Risk areas** inside the Intent card;
   - a full-width **Review focus — read these first** list.
 - A new server module `brief/`:
@@ -236,7 +236,7 @@ behaviour of the system:
 - **AC-3** (US-1, US-5) ПОКИ a generation for the PR is running, the system (shall) show a loading skeleton in place of the summary, Risk areas and Review focus blocks, with no text-only "Generating…" placeholder.
 - **AC-4** (US-1, US-5) КОЛИ a generation finishes, the system (shall) replace the displayed brief with the new one without a page reload.
 - **AC-5** (US-1) КОЛИ a stored brief renders, the system (shall) show its `summary` text at the top of the PR Brief section.
-- **AC-6** (US-1) КОЛИ a stored brief renders, the system (shall) show the Intent card and the Blast radius card side by side in two columns between the summary and Review focus.
+- **AC-6** (US-1) КОЛИ a stored brief renders, the system (shall) show the Intent card, the Blast radius card, Risk areas and Review focus one per row at full width, in that order, below the summary.
 - **AC-7** (US-1) КОЛИ a generation runs, the system (shall) send the model the PR title, the PR description, the linked issue's title and body, the intent (`intent`, `in_scope`, `out_of_scope`), the blast-radius `summary` with the list of caller files, each changed file's path, additions, deletions and Smart Diff role, the hunk headers, and the attached spec documents, omitting each one that is unavailable.
 - **AC-8** (US-1) The system (shall) exclude every hunk body line (added, removed and context lines) from the model prompt.
 - **AC-9** (US-1) КОЛИ a generation runs, the system (shall) make exactly one `completeStructured` call with the output schema `{ summary, risks[], review_focus[] }` using the provider and model resolved for `risk_brief`.

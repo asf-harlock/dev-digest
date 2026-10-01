@@ -306,7 +306,7 @@ export class BriefService {
     }
 
     const issue: LinkedIssueResult = await resolveLinkedIssue({ container: c, repoRef, body: pull.body });
-    const specs = await this.resolveSpecs(workspaceId, repoRow);
+    const { specs, overBudget: specsOverBudget } = await this.resolveSpecs(workspaceId, repoRow);
 
     const system = await loadPromptTemplate(BRIEF_PROMPT_FILE);
     const count = (text: string) => c.tokenizer.count(text);
@@ -340,6 +340,7 @@ export class BriefService {
         headSha: pull.headSha,
         blast,
         specCount: specs.length,
+        specsOverBudget,
         totalFiles: allFiles.length,
       },
     };
@@ -358,13 +359,14 @@ export class BriefService {
   /**
    * One merged, de-duplicated project-context read over every enabled agent's
    * and enabled skill's documents, under the smaller spec budget. Only
-   * attached, non-empty entries count (F9). Never throws.
+   * attached, non-empty entries count (F9); `overBudget` names the ones the
+   * budget skipped. Never throws.
    */
   private async resolveSpecs(
     workspaceId: string,
     repoRow: Awaited<ReturnType<Container['reviewRepo']['getRepo']>>,
-  ): Promise<SpecDoc[]> {
-    if (!repoRow) return [];
+  ): Promise<{ specs: SpecDoc[]; overBudget: string[] }> {
+    if (!repoRow) return { specs: [], overBudget: [] };
     try {
       const agents = await this.container.agentsRepo.listEnabled(workspaceId);
       const agentPaths = [...new Set(agents.flatMap((a) => a.contextPaths))];
@@ -383,11 +385,14 @@ export class BriefService {
         skills: [...skills.values()],
         budget: SPEC_DOCS_TOKEN_BUDGET,
       });
-      return resolved.entries
-        .filter((e) => e.status === 'attached' && e.text.trim().length > 0)
-        .map((e) => ({ path: e.path, text: e.text }));
+      return {
+        specs: resolved.entries
+          .filter((e) => e.status === 'attached' && e.text.trim().length > 0)
+          .map((e) => ({ path: e.path, text: e.text })),
+        overBudget: resolved.entries.filter((e) => e.status === 'over_budget').map((e) => e.path),
+      };
     } catch {
-      return [];
+      return { specs: [], overBudget: [] };
     }
   }
 }

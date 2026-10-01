@@ -256,6 +256,14 @@ describe('computeMissingInputs', () => {
       { kind: 'blast_degraded', reason: 'index_partial' },
     ]);
   });
+  it('AC-25: specs_missing names attached docs the budget skipped', () => {
+    expect(
+      computeMissingInputs({ ...healthy, specCount: 0, specsOverBudget: ['specs/04-a.md', 'specs/05-b.md'] }),
+    ).toEqual([{ kind: 'specs_missing', reason: 'specs/04-a.md, specs/05-b.md' }]);
+  });
+  it('AC-25: skipped docs are not reported while another spec made it in', () => {
+    expect(kinds({ specCount: 1, specsOverBudget: ['specs/06-c.md'] })).toEqual([]);
+  });
   it('AC-25: exactly 200 files is not truncated', () => {
     expect(kinds({ totalFiles: 200 })).toEqual([]);
   });
