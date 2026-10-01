@@ -109,6 +109,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Tool & Library Notes
 
+- **2026-10-01** — `/pr-self-review` via the Skill tool can load the USER-level
+  `~/.claude/skills/pr-self-review` (a PrestaShop `dt review` skill) instead of
+  this repo's `.claude/skills/pr-self-review` — same name, and the global one
+  wins. It writes no `.claude/pr-self-review/report.md`, so the push/PR hook
+  stays blocked. If the loaded skill mentions `dt`, PHPStan or `sites.json`,
+  ignore it and run `.claude/skills/pr-self-review/scripts/collect-diff.sh`,
+  `hard-rules.sh`, `run-gates.sh`, the reviewer fan-out, then `build-report.sh`.
+  Also: `collect-diff.sh` counts untracked files, so stash run artifacts
+  (`.claude/sdd/`, `.claude/workflow-retro/`, `.playwright-mcp/` — not ignored
+  on `main`) before collecting.
+
 - **2026-09-29** — Claude Code transcripts (`~/.claude/projects/<cwd with /
   and . → ->/<session>.jsonl`, subagents in `<session>/subagents/agent-<id>.jsonl`
   + `.meta.json`) write one line per content block of an assistant message.
@@ -205,6 +216,13 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Session Notes
 
+- **2026-10-01** — Landed SPEC-04/05/06 on `main` ahead of their code
+  (PR #17; specs must be on the base branch for PR review), fixed the brief's
+  spec budget, drafted SPEC-07 PR Context (spec-creator → researcher ×2 ∥).
+  In zsh, quote git pathspec globs (`git checkout B -- 'specs/04-*'`): unquoted,
+  zsh expands against the current tree and aborts with "no matches found".
+  Entries: root Tool Notes (pr-self-review shadowing), `server/` Recurring
+  Errors (spec size gates), `server/` Codebase Patterns (fetchPullHead, token URL).
 
 - **2026-09-29** — SPEC-04 Project Context (approved): spec-creator (Opus,
   2 phases) → researcher ×2 ∥ → answers → draft → lint → approved. Then

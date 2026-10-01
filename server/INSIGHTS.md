@@ -72,6 +72,12 @@ needed none of those and cannot drift.
   feature that reads a user-chosen path must reject `..`, absolute paths and
   symlinks itself (precedent: `repo-intel/pipeline/walk.ts:89`).
   `server/src/adapters/git/simple-git.ts:77-88,129-131`
+  **2026-10-01** — `fetchPullHead` has no caller, and its refspec
+  `pull/N/head:pr-N` lacks `+`, so a re-fetch after a force-push fails
+  `non-fast-forward` (rc=1). `git fetch origin <sha>` (no local ref) works
+  against GitHub in ~0.8 s and avoids it. The clone's `origin` URL embeds the
+  token (`https://x-access-token:…@github.com/…`): never log the remote URL or
+  raw git stderr unredacted. Verified on scratch clones for SPEC-07.
 
 - **2026-09-26** — A module that maps another module's facade result cannot
   type its `helpers.ts` with that result's type. `no-cross-module-import` blocks
@@ -326,6 +332,16 @@ needed none of those and cannot drift.
   a green result.
 
 ## Recurring Errors & Fixes
+
+- **2026-10-01** — The brief says "No spec documents were available — attach
+  Project Context docs" even though a doc IS attached: the doc was skipped
+  whole, not missing. Two size gates drop real specs silently: the brief's
+  `SPEC_DOCS_TOKEN_BUDGET` (was 4 000; this repo's specs are 6–10k tokens;
+  raised to 10 000 in 97b8614, and the message now names the skipped doc) and
+  `MAX_CONTEXT_FILE_BYTES` = 32 KB (`_shared/context-paths.ts:18`), which still
+  rejects `specs/06-pr-brief.md` (34 962 B) as `too_large` for any agent.
+  Diagnose by token-counting the file with `TiktokenTokenizer` and `wc -c`
+  before reading resolver code. SPEC-07 gives PR context a 64 KB cap.
 
 - **2026-09-17** — `Run failed: 401 User not found.` mid-agent-run is OpenRouter
   rejecting the key, not a bug in the run pipeline. `container.buildLlm` only
