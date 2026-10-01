@@ -149,7 +149,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 
 ### Suggestions
 
-- **AC-10** (US-3) КОЛИ the Context tab loads, the system (shall) list as suggestions, each with an Attach button and its reason, every not-attached path that is a `.md` file inside a `specs` directory among the PR's changed files or that a `SPEC-NN` or `specs/NN-…` reference in the PR title, description or branch name resolves to.
+- **AC-10** (US-3) КОЛИ the Context tab loads, the system (shall) list as suggestions, each with an Attach button and its reason, every not-attached path in the attachable list (AC-3) that is a `.md` file inside a `specs` directory among the PR's changed files or that a `SPEC-NN` or `specs/NN-…` reference in the PR title, description or branch name resolves to.
 - **AC-11** (US-3) The system (shall) resolve a `SPEC-NN` reference to every path in the attachable list that is a `.md` file inside a `specs` directory whose file name starts with `NN-`.
 - **AC-12** (US-3) The system (shall) add a suggested document to the attached list only when the user activates its Attach button.
 - **AC-13** (US-3) The system (shall) recompute suggestions each time the Context tab loads, keeping no record of an ignored suggestion.
@@ -180,7 +180,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 
 ### Brief
 
-- **AC-29** (US-7) КОЛИ a brief generation runs for a PR whose attached list is not empty, the system (shall) use the resolved PR-context documents as the brief's spec documents in place of the enabled agents' and skills' documents.
+- **AC-29** (US-7) КОЛИ a brief generation runs for a PR whose attached list is not empty, the system (shall) use the resolved PR-context documents as the brief's spec documents, under a `## PR context` heading as `pr-context:<path>` blocks, in place of the enabled agents' and skills' documents.
 - **AC-30** (US-7) КОЛИ a brief generation runs for a PR whose attached list is empty, the system (shall) use the enabled agents' and skills' documents under `SPEC_DOCS_TOKEN_BUDGET` as SPEC-06 D5 defines.
 - **AC-31** (US-9) КОЛИ a brief is stored, the system (shall) store in its envelope the context fingerprint it was generated with, null when it used the agent-document fallback.
 
@@ -197,7 +197,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 - **AC-37** (US-9) The system (shall) compute the context fingerprint over the ordered attached paths and, for each, its blob id at the head SHA or its unresolved status, and use null for an empty attached list.
 - **AC-38** (US-9) КОЛИ the stored fingerprint of the brief differs from the current fingerprint, the system (shall) show the note "Generated with different PR context" next to the **Regenerate** button.
 - **AC-39** (US-9) КОЛИ the stored fingerprint of the intent differs from the current fingerprint, the system (shall) show the note "Classified with different PR context" on the Intent card next to its classify action.
-- **AC-40** (US-9) КОЛИ a run's stored fingerprint differs from the current fingerprint, the system (shall) show "Project context changed since this run" on that run's row in Agent runs.
+- **AC-40** (US-9) КОЛИ a run's stored fingerprint differs from the current fingerprint, the system (shall) show "Run used different PR context" on that run's row in Agent runs.
 - **AC-41** (US-9) КОЛИ the PR's attached list changes, the system (shall) start no brief generation, intent classification or review run.
 
 ### Preview contract
@@ -215,7 +215,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 - **EC-7** ЯКЩО an attached document is not valid UTF-8 or contains a NUL byte, ТОДІ the system (shall) record it with `status: 'unreadable'`.
 - **EC-8** ЯКЩО an attached path no longer exists at the current head SHA (force-push, rename, delete), ТОДІ the system (shall) show it on the Context tab as a "missing" row with a Remove action and keep it in the stored list until the user removes it.
 - **EC-9** ЯКЩО the attached list is not empty but no document resolves as `attached` or `truncated`, ТОДІ the system (shall) generate the brief with no spec section and no agent-document fallback, and record `specs_missing` in `missing_inputs` with a reason naming each path and its status.
-- **EC-10** ЯКЩО a brief's PR-context document was truncated or skipped, ТОДІ the system (shall) record `specs_missing` in `missing_inputs` with a reason naming each such path and its status.
+- **EC-10** ЯКЩО a brief's PR-context document was truncated or skipped, including one dropped by the brief's whole-prompt fitter, ТОДІ the system (shall) record `specs_missing` in `missing_inputs` with a reason naming each such path and its status.
 - **EC-11** ЯКЩО a run resolves zero PR-context documents, ТОДІ the system (shall) omit the `## PR context` section so the prompt is byte-identical to the prompt without this feature.
 - **EC-12** ЯКЩО a PR has an empty attached list, ТОДІ the system (shall) send the intent classifier a prompt byte-identical to the pre-feature prompt.
 - **EC-13** ЯКЩО the attached list changes while a run, a brief generation or an intent classification is in flight, ТОДІ the system (shall) let that job use the list it read at its start and store that list's fingerprint.
@@ -258,7 +258,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 | Document text | `GitClient` read by blob id (`git cat-file blob <oid>`) from the local clone, after the entry is resolved at the head SHA | no — author-controlled at head | agreed direction 4; researcher R2 |
 | Preview path | `path` query of `GET /pulls/:id/context/preview` | no — client-controlled | coordinator review item 2 |
 | Head SHA | `pull_requests.head_sha` (updated by PR sync, `pulls/routes.ts:89`) | yes (GitHub API) but validated as 40-hex | SPEC-06 Inputs table |
-| Tree entry mode, type, size, blob id | `git ls-tree -l --literal-pathspecs <sha> -- <path>` | yes (git) | researcher R2 |
+| Tree entry mode, type, size, blob id | `git --literal-pathspecs ls-tree -l -z <sha> -- <path>` | yes (git) | researcher R2 |
 | Head commit availability | fetch by SHA, else `+pull/<n>/head:pr-<n>` | yes | researcher R2 (`fetchPullHead` refspec lacks `+`) |
 | Origin badge (added / modified / default branch) | `pr_files` paths of the PR | yes (GitHub API); paths untrusted text | F8 |
 | Attachable list | SPEC-04 listing (default-branch clone) ∪ PR changed `.md` files passing UI-1 | no — repo content | SPEC-04 AC-1; F8 |
@@ -277,7 +277,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 ## Untrusted inputs
 
 - **UI-1** Every client-supplied path (each entry of a `PUT /pulls/:id/context` body and the `path` query of `GET /pulls/:id/context/preview`) → stored list and git reads: the system (shall) accept only a relative path whose first character is not `:`, without empty, `.` or `..` segments, without backslash, NUL or control characters, ending in `.md`, at most 512 characters, matching the SPEC-04 globs and outside the excluded directories, and reject any other with 422 (OWASP A01 path traversal).
-- **UI-2** Stored or previewed path → git commands: the system (shall) resolve the tree entry with `git ls-tree -l --literal-pathspecs <sha> -- <path>` (the only call that carries the path, passed after `--` in an argument array with no shell, refused when its POSIX-normalised form differs from the input), then read the content only by blob id with `git cat-file blob <oid>`, never through the `<sha>:<path>` form (OWASP A03 injection).
+- **UI-2** Stored or previewed path → git commands: the system (shall) resolve the tree entry with `git --literal-pathspecs ls-tree -l -z <sha> -- <path>` (the only call that carries the path, its NUL-terminated output parsed without C-quote unescaping, passed after `--` in an argument array with no shell, refused when its POSIX-normalised form differs from the input), then read the content only by blob id with `git cat-file blob <oid>`, never through the `<sha>:<path>` form (OWASP A03 injection).
 - **UI-3** Head SHA and default-branch commit → every git command of this spec, the preview included: the system (shall) pass a commit to git only when it matches `^[0-9a-f]{40}$` (OWASP A03 argument injection).
 - **UI-4** Tree entry at the head SHA → file read: the system (shall) read only regular-file blobs within the 64 KB cap and refuse symlinks and submodules without resolving their targets (OWASP A01).
 - **UI-5** PR-context document text → agent-run, brief and intent prompts: the system (shall) wrap it in all three consumers only with `reviewer-core`'s `wrapUntrusted` in its hardened form (`reviewer-core/src/prompt.ts:37-46`: neutralises case- and whitespace-variant closing tags and forged opening tags, escapes the label), with the `pr-context:<path>` label and the injection-guard sentence of AC-23, replacing the intent classifier's private copy (`server/src/modules/reviews/intent-classifier.ts:75-78`, which escapes only the exact `</untrusted>` and leaves the label raw) (OWASP LLM01).
