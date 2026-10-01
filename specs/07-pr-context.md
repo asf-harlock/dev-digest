@@ -1,6 +1,6 @@
 # Spec: PR Context
 Spec ID: SPEC-07
-Status: draft
+Status: approved
 Supersedes: [SPEC-06](06-pr-brief.md) (D5, AC-7, EC-13, EC-26 — partial), [SPEC-04](04-project-context.md) (two Non-goals — partial), [SPEC-03](03-intent-layer.md) (D1 — partial)
 
 ## Проблема й користувач
