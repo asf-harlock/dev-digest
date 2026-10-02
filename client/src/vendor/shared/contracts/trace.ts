@@ -79,7 +79,7 @@ export const ProjectContextEntry = z.object({
   origin: z.string(),
   sha: z.string(),
   tokens: z.number().int(),
-  status: z.enum(['attached', 'missing', 'too_large', 'unreadable', 'over_budget']),
+  status: z.enum(['attached', 'missing', 'too_large', 'unreadable', 'over_budget', 'truncated']),
   /** Exact text sent to the model (empty when not attached). */
   text: z.string(),
 });
@@ -103,6 +103,8 @@ export const RunTrace = z.object({
   specs_read: z.array(z.string()),
   /** `nullish` on purpose: traces written before SPEC-04 have no such key. */
   project_context: z.array(ProjectContextEntry).nullish(),
+  /** SPEC-07: fingerprint of the PR context sent; `nullish` for older traces / no PR context. */
+  context_fingerprint: z.string().nullish(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;
@@ -132,5 +134,7 @@ export const RunSummary = z.object({
   // findings that trip the agent's gate. Null on failed/cancelled runs.
   score: z.number().int().nullable(),
   blockers: z.number().int().nullable(),
+  /** SPEC-07: fingerprint of the PR context the run used (from its trace); null when none. */
+  context_fingerprint: z.string().nullish(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

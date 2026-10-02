@@ -182,7 +182,30 @@ export interface GitClient {
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;
+  /**
+   * SPEC-07: read one blob at a commit (`ls-tree` + `cat-file`, argv arrays,
+   * `--literal-pathspecs`). Never throws for an expected miss; git stderr and
+   * remote URLs never appear in the result.
+   */
+  readFileAtCommit(repo: RepoRef, sha: string, path: string): Promise<ReadFileAtCommitResult>;
+  /**
+   * SPEC-07: make sure `sha` is present in the local clone. Tries a fetch by
+   * SHA, then the forced `+pull/<n>/head:pr-<n>` refspec (30 s timeout;
+   * concurrent callers share one fetch). Resolves `ok: false` on failure.
+   */
+  ensureCommit(repo: RepoRef, sha: string, prNumber: number): Promise<EnsureCommitResult>;
 }
+
+/** Result of `GitClient.readFileAtCommit` (SPEC-07). */
+export type ReadFileAtCommitResult =
+  | { ok: true; reason: 'ok'; text: string; blobId: string }
+  | {
+      ok: false;
+      reason: 'not_found' | 'symlink' | 'submodule' | 'not_blob' | 'too_large' | 'not_utf8' | 'fetch_failed';
+    };
+
+/** Result of `GitClient.ensureCommit` (SPEC-07). */
+export type EnsureCommitResult = { ok: true } | { ok: false; reason: 'invalid_sha' | 'fetch_failed' | 'timeout' };
 
 // ---------- CodeIndex (ripgrep + tree-sitter) ----------
 export interface CodeMatch {

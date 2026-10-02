@@ -200,6 +200,8 @@ export const BriefEnvelope = z.object({
   cost_usd: z.number().nullish(),
   last_error: z.string().nullish(),
   last_error_at: z.string().nullish(),
+  /** SPEC-07: fingerprint of the PR context used; null when none attached. */
+  context_fingerprint: z.string().nullish(),
 });
 export type BriefEnvelope = z.infer<typeof BriefEnvelope>;
 
