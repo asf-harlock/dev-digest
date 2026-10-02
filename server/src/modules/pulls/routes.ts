@@ -2,12 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
-import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
-import { PrCommentInput } from '@devdigest/shared';
+import type { PrMeta, PrDetail, PrFileStatus, GitHubClient, PrReviewComment } from '@devdigest/shared';
+import { PrCommentInput, PrContextSaveBody } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
+import { PrContextService } from './context-service.js';
 import { deriveReviewStatus, sumRunCosts, toFindingsCounts } from './status.js';
 
 /**
@@ -38,6 +39,9 @@ import { deriveReviewStatus, sumRunCosts, toFindingsCounts } from './status.js';
  * turns into a 422.
  */
 const PullLookupQuery = z.object({ number: z.coerce.number().int().positive() });
+
+/** `path` is shape-checked by the service (UI-1) so a bad path answers 422. */
+const PrContextPreviewQuery = z.object({ path: z.string().min(1) });
 
 export default async function pullsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
@@ -302,6 +306,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           // by `getIntent`, just not previously surfaced on this DTO.
           classified_at: intentRow.classifiedAt?.toISOString() ?? null,
           classified_for_sha: intentRow.classifiedForSha ?? null,
+          context_fingerprint: intentRow.contextFingerprint ?? null,
         }
       : null;
 
@@ -318,6 +323,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           detail.files.map((f) => ({
             prId: pr.id,
             path: f.path,
+            status: f.status ?? 'modified',
             additions: f.additions,
             deletions: f.deletions,
             patch: f.patch ?? null,
@@ -370,6 +376,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         body: pr.body ?? null,
         files: files.map((f) => ({
           path: f.path,
+          status: f.status as PrFileStatus,
           additions: f.additions,
           deletions: f.deletions,
           patch: f.patch ?? null,
@@ -453,6 +460,37 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         const msg = err instanceof Error ? err.message : 'Failed to post the comment to GitHub.';
         throw new AppError('github_comment_failed', msg, 400, { cause: String(err) });
       }
+    },
+  );
+
+  // ---- PR Context (SPEC-07) ------------------------------------------------
+  //   GET  /pulls/:id/context              → PrContextResponse
+  //   PUT  /pulls/:id/context              → full ordered list, last save wins
+  //   GET  /pulls/:id/context/preview?path → PrContextPreview (+ kind/origin/tokens)
+  // 404 for a PR outside the workspace; 422 `validation_error` for a bad body.
+  // Saving writes only `pull_requests.context_paths` — no LLM call (AC-41).
+  const prContext = new PrContextService(container);
+
+  app.get('/pulls/:id/context', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return prContext.get(workspaceId, req.params.id);
+  });
+
+  app.put(
+    '/pulls/:id/context',
+    { schema: { params: IdParams, body: PrContextSaveBody } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return prContext.save(workspaceId, req.params.id, req.body.paths);
+    },
+  );
+
+  app.get(
+    '/pulls/:id/context/preview',
+    { schema: { params: IdParams, querystring: PrContextPreviewQuery } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return prContext.preview(workspaceId, req.params.id, req.query.path);
     },
   );
 }

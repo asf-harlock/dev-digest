@@ -191,3 +191,44 @@ describe("PrBrief", () => {
     expect(screen.getByRole("link", { name: "Skills" })).toHaveAttribute("href", "/skills");
   });
 });
+
+describe("PrBrief — PR-context stale note (SPEC-07 AC-38, EC-21)", () => {
+  const NOTE = "Generated with different PR context";
+
+  /** Routes the brief and the PR-context endpoints separately. */
+  function stub(stored: string | null | undefined, current: string | null | undefined) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: RequestInfo | URL) => {
+        const body = String(url).endsWith("/context")
+          ? current === undefined
+            ? null
+            : { entries: [], suggestions: [], attachable: [], budget: { used: 0, limit: 10000 }, fingerprint: current, cloned: true, map_reduce: false }
+          : response({ meta: { generated_at: "2026-09-01T00:00:00Z", generated_for_sha: "abcdef1234567", last_error_at: null, context_fingerprint: stored } });
+        return { ok: body !== null, status: body ? 200 : 500, statusText: "x", json: async () => body } as Response;
+      }),
+    );
+    renderBrief();
+  }
+
+  it("AC-38: a brief generated with a different fingerprint is flagged next to Regenerate", async () => {
+    stub("old", "new");
+    expect(await screen.findByText(NOTE)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate brief" })).toBeInTheDocument();
+  });
+
+  it("AC-38: no note when the fingerprints match, when the stored one is null (fallback brief / pre-feature), or when the current one is unknown", async () => {
+    for (const [stored, current] of [["same", "same"], [null, "new"], [undefined, "new"], ["old", undefined]] as const) {
+      stub(stored, current);
+      expect(await screen.findByText("Adds rate limiting to the users API.")).toBeInTheDocument();
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1));
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("AC-38: a brief stored with a fingerprint is stale after the PR context was cleared (current null)", async () => {
+    stub("old", null);
+    expect(await screen.findByText(NOTE)).toBeInTheDocument();
+  });
+});

@@ -70,6 +70,8 @@ export interface BriefPromptInput {
   /** Rebuilt `@@` headers per file path (see `_shared/hunk-headers.ts`). */
   hunkHeaders: ReadonlyMap<string, readonly string[]>;
   specs: readonly SpecDoc[];
+  /** SPEC-07: attached PR-context documents, rendered under `## PR context`. */
+  prContext?: readonly SpecDoc[];
   /** Token budget left for the user message (the cap minus the system prompt). */
   budget: number;
   count: (text: string) => number;
@@ -80,6 +82,8 @@ export interface BriefPrompt {
   tokens: number;
   /** True when hunk headers, caller files or spec documents were dropped to fit. */
   trimmed: boolean;
+  /** Paths of PR-context documents the whole-prompt fitter dropped (SPEC-07). */
+  droppedPrContext: string[];
 }
 
 /** Redact secret-shaped text, cap it, THEN wrap it (F6). */
@@ -105,6 +109,7 @@ interface RenderOptions {
   withHeaders: boolean;
   callerCount: number;
   specCount: number;
+  prCount: number;
 }
 
 function render(input: BriefPromptInput, opt: RenderOptions): string {
@@ -164,6 +169,12 @@ function render(input: BriefPromptInput, opt: RenderOptions): string {
       `## Project context\n${specs.map((s) => wrapText(`spec:${s.path}`, s.text, Number.MAX_SAFE_INTEGER)).join('\n\n')}`,
     );
   }
+  const prDocs = (input.prContext ?? []).slice(0, opt.prCount);
+  if (prDocs.length > 0) {
+    sections.push(
+      `## PR context\n${prDocs.map((d) => wrapText(`pr-context:${d.path}`, d.text, Number.MAX_SAFE_INTEGER)).join('\n\n')}`,
+    );
+  }
   return sections.join('\n\n');
 }
 
@@ -174,11 +185,13 @@ function render(input: BriefPromptInput, opt: RenderOptions): string {
  */
 export function buildBriefPrompt(input: BriefPromptInput): BriefPrompt {
   const specs = input.specs.filter((s) => s.text.trim().length > 0);
-  const base: BriefPromptInput = { ...input, specs };
+  const prDocs = (input.prContext ?? []).filter((s) => s.text.trim().length > 0);
+  const base: BriefPromptInput = { ...input, specs, prContext: prDocs };
   const opt: RenderOptions = {
     withHeaders: true,
     callerCount: MAX_BLAST_CALLER_FILES,
     specCount: specs.length,
+    prCount: prDocs.length,
   };
   let text = render(base, opt);
   let tokens = input.count(text);
@@ -200,7 +213,11 @@ export function buildBriefPrompt(input: BriefPromptInput): BriefPrompt {
   while (tokens > input.budget && opt.specCount > 0) {
     step(() => (opt.specCount -= 1));
   }
-  return { text, tokens, trimmed };
+  // PR context is the author's own attached list: dropped last, last one first.
+  while (tokens > input.budget && opt.prCount > 0) {
+    step(() => (opt.prCount -= 1));
+  }
+  return { text, tokens, trimmed, droppedPrContext: prDocs.slice(opt.prCount).map((d) => d.path) };
 }
 
 // ---- Grounding (AC-17..AC-19, EC-18, UI-5, UI-6) ---------------------------
@@ -279,6 +296,12 @@ export interface MissingInputFacts {
   specsOverBudget?: readonly string[];
   totalFiles: number;
   promptTrimmed: boolean;
+  /**
+   * SPEC-07: set when a PR-context list is attached. `issues` names each
+   * truncated / skipped / dropped document with its status; the legacy
+   * `specCount` rule is not used in that mode (AC-29..31).
+   */
+  prContext?: { issues: readonly string[] };
 }
 
 export function computeMissingInputs(f: MissingInputFacts): BriefMissingInput[] {
@@ -291,7 +314,11 @@ export function computeMissingInputs(f: MissingInputFacts): BriefMissingInput[] 
   else if (f.blast.degraded) {
     out.push({ kind: 'blast_degraded', ...(f.blast.reason ? { reason: f.blast.reason } : {}) });
   }
-  if (f.specCount === 0) {
+  if (f.prContext) {
+    if (f.prContext.issues.length > 0) {
+      out.push({ kind: 'specs_missing', reason: f.prContext.issues.join(', ') });
+    }
+  } else if (f.specCount === 0) {
     // Docs were attached but none fit: name them, so the UI does not ask the
     // user to attach what they already attached.
     const skipped = f.specsOverBudget ?? [];

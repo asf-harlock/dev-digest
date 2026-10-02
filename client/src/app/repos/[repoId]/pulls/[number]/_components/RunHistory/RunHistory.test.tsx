@@ -167,3 +167,36 @@ describe("RunHistory — severity chips", () => {
     expect(screen.getByText("86% conf")).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — PR-context stale note (SPEC-07 AC-40, EC-21)", () => {
+  const render2 = (r: RunSummary, current: string | null | undefined) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <RunHistory runs={[r]} onOpenTrace={() => {}} currentContextFingerprint={current} />
+      </NextIntlClientProvider>,
+    );
+
+  it("AC-40: shows 'Run used different PR context' only when the stored fingerprint differs from the current one", () => {
+    render2(run({ context_fingerprint: "old" }), "new");
+    expect(screen.getByText("Run used different PR context")).toBeInTheDocument();
+    cleanup();
+    render2(run({ context_fingerprint: "same" }), "same");
+    expect(screen.queryByText("Run used different PR context")).not.toBeInTheDocument();
+  });
+
+  it("EC-21: a run with a null/absent fingerprint is never stale, and neither is an unloaded current fingerprint", () => {
+    render2(run({ context_fingerprint: null }), "new");
+    expect(screen.queryByText("Run used different PR context")).not.toBeInTheDocument();
+    cleanup();
+    render2(run({}), "new");
+    expect(screen.queryByText("Run used different PR context")).not.toBeInTheDocument();
+    cleanup();
+    render2(run({ context_fingerprint: "old" }), undefined);
+    expect(screen.queryByText("Run used different PR context")).not.toBeInTheDocument();
+  });
+
+  it("AC-40: a run stored with a fingerprint is stale once the PR context was cleared (current null)", () => {
+    render2(run({ context_fingerprint: "old" }), null);
+    expect(screen.getByText("Run used different PR context")).toBeInTheDocument();
+  });
+});

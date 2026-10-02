@@ -25,6 +25,10 @@ vi.mock("../../../../../../../lib/hooks/trace", () => ({
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
 }));
+vi.mock("../../../../../../../lib/hooks/pr-context", () => ({
+  usePrContext: () => ({ data: undefined }),
+  isContextStale: () => false,
+}));
 
 import RunTraceDrawer from "./RunTraceDrawer";
 

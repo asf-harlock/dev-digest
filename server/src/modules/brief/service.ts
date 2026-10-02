@@ -16,6 +16,9 @@ import { toBlastRadius } from '../_shared/blast-map.js';
 import { hunkHeadersByFile } from '../_shared/hunk-headers.js';
 import { resolveLinkedIssue, type LinkedIssueResult } from '../_shared/linked-issue.js';
 import { resolveProjectContext } from '../_shared/project-context.js';
+import { resolvePrContext, usableClonePath } from '../_shared/pr-context.js';
+import { computeContextFingerprint } from '../_shared/pr-context-truncate.js';
+import { sanitizePathForLog } from '../_shared/context-paths.js';
 import { classifyFile } from '../_shared/smart-diff-roles.js';
 import {
   BRIEF_ATTEMPT_TIMEOUT_MS,
@@ -198,6 +201,7 @@ export class BriefService {
         cost_usd: result.costUsd,
         last_error: null,
         last_error_at: null,
+        context_fingerprint: inputs.contextFingerprint,
       });
       outcome = OUTCOME_OK;
     } catch (err) {
@@ -306,7 +310,25 @@ export class BriefService {
     }
 
     const issue: LinkedIssueResult = await resolveLinkedIssue({ container: c, repoRef, body: pull.body });
-    const { specs, overBudget: specsOverBudget } = await this.resolveSpecs(workspaceId, repoRow);
+    // SPEC-07: the list was read once with the pull at the start of the run
+    // (EC-13). Non-empty → PR context replaces the SPEC-04 fallback.
+    const attachedPaths = pull.contextPaths ?? [];
+    const prResolved =
+      attachedPaths.length > 0
+        ? await resolvePrContext({
+            git: c.git,
+            tokenizer: c.tokenizer,
+            repo: repoRef,
+            clonePath: await usableClonePath(repoRow?.clonePath ?? null),
+            pr: { number: pull.number, headSha: pull.headSha, contextPaths: attachedPaths },
+          }).catch(() => null)
+        : null;
+    const fallback =
+      attachedPaths.length > 0
+        ? { specs: [] as SpecDoc[], overBudget: [] as string[] }
+        : await this.resolveSpecs(workspaceId, repoRow);
+    const { specs, overBudget: specsOverBudget } = fallback;
+    const prDocs: SpecDoc[] = prResolved ? prResolved.sent : [];
 
     const system = await loadPromptTemplate(BRIEF_PROMPT_FILE);
     const count = (text: string) => c.tokenizer.count(text);
@@ -319,6 +341,7 @@ export class BriefService {
       files: files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions, role: f.role })),
       hunkHeaders,
       specs,
+      prContext: prDocs,
       budget: Math.max(0, PROMPT_TOKEN_CAP - count(system)),
       count,
     });
@@ -327,8 +350,28 @@ export class BriefService {
       { role: 'user', content: prompt.text },
     ];
 
+    const prIssues: string[] = [];
+    if (attachedPaths.length > 0) {
+      if (prResolved) {
+        for (const e of prResolved.entries) {
+          if (e.status !== 'attached') prIssues.push(`${sanitizePathForLog(e.path)} (${e.status})`);
+        }
+      } else {
+        for (const p of attachedPaths) prIssues.push(`${sanitizePathForLog(p)} (unreadable)`);
+      }
+      for (const p of prompt.droppedPrContext) prIssues.push(`${sanitizePathForLog(p)} (dropped)`);
+    }
+
     return {
       messages,
+      // AC-31: a resolver failure still yields a fingerprint (every path unresolved).
+      contextFingerprint:
+        attachedPaths.length === 0
+          ? null
+          : (prResolved?.fingerprint ??
+            computeContextFingerprint(
+              attachedPaths.map((path) => ({ path, blobId: null, status: 'unreadable' })),
+            )),
       intent,
       blast,
       allowedFiles: new Set<string>([...prPaths, ...blastFiles(blast)]),
@@ -342,6 +385,7 @@ export class BriefService {
         specCount: specs.length,
         specsOverBudget,
         totalFiles: allFiles.length,
+        ...(attachedPaths.length > 0 ? { prContext: { issues: prIssues } } : {}),
       },
     };
   }

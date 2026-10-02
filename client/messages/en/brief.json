@@ -64,5 +64,6 @@
     "agents": "Agents",
     "skills": "Skills",
     "projectContext": "Project Context"
-  }
+  },
+  "contextStale": "Generated with different PR context"
 }

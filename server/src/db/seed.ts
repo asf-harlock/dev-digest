@@ -264,6 +264,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       {
         prId: pr!.id,
         path: 'docs/rate-limiting.md',
+        status: 'added',
         additions: 9,
         deletions: 0,
         patch:

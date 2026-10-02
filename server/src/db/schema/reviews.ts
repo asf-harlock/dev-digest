@@ -74,6 +74,8 @@ export const prIntent = pgTable('pr_intent', {
   // null until the PR's first POST /pulls/:id/intent.
   classifiedAt: timestamp('classified_at', { withTimezone: true }),
   classifiedForSha: text('classified_for_sha'),
+  // SPEC-07: fingerprint of the PR context it was classified with (null = none).
+  contextFingerprint: text('context_fingerprint'),
 });
 
 export const prBrief = pgTable('pr_brief', {

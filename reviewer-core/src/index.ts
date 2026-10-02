@@ -15,6 +15,8 @@
 export {
   assemblePrompt,
   wrapUntrusted,
+  renderPrContextBlocks,
+  PR_CONTEXT_GUARD,
   type PromptParts,
   type AssembledPrompt,
 } from './prompt.js';

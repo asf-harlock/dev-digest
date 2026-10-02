@@ -11,6 +11,7 @@ import { Badge, Button, Icon, Skeleton } from "@devdigest/ui";
 import type { PrIntentRecord } from "@devdigest/shared";
 import { formatFileRef } from "../../../../../../../lib/file-ref";
 import { useBriefGeneration } from "../../../../../../../lib/hooks/brief";
+import { isContextStale, usePrContext } from "../../../../../../../lib/hooks/pr-context";
 import { IntentCard } from "../IntentCard";
 import { BlastRadiusCard } from "../BlastRadiusCard";
 import { RiskAreas } from "../RiskAreas";
@@ -40,6 +41,8 @@ export function PrBrief({
   const lastError = meta?.last_error ?? null;
   const missing = data?.missing_inputs ?? [];
   const sha = shortSha(meta?.generated_for_sha);
+  const { data: prContext } = usePrContext(prId);
+  const contextStale = isContextStale(meta?.context_fingerprint, prContext?.fingerprint);
 
   const errorText =
     outcome === "config_error"
@@ -103,6 +106,13 @@ export function PrBrief({
           <div style={s.note("var(--warn)")}>
             <Icon.Clock size={13} style={s.noteIcon} />
             <span>{sha ? t("staleNote", { sha }) : t("staleNoSha")}</span>
+          </div>
+        )}
+
+        {contextStale && brief && !isGenerating && (
+          <div style={s.note("var(--warn)")}>
+            <Icon.Clock size={13} style={s.noteIcon} />
+            <span>{t("contextStale")}</span>
           </div>
         )}
 

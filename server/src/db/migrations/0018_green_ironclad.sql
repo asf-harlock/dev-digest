@@ -1,0 +1,1 @@
+ALTER TABLE "pr_files" ADD COLUMN "status" text DEFAULT 'modified' NOT NULL;

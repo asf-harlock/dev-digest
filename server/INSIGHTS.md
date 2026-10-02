@@ -432,6 +432,15 @@ needed none of those and cannot drift.
 
 ## Open Questions
 
+- **2026-10-02** — `detectInjectionPatterns` flags documents that *discuss*
+  prompt injection. In the browser, `specs/04-project-context.md` attached as PR
+  context showed the "possible injection" badge (EC-25), because the spec quotes
+  the patterns it defends against. It's harmless, since the badge is advisory
+  and the text is still wrapped as untrusted. But every security spec in
+  `specs/` will warn, so users may learn to ignore the badge. Unresolved:
+  whether to exempt fenced code or quoted examples.
+  `modules/_shared/injection-detection.ts`
+
 - **2026-09-30** — `test/onboarding-tour.it.test.ts` passes 27/27 alone but
   1–3 different cases fail per run inside the full parallel `pnpm test`
   ("generation did not settle"). The bug reviewer found no service defect: its

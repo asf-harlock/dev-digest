@@ -35,5 +35,6 @@
     "started": "Intent classification started",
     "done": "Intent classified",
     "timeout": "Classification is taking longer than expected — the result will appear here once it finishes."
-  }
+  },
+  "contextStale": "Classified with different PR context"
 }

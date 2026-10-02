@@ -7,9 +7,12 @@ import * as t from '../../db/schema.js';
 export interface BriefPull {
   id: string;
   repoId: string;
+  number: number;
   title: string;
   body: string | null;
   headSha: string;
+  /** SPEC-07: the attached PR-context paths, in saved order. */
+  contextPaths: string[];
 }
 
 export interface BriefFileRow {
@@ -31,9 +34,11 @@ export class BriefRepository {
       .select({
         id: t.pullRequests.id,
         repoId: t.pullRequests.repoId,
+        number: t.pullRequests.number,
         title: t.pullRequests.title,
         body: t.pullRequests.body,
         headSha: t.pullRequests.headSha,
+        contextPaths: t.pullRequests.contextPaths,
       })
       .from(t.pullRequests)
       .where(and(eq(t.pullRequests.workspaceId, workspaceId), eq(t.pullRequests.id, prId)));

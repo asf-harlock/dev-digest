@@ -14,6 +14,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, EmptyState, Icon } from "@devdigest/ui";
 import type { PrIntentRecord } from "@devdigest/shared";
 import { useIntentClassification } from "../../../../../../../lib/hooks/intent";
+import { isContextStale, usePrContext } from "../../../../../../../lib/hooks/pr-context";
 import { notify } from "../../../../../../../lib/toast";
 import { CONFIDENCE_META, SCOPE_META } from "./constants";
 import { isIntentStale, unresolvedSources } from "./helpers";
@@ -29,6 +30,7 @@ export function IntentCard({
   headSha?: string | null;
 }) {
   const t = useTranslations("intent");
+  const { data: prContext } = usePrContext(prId);
   // Tracks the background job until the new classification lands (the POST
   // alone returns in milliseconds), and reports progress as toasts.
   const { start, isClassifying } = useIntentClassification(prId, intent?.classified_at, {
@@ -63,6 +65,7 @@ export function IntentCard({
   const meta = CONFIDENCE_META[intent.confidence];
   const notes = unresolvedSources(intent.sources);
   const stale = isIntentStale(intent.classified_for_sha, headSha);
+  const contextStale = isContextStale(intent.context_fingerprint, prContext?.fingerprint);
 
   return (
     <section style={s.wrap}>
@@ -77,6 +80,11 @@ export function IntentCard({
             {stale && (
               <Badge color="var(--warn)" bg="var(--warn-bg)" icon="Clock">
                 {t("stale")}
+              </Badge>
+            )}
+            {contextStale && (
+              <Badge color="var(--warn)" bg="var(--warn-bg)" icon="Clock">
+                {t("contextStale")}
               </Badge>
             )}
             <Button

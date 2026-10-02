@@ -94,7 +94,9 @@ export default function RunTraceDrawer({
               {stillRunning ? t("drawer.tracePending") : t("drawer.loadingTrace")}
             </div>
           ) : trace ? (
-            <TraceBody trace={trace} findings={findings} />
+            <>
+              <TraceBody trace={trace} findings={findings} />
+            </>
           ) : (
             <div style={s.emptyNote}>{t("drawer.noTrace")}</div>
           )

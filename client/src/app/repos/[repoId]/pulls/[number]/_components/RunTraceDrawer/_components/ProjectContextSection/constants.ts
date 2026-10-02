@@ -7,4 +7,5 @@ export const STATUS_COLORS: Record<ProjectContextEntry["status"], { color: strin
   too_large: { color: "var(--warn)", bg: "var(--bg-hover)" },
   unreadable: { color: "var(--crit)", bg: "var(--crit-bg)" },
   over_budget: { color: "var(--warn)", bg: "var(--bg-hover)" },
+  truncated: { color: "var(--warn)", bg: "var(--bg-hover)" },
 };

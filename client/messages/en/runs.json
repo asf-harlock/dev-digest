@@ -70,8 +70,10 @@
         "missing": "missing",
         "too_large": "too large",
         "unreadable": "unreadable",
-        "over_budget": "over budget"
-      }
+        "over_budget": "over budget",
+        "truncated": "truncated"
+      },
+      "originPr": "PR"
     }
   },
   "drawer": {
