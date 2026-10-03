@@ -52,6 +52,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## What Doesn't Work
 
+- **2026-09-30** — Relaying a user's approval to a subagent does not let it edit
+  `*/src/vendor/**`. The implementer's Edit on both `contracts/knowledge.ts`
+  copies was denied by the permission system even with "the user authorised
+  this" in the orchestrator's message, because an agent's word is not user
+  approval. What worked: ask the user with `AskUserQuestion` in the main
+  session, then resume the implementer, quoting that answer. Budget for this
+  whenever a mid-run fix needs a contract field the plan didn't list (SPEC-05
+  needed 3: `complexity`, `last_error_at`, `TourReadingStep.hotness`).
+
 - **2026-09-24** — A realistic-looking fake secret in a fixture breaks the push,
   not the tests. `sk_live_51Hxxxx…` in a seed demo patch passed every gate and
   `/pr-self-review`. Then GitHub push protection rejected `git push`, because it
@@ -64,6 +73,12 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   line's position matters. `server/src/db/seed.ts` (`src/config.ts` patch)
 
 ## Codebase Patterns
+
+- **2026-09-29** — When a contract field gains `.default([])` in the server copy of
+  `@devdigest/shared`, give the CLIENT copy `.optional()` and read `x ?? []`:
+  `.default()` makes the inferred output type required, which broke two client
+  helpers and ~15 test fixtures that build `Agent`/`Skill` literals (SPEC-04
+  `context_paths`, `client/src/vendor/shared/contracts/knowledge.ts`).
 
 - **2026-09-29** — There are **five** packages, not four: `mcp/`
   (`@devdigest/mcp`, npm, wired to `GET /pulls/:id/blast`) arrived in L04 with
@@ -93,6 +108,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `server/src/vendor/shared/contracts/trace.ts`
 
 ## Tool & Library Notes
+
+- **2026-09-29** — Claude Code transcripts (`~/.claude/projects/<cwd with /
+  and . → ->/<session>.jsonl`, subagents in `<session>/subagents/agent-<id>.jsonl`
+  + `.meta.json`) write one line per content block of an assistant message.
+  All the lines share `message.id` and repeat the full `usage`, so summing
+  usage per line inflates tokens several-fold: dedupe by `message.id` first.
+  A failed Bash call is a `tool_result` with `is_error: true` and text starting
+  `Exit code N`, but a gate piped through `| tail` exits 0, so read the output.
+  `.claude/skills/workflow-retro/scripts/collect.mjs`
 
 - **2026-09-29** — On the local Node (v26), `node --test <directory>` does not
   discover tests: it treats the directory as a module and fails with
@@ -181,6 +205,12 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Session Notes
 
+
+- **2026-09-29** — SPEC-04 Project Context (approved): spec-creator (Opus,
+  2 phases) → researcher ×2 ∥ → answers → draft → lint → approved. Then
+  spec-creator lost its web/Figma tools (research only via `researcher`) and
+  the `workflow-retro` skill was added. Entries: root Tool Notes (transcript
+  usage dedupe), `server/` Codebase Patterns (clone is a reset mirror).
 
 - **2026-09-26** — Blast Radius (L04 homework): `GET /pulls/:id/blast`, the
   Overview block (tree + mermaid graph + degraded states) and a real

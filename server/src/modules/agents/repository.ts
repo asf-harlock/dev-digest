@@ -4,6 +4,7 @@ import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
 import { isConfigChange } from './helpers.js';
+import { samePathList } from '../_shared/context-paths.js';
 
 /**
  * A2 — agents data-access. Owns `agents`, `agent_versions`, and the
@@ -148,6 +149,29 @@ export class AgentsRepository {
   }
 
   /**
+   * Replace the agent's attached Project Context paths (SPEC-04). A changed list
+   * bumps the version and snapshots it into `agent_versions.config_json`; an
+   * identical list is a no-op (no bump, no snapshot). Last save wins.
+   */
+  async setContextPaths(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<AgentRow | undefined> {
+    const existing = await this.getById(workspaceId, id);
+    if (!existing) return undefined;
+    if (samePathList(existing.contextPaths, paths)) return existing;
+    const nextVersion = existing.version + 1;
+    const [row] = await this.db
+      .update(t.agents)
+      .set({ contextPaths: paths, version: nextVersion })
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
+      .returning();
+    if (row) await this.snapshotVersion(row, nextVersion);
+    return row;
+  }
+
+  /**
    * Bump an agent's config version and snapshot it, after `agent_skills` has
    * already been mutated (linkSkill / unlinkSkill / setSkills). Every link
    * change counts as a config change — there is no toggle-only exception on the
@@ -181,6 +205,7 @@ export class AgentsRepository {
           strategy: row.strategy,
           ci_fail_on: row.ciFailOn,
           repo_intel: row.repoIntel,
+          context_paths: row.contextPaths,
           skills,
         },
       })
@@ -238,9 +263,14 @@ export class AgentsRepository {
    */
   async enabledSkillsForPrompt(
     agentId: string,
-  ): Promise<{ id: string; name: string; body: string }[]> {
+  ): Promise<{ id: string; name: string; body: string; contextPaths: string[] }[]> {
     return this.db
-      .select({ id: t.skills.id, name: t.skills.name, body: t.skills.body })
+      .select({
+        id: t.skills.id,
+        name: t.skills.name,
+        body: t.skills.body,
+        contextPaths: t.skills.contextPaths,
+      })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(

@@ -29,7 +29,8 @@
       "Bash(pnpm --dir client arch)",
       "Bash(pnpm --dir client test)",
       "Bash(npm --prefix reviewer-core run typecheck)",
-      "Bash(npm --prefix e2e run typecheck)"
+      "Bash(npm --prefix e2e run typecheck)",
+      "Bash(./scripts/check.sh:*)"
     ]
   }
 }

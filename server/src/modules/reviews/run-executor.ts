@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { Provider, ProjectContextEntry, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
@@ -8,6 +8,11 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { applyScopeFilter, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import {
+  attachedContext,
+  formatContextNote,
+  resolveProjectContext,
+} from '../_shared/project-context.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -169,6 +174,10 @@ export class ReviewRunExecutor {
 
     runLog.info(`Starting review with agent "${agent.name}" (${agent.provider}/${agent.model})`);
 
+    // Project Context (SPEC-04). Declared OUTSIDE the try so a failure or cancel
+    // after it was resolved still persists what was sent (EC-18).
+    let projectContext: ProjectContextEntry[] = [];
+
     try {
       // Resolve the agent's LLM provider. (container.llm throws if the provider
       // key is missing — caught below and persisted as a failed run.)
@@ -210,6 +219,33 @@ export class ReviewRunExecutor {
         runLog.info(`skills: ${skills.length} attached (+~${tokens} tokens)`);
       }
 
+      // SPEC-04 — Project Context: the agent's own attached repo documents, then
+      // each enabled skill's, read from the default-branch clone. No LLM call
+      // (AC-26). Best-effort like the other enrichments: a resolver failure
+      // must not fail the run, so it degrades to "no project context" + a log.
+      try {
+        const resolved = await resolveProjectContext({
+          git: this.container.git,
+          tokenizer: this.container.tokenizer,
+          repo: { owner: repo.owner, name: repo.name },
+          clonePath: repo.clonePath,
+          agentPaths: agent.contextPaths,
+          skills: skills.map((s) => ({ name: s.name, body: s.body, contextPaths: s.contextPaths })),
+        });
+        projectContext = resolved.entries;
+        for (const note of resolved.notes) runLog.info(formatContextNote(note));
+      } catch (err) {
+        runLog.info(`project context: resolver failed — continuing without it: ${(err as Error).message}`);
+        projectContext = [];
+      }
+      const attachedDocs = attachedContext(projectContext);
+      if (projectContext.length > 0) {
+        const tokens = projectContext
+          .filter((e) => e.status === 'attached')
+          .reduce((n, e) => n + e.tokens, 0);
+        runLog.info(`project context: ${attachedDocs.length} doc(s) attached (+~${tokens} tokens)`);
+      }
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -246,6 +282,9 @@ export class ReviewRunExecutor {
         // D5 — linked, enabled skill bodies, `### name`-prefixed. Omitted when
         // empty so assemblePrompt's `## Skills / rules` section stays absent.
         ...(blocks.length ? { skills: blocks } : {}),
+        // SPEC-04 — attached project documents. Omitted when none, so
+        // assemblePrompt drops `## Project context` (byte-identical prompt).
+        ...(attachedDocs.length ? { projectContext: attachedDocs } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -254,6 +293,14 @@ export class ReviewRunExecutor {
         },
       });
       const { tokensIn, tokensOut, costUsd, grounding } = outcome;
+
+      // EC-16 — map-reduce sends the SAME project context on every per-file
+      // call; logged after the run because N is only known then.
+      if (attachedDocs.length > 0 && outcome.mode === 'map-reduce') {
+        runLog.info(
+          `project context: sent on each of ${outcome.chunks.length} per-file call(s) (map-reduce)`,
+        );
+      }
 
       const groundedFindings = outcome.review.findings;
 
@@ -341,7 +388,8 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        specs_read: attachedDocs.map((d) => d.path),
+        ...(projectContext.length > 0 ? { project_context: projectContext } : {}),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
@@ -371,7 +419,7 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, projectContext))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
@@ -476,6 +524,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     grounding: string,
     durationMs = 0,
+    projectContext: ProjectContextEntry[] = [],
   ): RunTrace {
     return {
       config: {
@@ -491,7 +540,8 @@ export class ReviewRunExecutor {
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],
-      specs_read: [],
+      specs_read: attachedContext(projectContext).map((d) => d.path),
+      ...(projectContext.length > 0 ? { project_context: projectContext } : {}),
       log: this.container.runBus.buffer(runId).map((e) => ({ t: e.t, kind: e.kind, msg: e.msg })),
     };
   }

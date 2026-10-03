@@ -12,6 +12,65 @@ import { join, isAbsolute, resolve } from 'node:path';
  * that reads process.env directly (see adapters/secrets/local.ts). Listing them
  * here would be dead config that never reaches AppConfig.
  */
+/**
+ * Project Context (SPEC-04) defaults. Globs use the small subset understood by
+ * `modules/_shared/context-paths.ts` (double-star-slash incl. zero depth, `{a,b}`, `*`);
+ * excludes are directory NAMES that block a path when any segment equals one.
+ */
+export const DEFAULT_CONTEXT_GLOBS = ['**/{specs,docs,insights}/**/*.md'];
+export const DEFAULT_CONTEXT_EXCLUDES = ['node_modules', '.git', 'dist', 'build', 'vendor'];
+
+/**
+ * Split a comma-separated list on commas at brace depth 0 only, so `{a,b}`
+ * groups survive. Items are trimmed; empties are dropped. Throws on unbalanced
+ * or nested braces (the glob matcher supports one level of `{a,b}` only).
+ */
+export function splitTopLevelCommas(input: string): string[] {
+  const items: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const c of input) {
+    if (c === '{') {
+      depth += 1;
+      if (depth > 1) throw new Error('nested "{" is not supported');
+    } else if (c === '}') {
+      depth -= 1;
+      if (depth < 0) throw new Error('unbalanced "}"');
+    }
+    if (c === ',' && depth === 0) {
+      items.push(current);
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  if (depth !== 0) throw new Error('unbalanced "{"');
+  items.push(current);
+  return items.map((x) => x.trim()).filter((x) => x.length > 0);
+}
+
+/**
+ * Comma-separated env list → trimmed non-empty items (commas inside `{…}` are
+ * kept); unset/blank → default. Malformed braces fail config load with a zod issue.
+ */
+const CsvList = (fallback: string[]) =>
+  z
+    .string()
+    .optional()
+    .transform((v, ctx) => {
+      let items: string[];
+      try {
+        items = splitTopLevelCommas(v ?? '');
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `invalid comma-separated list: ${e instanceof Error ? e.message : String(e)}`,
+        });
+        return z.NEVER;
+      }
+      return items.length > 0 ? items : fallback;
+    });
+
 const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
@@ -26,6 +85,9 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Project Context: which repo files can be attached to an agent or skill.
+  CONTEXT_GLOBS: CsvList(DEFAULT_CONTEXT_GLOBS),
+  CONTEXT_EXCLUDES: CsvList(DEFAULT_CONTEXT_EXCLUDES),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -59,6 +121,10 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /** Globs (repo-relative, `/`-separated) a Project Context document must match. */
+  contextGlobs: string[];
+  /** Directory names excluded from Project Context scans and attachments. */
+  contextExcludes: string[];
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -77,5 +143,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
+    contextGlobs: parsed.CONTEXT_GLOBS,
+    contextExcludes: parsed.CONTEXT_EXCLUDES,
   };
 }

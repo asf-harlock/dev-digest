@@ -107,3 +107,41 @@ export function useSkillAgents(id: string | null | undefined) {
     enabled: !!id,
   });
 }
+
+export interface SaveSkillContextInput {
+  id: string;
+  /** The FULL ordered list of attached repo-relative paths (last save wins). */
+  paths: string[];
+}
+
+/** Saves a skill's attached project-context paths (`PUT /skills/:id/context`;
+ *  the server does not bump the skill version). Optimistic with rollback, same
+ *  contract as `useSaveAgentContext`. Agents inherit these paths, so the
+ *  agent-skill caches are refreshed once the save settles. */
+export function useSaveSkillContext() {
+  const qc = useQueryClient();
+  const mutationKey = ["save-skill-context"];
+  return useMutation({
+    mutationKey,
+    mutationFn: ({ id, paths }: SaveSkillContextInput) => api.put<Skill>(`/skills/${id}/context`, { paths }),
+    onMutate: async ({ id, paths }) => {
+      await qc.cancelQueries({ queryKey: ["skill", id] });
+      const previous = qc.getQueryData<Skill>(["skill", id]);
+      if (previous) qc.setQueryData<Skill>(["skill", id], { ...previous, context_paths: paths });
+      return { previous, id };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["skill", ctx.id], ctx.previous);
+    },
+    onSuccess: (data) => {
+      if (qc.isMutating({ mutationKey }) <= 1) qc.setQueryData(["skill", data.id], data);
+    },
+    onSettled: (_data, _err, { id }) => {
+      if (qc.isMutating({ mutationKey }) <= 1) {
+        qc.invalidateQueries({ queryKey: ["skill", id] });
+        qc.invalidateQueries({ queryKey: ["skills"] });
+        qc.invalidateQueries({ queryKey: ["agent-skills"] });
+      }
+    },
+  });
+}

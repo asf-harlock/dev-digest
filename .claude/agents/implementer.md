@@ -39,12 +39,16 @@ its own tests."
 For each file you are about to touch, resolve its skills via
 `.claude/skills/pr-self-review/reference/routing.json` — match the path
 against `rules` (first match wins) to get a `bucket`, then read that bucket's
-`skills` from `buckets`, plus any `conditional_skills` matches. Load and apply
-those skills via the `Skill` tool before editing that file. This must be the
+`skills` from `buckets`, plus any `conditional_skills` matches. This must be the
 same table (and, for files already listed in the plan, the same result) the
 plan's "Skills the implementer will apply" section named — if your resolution
 disagrees with the plan for a file the plan already covered, stop and surface
 the mismatch instead of silently picking one.
+
+Load each resolved skill via the `Skill` tool **once per session**, before
+the first file that needs it — not again for every file in the same bucket.
+A loaded skill stays in your context; reloading it only repeats the same
+tens of kilobytes. Resolve per file, load per distinct skill.
 
 ## Step 2 — implement
 
@@ -66,13 +70,58 @@ the mismatch instead of silently picking one.
 
 ## Step 3 — run the gates the plan specified
 
-For each touched package, run the commands from the plan's "Test plan"
-section (typically `pnpm test`, `pnpm typecheck`, `pnpm lint`,
-`pnpm arch` — scoped to the module, e.g. `cd server && pnpm typecheck`).
-Only run `*.it.test.ts` (Docker-backed) suites if the change actually touches
-DB-backed behavior. Do not skip a gate the plan listed; if one fails, fix the
-implementation (not the test) unless the plan explicitly says the test itself
-is being changed.
+Run every gate through `./scripts/check.sh <server|client|core> <gate> [files…]`
+— never the raw `pnpm`/`npm`/`vitest` command. It prints one `PASS` line, or
+a capped failure excerpt plus the path to the full log
+(`.claude/implementer/logs/<pkg>-<gate>.log`). Read that log only when the
+excerpt is not enough to fix the failure, and then with a targeted `grep` or
+line range — never whole. Gates: `typecheck`, `lint`, `arch` (server/client
+only), `test` (unit suite; server excludes `*.it.test.ts`), `related` (only
+the tests that import the given files).
+
+Two loops:
+
+1. **Inner loop — after each plan step.** For each package the step touched:
+   `check.sh <pkg> typecheck` and `check.sh <pkg> related <files the step
+   changed>`. Add `check.sh <pkg> lint <files>` when the step added or
+   restructured code rather than filling in a body. Do not run the full suites
+   here.
+2. **Outer loop — once, after the last step.** Every gate from the plan's
+   "Test plan" section for every touched package, via `check.sh` (e.g.
+   `check.sh server test`, `check.sh client arch`). Only run `*.it.test.ts`
+   (Docker-backed) suites if the change actually touches DB-backed behavior —
+   `check.sh` never runs them; call `cd server && pnpm exec vitest run
+   <file>.it.test.ts` for the specific file.
+
+Do not skip a gate the plan listed; if one fails, fix the implementation (not
+the test) unless the plan explicitly says the test itself is being changed.
+
+**Retry limit.** If the same gate still fails after **3** fix attempts, stop
+fixing it: record it under "Deviations from plan" with the failure excerpt
+and your best diagnosis, and move on to report. Do not loop.
+
+**Multi-agent runs.** When the caller says you are one of several parallel
+workstreams sharing the working tree, run only the inner loop, on your own
+files. Another workstream's half-finished files can break a package-wide
+`typecheck` or `test` — do not "fix" files outside your workstream's "Files
+owned"; name the failure in your report. The caller runs the outer loop once
+all workstreams have finished.
+
+## Fix mode — when the prompt starts with "Fix mode"
+
+The caller (`/run-plan`) hands you a findings file
+(`.claude/sdd/<SPEC>/review-round-N.json`) and the ids to fix. Nothing else
+from the plan is re-executed.
+- Read only those ids. Fix each one within its file and the minimum around
+  it; do not refactor beyond the finding, do not touch other ids.
+- If a finding is wrong (the defect cannot happen, or the fix would break a
+  plan item or a CLAUDE.md rule), do not fix it — mark it `disputed` with
+  file:line evidence. Never silently skip one.
+- Run the inner loop (Step 3) on the files you changed. The retry limit
+  applies.
+- Reply with ONLY the table from
+  `.claude/skills/run-plan/reference/findings.md` → "Implementer Fix mode",
+  plus a `Gates` line with the `check.sh` PASS/FAIL lines. No Step 4 report.
 
 ## Step 4 — report
 
@@ -86,7 +135,10 @@ Return your final message in this exact structure:
 2. ...
 
 ### Tests run
-- `cd <module> && pnpm <command>` — <pass/fail, and what it covered>
+- `./scripts/check.sh <pkg> <gate>` — <PASS/FAIL line as printed, and the
+  log path for any FAIL; never paste the log itself>
+(outer-loop gates only; say "inner loop only — caller runs the outer loop" in
+a multi-agent run)
 
 ### Self-check (implementation scope only)
 - Diff matches the plan: <yes/no + note>

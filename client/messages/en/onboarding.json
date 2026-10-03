@@ -1,17 +1,84 @@
 {
   "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
-  "regenerate": "Regenerate",
-  "regenerating": "Regenerating…",
-  "unknownError": "Unknown error",
-  "generate": {
-    "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
-    "cta": "Generate onboarding tour",
-    "generating": "Generating…"
-  },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
+  },
+  "tour": {
+    "heading": "Onboarding for {repo}",
+    "generate": "Generate",
+    "regenerate": "Regenerate",
+    "generating": "Generating…",
+    "retry": "Retry",
+    "timedOut": "Generation is taking longer than expected",
+    "pollFailed": "Couldn’t check on the generation",
+    "status": {
+      "skeleton": "Skeleton",
+      "skeletonReason": "Skeleton — {reason}",
+      "writtenBy": "Written by {model}"
+    },
+    "meta": {
+      "files": "~{count} files",
+      "generated": "generated {time}",
+      "notGenerated": "not generated yet",
+      "rankedImport": "Ranked by import graph",
+      "rankedActivity": "Ranked by import graph + activity, last {days} days"
+    },
+    "stale": {
+      "label": "Stale",
+      "detail": "Stale — the index changed since this tour was generated"
+    },
+    "activeRecently": "Active recently",
+    "ranking": {
+      "legend": "Ranking",
+      "importGraph": "Import graph only",
+      "activity": "Include recent activity (hotness)",
+      "noClone": "No local clone — activity ranking unavailable",
+      "days": "Days of history",
+      "daysError": "Enter a whole number of days from {min} to {max}.",
+      "warning": "The local clone will grow on disk as history for this window is fetched, and the first generation can take longer on large repos.",
+      "fallback": "Activity ranking unavailable — ranked by import graph"
+    },
+    "noIndex": "No index yet",
+    "configureModel": "Configure a model in Settings → Feature Models",
+    "regenFailed": "Last regeneration failed · {time}",
+    "regenFailedOlder": "Last regeneration failed · showing the tour from {time}",
+    "regenFailedNoTime": "Last regeneration failed",
+    "modelHint": "Uses {model}",
+    "toggle": {
+      "expand": "Expand {section}",
+      "collapse": "Collapse {section}"
+    },
+    "onThisPage": "On this page",
+    "sections": {
+      "architecture": "Architecture overview",
+      "criticalPaths": "Critical paths",
+      "runLocally": "How to run locally",
+      "readingPath": "Guided reading path",
+      "firstTasks": "First tasks"
+    },
+    "empty": {
+      "architecture": "No architecture summary yet — index the repo and generate the tour.",
+      "criticalPaths": "No critical files found — the repo has no import graph yet.",
+      "runLocally": "No run commands found — no manifest scripts were detected.",
+      "readingPath": "No reading path yet — the repo has no import graph yet.",
+      "firstTasks": "No first tasks suggested yet."
+    },
+    "architecture": {
+      "diagramLabel": "Architecture diagram"
+    },
+    "open": "Open",
+    "openLabel": "Open {path} on GitHub",
+    "copyLabel": "Copy command: {command}",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "envKeys": "Environment variables: {keys}",
+    "suggestion": "Suggestion",
+    "complexity": {
+      "low": "Low complexity",
+      "medium": "Medium complexity",
+      "high": "High complexity"
+    },
+    "suggestedComplexity": "{level} (suggested)",
+    "suggestedMarker": "(suggested)"
   }
 }

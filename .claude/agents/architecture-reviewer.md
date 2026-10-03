@@ -85,6 +85,11 @@ report as your final message, in this structure:
 - <for each finding derived from prose rather than a tool: say so explicitly>
 ```
 
+When run by `/run-plan`, append after the report the `findings-json` block
+defined in `.claude/skills/run-plan/reference/findings.md` (`"reviewer":
+"architecture"`), one entry per Findings row. A re-review prompt from that
+file narrows your scope to the fix diff — follow it over Step 0.
+
 ## General rules
 
 - No `Write`/`Edit` tool at all — hard, config-enforced, never a prompt-level

@@ -256,8 +256,8 @@ d('agents ⋈ skills', () => {
     const prompt = await repo.enabledSkillsForPrompt(agentId);
 
     expect(prompt).toEqual([
-      { id: alsoLive.id, name: alsoLive.name, body: alsoLive.body },
-      { id: live.id, name: live.name, body: live.body },
+      { id: alsoLive.id, name: alsoLive.name, body: alsoLive.body, contextPaths: [] },
+      { id: live.id, name: live.name, body: live.body, contextPaths: [] },
     ]);
 
     await app.close();

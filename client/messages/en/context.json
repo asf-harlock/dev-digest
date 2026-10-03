@@ -1,24 +1,77 @@
 {
   "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
+  "subtitle": "Markdown documents from this repository's default branch. Attach them to an agent or a skill so reviews are grounded in your specs. Read-only — change a document in git, then Rescan.",
+  "loading": "Loading documents…",
+  "loadError": "Couldn’t load project context documents",
+  "kind": {
+    "specs": "specs",
+    "docs": "docs",
+    "insights": "insights"
+  },
+  "filter": {
+    "label": "Filter documents",
+    "placeholder": "Filter documents…",
+    "noMatch": "No documents match",
+    "clear": "Clear filter"
+  },
   "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+    "title": "No documents found",
+    "body": "To add one: commit a .md file under specs/, docs/ or insights/, push it to the default branch, then click Rescan."
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
+  "notCloned": {
+    "title": "Repository not cloned yet",
+    "body": "Project context is read from the local clone of this repository. Once the repository has been cloned, its documents appear here."
   },
-  "editor": {
-    "loadError": "Couldn’t load spec",
-    "save": "Save",
-    "saving": "Saving…"
+  "row": {
+    "tokens": "≈ {tokens} tokens",
+    "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}}",
+    "preview": "Preview",
+    "previewNamed": "Preview {path}",
+    "remove": "Remove",
+    "removeNamed": "Remove {path} from the attached list",
+    "missing": "Missing",
+    "viaSkill": "via {skill}",
+    "moveUpNamed": "Move {path} up",
+    "moveDownNamed": "Move {path} down",
+    "injection": "Injection detected",
+    "injectionNamed": "Injection patterns: {patterns}",
+    "unattachable": {
+      "too_large": "Too large (over 32 KB)",
+      "not_utf8": "Not UTF-8 text"
+    }
+  },
+  "preview": {
+    "title": "Document preview",
+    "injectionTitle": "Prompt injection detected",
+    "injectionBody": "This document contains text that looks like instructions to an AI model. If attached, it could try to override an agent’s instructions.",
+    "injectionPatterns": "Matched patterns:",
+    "injectionLine": "line {line}",
+    "select": "Select a document’s Preview to read it here.",
+    "loadError": "Couldn’t load this document"
+  },
+  "rescan": {
+    "label": "Rescan",
+    "running": "Rescanning…",
+    "warning": {
+      "fetch_failed": "Couldn’t update the repository from the remote. Showing the documents in the local clone as they are on disk.",
+      "timeout": "Updating the repository took too long. Showing the documents in the local clone as they are on disk."
+    }
+  },
+  "footer": {
+    "files": "{count, plural, one {# file} other {# files}}",
+    "showing": "showing {shown} of {total}",
+    "lastScan": "Last scan {time}"
+  },
+  "attach": {
+    "ofTotal": "{attached} of {total} attached",
+    "attachedCount": "{attached} attached",
+    "attached": "Attached",
+    "attach": "Attach",
+    "tokensPerCall": "≈ {tokens} tokens per call",
+    "overBudget": "Over the {budget}-token project context budget. A run would skip: {paths}",
+    "noRepo": {
+      "title": "No repository selected",
+      "body": "Pick a repository in the sidebar to attach its documents."
+    }
   }
 }

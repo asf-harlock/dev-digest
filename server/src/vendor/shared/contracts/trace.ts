@@ -73,6 +73,19 @@ export const RunStats = z.object({
 });
 export type RunStats = z.infer<typeof RunStats>;
 
+export const ProjectContextEntry = z.object({
+  path: z.string(),
+  kind: z.enum(['specs', 'docs', 'insights']),
+  /** `'agent'` or `'skill:<name>'`. */
+  origin: z.string(),
+  sha: z.string(),
+  tokens: z.number().int(),
+  status: z.enum(['attached', 'missing', 'too_large', 'unreadable', 'over_budget']),
+  /** Exact text sent to the model (empty when not attached). */
+  text: z.string(),
+});
+export type ProjectContextEntry = z.infer<typeof ProjectContextEntry>;
+
 /** The single-document trace stored in `run_traces.trace`. */
 export const RunTrace = z.object({
   config: z.object({
@@ -89,6 +102,8 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /** `nullish` on purpose: traces written before SPEC-04 have no such key. */
+  project_context: z.array(ProjectContextEntry).nullish(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

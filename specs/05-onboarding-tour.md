@@ -1,6 +1,6 @@
 # Spec: Onboarding Tour
 Spec ID: SPEC-05
-Status: approved
+Status: implemented
 Supersedes: —
 
 ## Проблема й користувач

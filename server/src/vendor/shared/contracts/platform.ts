@@ -278,13 +278,52 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
+export const SpecFileKind = z.enum(['specs', 'docs', 'insights']);
+export type SpecFileKind = z.infer<typeof SpecFileKind>;
+
+export const SpecFileUnattachableReason = z.enum(['too_large', 'not_utf8']);
+export type SpecFileUnattachableReason = z.infer<typeof SpecFileUnattachableReason>;
+
+// The fields after `updated_at` are computed on request (never stored) and are
+// `nullish` so older payloads keep parsing. `content` is only set by the
+// preview route (`GET /repos/:id/context/file`), never by the listing.
 export const SpecFile = z.object({
   path: z.string(),
   content: z.string().nullish(),
   size: z.number().int().nullish(),
   updated_at: z.string().nullish(),
+  kind: SpecFileKind.nullish(),
+  tokens: z.number().int().nullish(),
+  attachable: z.boolean().nullish(),
+  unattachable_reason: SpecFileUnattachableReason.nullish(),
+  injection_flagged: z.boolean().nullish(),
+  injection_patterns: z.array(z.string()).nullish(),
+  /** Preview only: where each pattern hit, with the offending line. */
+  injection_matches: z
+    .array(z.object({ pattern: z.string(), line: z.number().int(), excerpt: z.string() }))
+    .nullish(),
+  /** Distinct agents in the workspace that would receive this document. */
+  used_by: z.number().int().nullish(),
 });
 export type SpecFile = z.infer<typeof SpecFile>;
+
+/** Response of `GET /repos/:id/context` and `POST /repos/:id/context/rescan`.
+    `total` may exceed `files.length` when the scan cap is hit. */
+export const ContextListing = z.object({
+  files: z.array(SpecFile),
+  total: z.number().int(),
+  scanned_at: z.string(),
+  state: z.enum(['ok', 'not_cloned']).nullish(),
+  warning: z.enum(['fetch_failed', 'timeout']).nullish(),
+});
+export type ContextListing = z.infer<typeof ContextListing>;
+
+/** Body of `PUT /agents/:id/context` and `PUT /skills/:id/context`: the full
+    ordered list of attached repo-relative paths (last save wins). */
+export const ContextPathsBody = z.object({
+  paths: z.array(z.string()),
+});
+export type ContextPathsBody = z.infer<typeof ContextPathsBody>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

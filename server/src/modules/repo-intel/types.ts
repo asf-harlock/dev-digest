@@ -168,5 +168,14 @@ export interface RepoIntel {
     n: number,
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
+  /**
+   * Like `getTopFilesByRank` but with the stored PageRank (`file_rank.rank`):
+   * same junk filter, ordered rank DESC then path ASC. `[]` when degraded.
+   */
+  getTopRanked(
+    repoId: string,
+    n: number,
+    opts?: { exclude?: string[] },
+  ): Promise<Array<{ path: string; rank: number }>>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
 }

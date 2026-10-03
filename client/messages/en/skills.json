@@ -45,7 +45,8 @@
       "preview": "Preview",
       "evals": "Evals",
       "stats": "Stats",
-      "versions": "Versions"
+      "versions": "Versions",
+      "context": "Context"
     }
   },
   "card": {
@@ -195,5 +196,9 @@
     "bodyLabel": "Skill body (Markdown)",
     "bodyHint": "Saving a changed body creates a new immutable version.",
     "version": "v{version}"
+  },
+  "context": {
+    "title": "Context",
+    "hint": "Attach repository documents this skill needs. Every agent that has this skill enabled receives them too. Order matters — earlier documents are added to the prompt first."
   }
 }

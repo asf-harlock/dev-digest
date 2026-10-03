@@ -28,6 +28,8 @@ export type {
   PrReviewComment,
   PrStatus,
   SpecFile,
+  SpecFileKind,
+  ContextListing,
   IndexStatus,
 } from "@devdigest/shared";
 

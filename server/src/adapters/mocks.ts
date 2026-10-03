@@ -247,6 +247,9 @@ export interface MockGitOptions {
   diffNameOnly?: string[];
   /** Override `currentHead()` so tests can simulate "sha unchanged since last index". */
   head?: string;
+  /** Result of `historyCounts()`; `historyError` makes it reject instead. */
+  historyCounts?: Record<string, number>;
+  historyError?: Error;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
 }
@@ -289,6 +292,10 @@ export class MockGitClient implements GitClient {
   }
   async log(): Promise<GitCommit[]> {
     return [{ sha: 'a1b2c3d4', message: 'init', author: 'marisa.koch', date: '2026-06-01' }];
+  }
+  async historyCounts(_repo: RepoRef, _sinceDays: number): Promise<Record<string, number>> {
+    if (this.opts.historyError) throw this.opts.historyError;
+    return this.opts.historyCounts ?? {};
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';

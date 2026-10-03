@@ -225,6 +225,20 @@ export interface GitClient {
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;
+  /**
+   * Per-file commit counts over the last `sinceDays` days (SPEC-05 activity
+   * ranking). Deepens the local clone with `git fetch --shallow-since`, then
+   * counts paths in `git log --name-only`; keys are repo-relative paths.
+   * Deepening is permanent (the clone keeps the extra history).
+   *
+   * Error contract: `sinceDays` must be an integer in 1..3650, otherwise this
+   * rejects with a `RangeError` BEFORE running git. Any git failure (missing
+   * clone, shallow/unreachable history, non-zero exit) or the 60 s abort
+   * rejects with an `Error`; it never returns partial counts and never
+   * crashes the process. Callers decide the fallback (e.g. import-graph ranking).
+   * All git invocations use argv arrays — no shell interpolation.
+   */
+  historyCounts(repo: RepoRef, sinceDays: number): Promise<Record<string, number>>;
 }
 
 // ---------- CodeIndex (ripgrep + tree-sitter) ----------
