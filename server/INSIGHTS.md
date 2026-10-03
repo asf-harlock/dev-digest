@@ -304,6 +304,15 @@ needed none of those and cannot drift.
 
 ## Tool & Library Notes
 
+- **2026-10-03** — `js-tiktoken` (`TiktokenTokenizer`, cl100k) is quadratic
+  on a long run of one repeated character: counting 8 KB of `'x'` takes 3.1 s,
+  80 KB of prose 5 ms. A fixture like `'x'.repeat(80 * 1024)` sent through any
+  route that token-counts (context preview, listing) hangs past vitest's 120 s
+  timeout. Build size fixtures from prose lines
+  (`'Lorem ipsum dolor sit amet.\n'.repeat(n)`). A real minified or one-line
+  doc near the 64 KB / 256 KB caps hits the same cliff — nothing guards it yet.
+  `server/src/adapters/tokenizer/index.ts`, `server/test/context.it.test.ts`
+
 - **2026-09-30** — An LLM call cannot be cancelled. `StructuredRequest` has
   `timeoutMs` but no `signal` (`vendor/shared/adapters.ts:55-62`). The
   adapters apply `timeoutMs` per attempt, through a non-cancelling
@@ -342,6 +351,9 @@ needed none of those and cannot drift.
   rejects `specs/06-pr-brief.md` (34 962 B) as `too_large` for any agent.
   Diagnose by token-counting the file with `TiktokenTokenizer` and `wc -c`
   before reading resolver code. SPEC-07 gives PR context a 64 KB cap.
+  **Fixed 2026-10-03 on `fix/context-large-docs`: `MAX_CONTEXT_FILE_BYTES` is
+  64 KB, and the preview reads up to `MAX_CONTEXT_PREVIEW_BYTES` (256 KB) so a
+  too-large doc still renders, marked `too_large`.**
 
 - **2026-09-17** — `Run failed: 401 User not found.` mid-agent-run is OpenRouter
   rejecting the key, not a bug in the run pipeline. `container.buildLlm` only
@@ -357,6 +369,9 @@ needed none of those and cannot drift.
 
 ## Session Notes
 
+- **2026-10-03** — Raised the agent/skill attach cap to 64 KB and made
+  oversized docs previewable (SPEC-04 EC-4/EC-11 amended, EC-27/EC-28 added).
+  Found the tiktoken repeated-character cliff via a timed-out fixture.
 - **2026-09-30** — SPEC-06 PR Brief built via `/run-plan`. It added the
   `brief/` module (GET/POST `/pulls/:id/brief`, atomic jsonb-merge cache in
   `pr_brief.json`). It moved `linked-issue`, `smart-diff-roles`, `blast-map`
@@ -432,6 +447,12 @@ needed none of those and cannot drift.
 
 ## Open Questions
 
+- **2026-10-03** — The context listing still runs `TiktokenTokenizer` on every
+  readable doc up to 64 KB, with no guard against the repeated-character cliff
+  (see Tool & Library Notes). One minified or one-line `.md` near the cap can
+  blow SPEC-04 NFR-2's 2 s listing budget and block the event loop. The preview
+  already uses a length estimate above 64 KB (`previewTokenCount`). Undecided:
+  cap tokenizer input, or estimate for single-line docs.
 - **2026-10-02** — `detectInjectionPatterns` flags documents that *discuss*
   prompt injection. In the browser, `specs/04-project-context.md` attached as PR
   context showed the "possible injection" badge (EC-25), because the spec quotes

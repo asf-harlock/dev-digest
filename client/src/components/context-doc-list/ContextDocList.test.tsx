@@ -53,7 +53,8 @@ describe("ContextDocList rows", () => {
 
     expect(screen.getByRole("checkbox", { name: "specs/big.md" })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: "specs/bin.md" })).toBeDisabled();
-    expect(screen.getByText(/Too large/)).toBeInTheDocument();
+    expect(screen.getByText("Too large (over 64 KB)")).toBeInTheDocument();
+    expect(screen.getByTitle(/attach documents up to 64 KB\. You can still preview it/)).toBeInTheDocument();
     expect(screen.getByText(/Not UTF-8/)).toBeInTheDocument();
 
     expect(screen.getByText("Injection detected")).toBeInTheDocument();

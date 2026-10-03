@@ -231,9 +231,9 @@ PR-content-based auto-selector is a separate feature.
   click Rescan) and shows no "Add a spec file" button.
 - **EC-3** ЯКЩО more than 500 files match, ТОДІ the system (shall) return the
   first 500 in path order and show "showing 500 of N".
-- **EC-4** ЯКЩО a matching file is larger than 32 KB, ТОДІ the system (shall)
-  list it with `attachable: false`, `unattachable_reason: 'too_large'` and a
-  disabled checkbox.
+- **EC-4** ЯКЩО a matching file is larger than 64 KB, ТОДІ the system (shall)
+  list it with `attachable: false`, `unattachable_reason: 'too_large'`, a
+  disabled checkbox and a tooltip naming the 64 KB limit.
 - **EC-5** ЯКЩО a matching file is not valid UTF-8, ТОДІ the system (shall)
   list it with `attachable: false` and `unattachable_reason: 'not_utf8'`.
 - **EC-6** ЯКЩО `detectInjectionPatterns` matches a document's text, ТОДІ the
@@ -251,7 +251,7 @@ PR-content-based auto-selector is a separate feature.
 - **EC-10** ЯКЩО an agent's attached path does not exist in the PR's repo
   because the agent is used on another repo, ТОДІ the system (shall) treat it
   as missing for that run under EC-8.
-- **EC-11** ЯКЩО an attached file exceeds 32 KB or is not UTF-8 at run time,
+- **EC-11** ЯКЩО an attached file exceeds 64 KB or is not UTF-8 at run time,
   ТОДІ the system (shall) skip it with `status: 'too_large'` or
   `status: 'unreadable'` and a run-log line.
 - **EC-12** ЯКЩО adding the next document would take the wrapped project
@@ -292,13 +292,19 @@ PR-content-based auto-selector is a separate feature.
 - **EC-26** ЯКЩО the Rescan's git fetch fails, ТОДІ the system (shall) return
   the listing of the clone as it is on disk and show that the repo could not be
   updated.
+- **EC-27** ЯКЩО the user previews a document larger than 64 KB and at most
+  256 KB, ТОДІ the system (shall) render its markdown with a note naming its
+  size and the 64 KB attach limit, and keep it unattachable.
+- **EC-28** ЯКЩО the user previews a document larger than 256 KB or not valid
+  UTF-8, ТОДІ the system (shall) show a note saying why it cannot be previewed
+  in place of the rendered markdown.
 
 ## Non-functional requirements
 
 - **NFR-1** The system (shall) make zero additional LLM calls for project
   context in any run.
 - **NFR-2** The system (shall) return `GET /repos/:id/context` within 2 s for
-  500 files of up to 32 KB each on a local clone.
+  500 files of up to 64 KB each on a local clone.
 - **NFR-3** The system (shall) give up a Rescan after 30 s and return the
   on-disk listing.
 - **NFR-4** The system (shall) scope every read and write of attachments,

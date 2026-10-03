@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Icon } from "@devdigest/ui";
 import type { SpecFile } from "@devdigest/shared";
-import { DEFAULT_KIND, KIND_COLORS } from "../context-doc-list/constants";
+import { ATTACH_LIMIT_KB, DEFAULT_KIND, KIND_COLORS } from "../context-doc-list/constants";
 import type { DocRow } from "../context-doc-list/helpers";
 import { s } from "./styles";
 
@@ -129,9 +129,11 @@ export function ContextDocRow({
       <KindChip file={file} />
       {file.tokens != null && <span style={s.tokens}>{t("row.tokens", { tokens: file.tokens })}</span>}
       {unattachable && reason && (
-        <Badge color="var(--text-muted)" icon="Lock">
-          {t(`row.unattachable.${reason}`)}
-        </Badge>
+        <span title={t(`row.unattachableHint.${reason}`, { limit: ATTACH_LIMIT_KB })}>
+          <Badge color="var(--text-muted)" icon="Lock">
+            {t(`row.unattachable.${reason}`, { limit: ATTACH_LIMIT_KB })}
+          </Badge>
+        </span>
       )}
       {file.injection_flagged && (
         <span title={patterns.length > 0 ? t("row.injectionNamed", { patterns: patterns.join(", ") }) : undefined}>

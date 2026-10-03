@@ -1,6 +1,6 @@
 import type { SpecFile } from '@devdigest/shared';
 import { detectInjectionPatterns, findInjectionMatches } from '../_shared/injection-detection.js';
-import { kindForPath } from '../_shared/context-paths.js';
+import { MAX_CONTEXT_FILE_BYTES, kindForPath } from '../_shared/context-paths.js';
 import type { ContextFileRead, ScannedContextFile } from '../_shared/project-context.js';
 
 /**
@@ -28,9 +28,20 @@ export function computeUsedBy(
 }
 
 /**
+ * Token count for a previewed document. Above the attach cap it is never sent to
+ * a model, so a cheap length estimate replaces the real encoder: js-tiktoken is
+ * quadratic on long single-character runs, and the preview reads up to 256 KB.
+ */
+export function previewTokenCount(text: string, size: number, count: (text: string) => number): number {
+  return size > MAX_CONTEXT_FILE_BYTES ? Math.ceil(text.length / 4) : count(text);
+}
+
+/**
  * Build the `SpecFile` for one scanned document. `tokens` is only meaningful
  * (and only set) for a readable UTF-8 file; `content` only when the caller is
- * the preview route.
+ * the preview route. The preview route reads past `MAX_CONTEXT_FILE_BYTES`, so
+ * an `ok` read can still be too large to attach — it keeps its content but is
+ * marked `too_large`.
  */
 export function buildSpecFile(
   scanned: Pick<ScannedContextFile, 'path' | 'size' | 'mtimeMs'>,
@@ -43,9 +54,11 @@ export function buildSpecFile(
     updated_at: new Date(scanned.mtimeMs).toISOString(),
     kind: kindForPath(scanned.path),
     used_by: opts.usedBy,
-    attachable: read.status === 'ok',
+    attachable: read.status === 'ok' && read.size <= MAX_CONTEXT_FILE_BYTES,
   };
-  if (read.status === 'too_large') file.unattachable_reason = 'too_large';
+  if (read.status === 'too_large' || (read.status === 'ok' && read.size > MAX_CONTEXT_FILE_BYTES)) {
+    file.unattachable_reason = 'too_large';
+  }
   if (read.status === 'not_utf8') file.unattachable_reason = 'not_utf8';
   if (read.status === 'ok') {
     const injection = detectInjectionPatterns(read.text, { ignoreCode: true });

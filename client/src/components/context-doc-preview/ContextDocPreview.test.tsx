@@ -104,6 +104,36 @@ describe("ContextDocPreview loaded", () => {
   });
 });
 
+describe("ContextDocPreview large and unreadable documents", () => {
+  it("a doc over the attach limit still renders, with a 'too large to attach' note naming its size", () => {
+    query.data = doc({ attachable: false, unattachable_reason: "too_large", size: 34_962 + 40_000 });
+    setup();
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent("Too large to attach");
+    expect(note).toHaveTextContent("74 KB, over the 64 KB limit");
+    expect(screen.getByRole("heading", { name: "Hello" })).toBeInTheDocument();
+  });
+
+  it("a doc past the preview limit shows why there is no body instead of a blank drawer", () => {
+    query.data = doc({ attachable: false, unattachable_reason: "too_large", size: 300 * 1024, content: undefined });
+    setup();
+    expect(screen.getByRole("note")).toHaveTextContent("300 KB, too large to preview here (limit 256 KB)");
+    expect(screen.queryByText("Too large to attach")).not.toBeInTheDocument();
+  });
+
+  it("a non-UTF-8 doc says it can't be previewed", () => {
+    query.data = doc({ attachable: false, unattachable_reason: "not_utf8", content: undefined });
+    setup();
+    expect(screen.getByRole("note")).toHaveTextContent("isn’t UTF-8 text");
+  });
+
+  it("an attachable doc shows no size note", () => {
+    query.data = doc();
+    setup();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});
+
 describe("ContextDocPreview layout and action", () => {
   it("EC-23: drawer layout is a dialog and renders the action (Attach toggle) above the markdown", () => {
     query.data = doc();
