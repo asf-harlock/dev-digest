@@ -304,7 +304,7 @@ PR-content-based auto-selector is a separate feature.
 - **NFR-1** The system (shall) make zero additional LLM calls for project
   context in any run.
 - **NFR-2** The system (shall) return `GET /repos/:id/context` within 2 s for
-  500 files of up to 32 KB each on a local clone.
+  500 files of up to 64 KB each on a local clone.
 - **NFR-3** The system (shall) give up a Rescan after 30 s and return the
   on-disk listing.
 - **NFR-4** The system (shall) scope every read and write of attachments,

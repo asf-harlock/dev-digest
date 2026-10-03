@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSpecFile, computeUsedBy } from '../src/modules/context/helpers.js';
+import { buildSpecFile, computeUsedBy, previewTokenCount } from '../src/modules/context/helpers.js';
 
 describe('SPEC-04 context helpers', () => {
   it('AC-6: computeUsedBy counts distinct agents (direct + via enabled skill), never double-counts one agent', () => {
@@ -54,5 +54,15 @@ describe('SPEC-04 context helpers', () => {
     expect(f.content).toBe(text);
     const atCap = { ...read, text: text.slice(1), size: 64 * 1024 };
     expect(buildSpecFile(scanned, atCap, { tokens: 1, usedBy: 0, includeContent: false })).toMatchObject({ attachable: true });
+  });
+
+  it('previewTokenCount: real encoder up to the attach cap, length estimate above it (never runs tiktoken on 256 KB)', () => {
+    const count = (t: string) => t.length; // stand-in encoder
+    let calls = 0;
+    const spy = (t: string) => (calls++, count(t));
+    expect(previewTokenCount('abcd', 64 * 1024, spy)).toBe(4);
+    expect(calls).toBe(1);
+    expect(previewTokenCount('x'.repeat(200_000), 200_000, spy)).toBe(50_000);
+    expect(calls).toBe(1);
   });
 });

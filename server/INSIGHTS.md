@@ -447,6 +447,12 @@ needed none of those and cannot drift.
 
 ## Open Questions
 
+- **2026-10-03** — The context listing still runs `TiktokenTokenizer` on every
+  readable doc up to 64 KB, with no guard against the repeated-character cliff
+  (see Tool & Library Notes). One minified or one-line `.md` near the cap can
+  blow SPEC-04 NFR-2's 2 s listing budget and block the event loop. The preview
+  already uses a length estimate above 64 KB (`previewTokenCount`). Undecided:
+  cap tokenizer input, or estimate for single-line docs.
 - **2026-10-02** — `detectInjectionPatterns` flags documents that *discuss*
   prompt injection. In the browser, `specs/04-project-context.md` attached as PR
   context showed the "possible injection" badge (EC-25), because the spec quotes

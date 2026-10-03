@@ -108,7 +108,7 @@ document that says what it is for, and the reviewer has no place to supply it.
 - Not feeding agent or skill documents to the intent classifier — their text
   would steer `out_of_scope`, which drives the deterministic scope filter that
   drops findings (SPEC-03 D7/D9, `server/src/modules/reviews/helpers.ts:208`).
-- Not changing SPEC-04 behaviour for agent and skill documents: their 32 KB cap,
+- Not changing SPEC-04 behaviour for agent and skill documents: their attach cap (32 KB at the time; 64 KB since SPEC-04 EC-4 was amended),
   whole-document drop and sticky over-budget skip stay as they are.
 - Not regenerating the brief, re-classifying intent or re-running reviews when
   PR context changes — each is a paid call; the user triggers it.

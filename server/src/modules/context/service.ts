@@ -10,7 +10,7 @@ import {
 } from '../_shared/project-context.js';
 import { validateContextPath, type ContextRules } from '../_shared/context-paths.js';
 import { ContextRepository, type ContextRepoRow } from './repository.js';
-import { buildSpecFile, computeUsedBy } from './helpers.js';
+import { buildSpecFile, computeUsedBy, previewTokenCount } from './helpers.js';
 import {
   CONTEXT_STATE_NOT_CLONED,
   CONTEXT_STATE_OK,
@@ -85,7 +85,10 @@ export class ContextService {
       { path, size: read.size, mtimeMs: read.mtimeMs },
       read,
       {
-        tokens: read.status === 'ok' ? wrappedTokenCount(this.container.tokenizer, path, read.text) : null,
+        tokens:
+          read.status === 'ok'
+            ? previewTokenCount(read.text, read.size, (text) => wrappedTokenCount(this.container.tokenizer, path, text))
+            : null,
         usedBy: usage.get(path) ?? 0,
         includeContent: true,
       },

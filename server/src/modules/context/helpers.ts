@@ -28,6 +28,15 @@ export function computeUsedBy(
 }
 
 /**
+ * Token count for a previewed document. Above the attach cap it is never sent to
+ * a model, so a cheap length estimate replaces the real encoder: js-tiktoken is
+ * quadratic on long single-character runs, and the preview reads up to 256 KB.
+ */
+export function previewTokenCount(text: string, size: number, count: (text: string) => number): number {
+  return size > MAX_CONTEXT_FILE_BYTES ? Math.ceil(text.length / 4) : count(text);
+}
+
+/**
  * Build the `SpecFile` for one scanned document. `tokens` is only meaningful
  * (and only set) for a readable UTF-8 file; `content` only when the caller is
  * the preview route. The preview route reads past `MAX_CONTEXT_FILE_BYTES`, so
