@@ -13,6 +13,8 @@ export const s = {
   chevron: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
   symbolIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
   symbolName: {
+    minWidth: 0,
+    overflowWrap: "anywhere",
     fontSize: 13.5,
     fontWeight: 600,
     color: "var(--text-primary)",
@@ -33,12 +35,14 @@ export const s = {
     gap: 8,
   } satisfies CSSProperties,
   callers: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
-  callerRow: { display: "flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
-  callerIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  callerRow: { display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 } satisfies CSSProperties,
+  /** Long repo paths wrap inside the card instead of overflowing it. */
+  callerPath: { minWidth: 0, overflowWrap: "anywhere" } satisfies CSSProperties,
+  callerIcon: { color: "var(--text-muted)", flexShrink: 0, marginTop: 3 } satisfies CSSProperties,
   callerText: { fontSize: 13, color: "var(--text-secondary)" } satisfies CSSProperties,
   quietRow: { display: "flex", alignItems: "center", gap: 8, padding: "8px 6px" } satisfies CSSProperties,
   /** Same width as the chevron, so quiet rows align with expandable ones. */
   chevronSlot: { width: 13, flexShrink: 0 } satisfies CSSProperties,
-  quietName: { fontSize: 13.5, fontWeight: 500, color: "var(--text-muted)" } satisfies CSSProperties,
+  quietName: { minWidth: 0, overflowWrap: "anywhere", fontSize: 13.5, fontWeight: 500, color: "var(--text-muted)" } satisfies CSSProperties,
   chips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 } satisfies CSSProperties,
 } as const;

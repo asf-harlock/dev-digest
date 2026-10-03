@@ -66,6 +66,11 @@ export interface ReviewInput {
    */
   projectContext?: { path: string; text: string }[];
   /**
+   * Per-PR context docs (untrusted; each wrapped as `pr-context:<path>` in a
+   * `## PR context` section before `## Project context`). Empty/undefined → omitted.
+   */
+  prContext?: { path: string; text: string }[];
+  /**
    * Optional callers-of-changed-symbols digest (T1.3). Untrusted; rendered
    * before the diff section. Empty/undefined → section omitted.
    */
@@ -147,6 +152,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     memory: input.memory,
     specs: input.specs,
     projectContext: input.projectContext,
+    prContext: input.prContext,
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,

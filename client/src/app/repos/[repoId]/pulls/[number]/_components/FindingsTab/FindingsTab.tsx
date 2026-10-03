@@ -8,6 +8,7 @@ import { ReviewRunAccordion } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { useCancelRun } from "@/lib/hooks/reviews";
+import { usePrContext } from "@/lib/hooks/pr-context";
 
 interface FindingsTabProps {
   prId: string | null;
@@ -41,6 +42,7 @@ export function FindingsTab({
   onDelete,
   onRunDone,
 }: FindingsTabProps) {
+  const { data: prContext } = usePrContext(prId);
   const handleCancelAll = useCallback(() => {
     liveRunIds.forEach((id) => cancelMutation.mutate(id));
   }, [liveRunIds, cancelMutation]);
@@ -135,6 +137,7 @@ export function FindingsTab({
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
+            currentContextFingerprint={prContext?.fingerprint}
           />
         </div>
       )}

@@ -147,3 +147,99 @@ export const PrBrief = z.object({
   history: PrHistory,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+// ---- Risk brief (generated on demand; one model call) ----
+/** A place the reviewer should look first. `line` is an integer (strict schema). */
+export const ReviewFocusItem = z.object({
+  file: z.string(),
+  line: z.number().int(),
+  reason: z.string(),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+/** What the model returns. Every field is required (strict JSON schema). */
+export const BriefModelOutput = z.object({
+  summary: z.string(),
+  risks: z.array(Risk),
+  review_focus: z.array(ReviewFocusItem),
+});
+export type BriefModelOutput = z.infer<typeof BriefModelOutput>;
+
+export const BriefMissingInputKind = z.enum([
+  'intent_missing',
+  'intent_other_sha',
+  'blast_degraded',
+  'specs_missing',
+  'description_empty',
+  'issue_not_referenced',
+  'issue_unreachable',
+  'files_truncated',
+  'prompt_trimmed',
+]);
+export type BriefMissingInputKind = z.infer<typeof BriefMissingInputKind>;
+
+export const BriefMissingInput = z.object({
+  kind: BriefMissingInputKind,
+  reason: z.string().optional(),
+});
+export type BriefMissingInput = z.infer<typeof BriefMissingInput>;
+
+/** Stored document (pr_brief.json). Every persisted field is nullish so an
+ *  error-only document, or one written before a field existed, still validates. */
+export const BriefEnvelope = z.object({
+  brief: BriefModelOutput.nullish(),
+  intent: Intent.nullish(),
+  blast: BlastRadius.nullish(),
+  generated_for_sha: z.string().nullish(),
+  generated_at: z.string().nullish(),
+  provider: z.string().nullish(),
+  model: z.string().nullish(),
+  missing_inputs: z.array(BriefMissingInput).nullish(),
+  tokens_in: z.number().nullish(),
+  tokens_out: z.number().nullish(),
+  cost_usd: z.number().nullish(),
+  last_error: z.string().nullish(),
+  last_error_at: z.string().nullish(),
+  /** SPEC-07: fingerprint of the PR context used; null when none attached. */
+  context_fingerprint: z.string().nullish(),
+});
+export type BriefEnvelope = z.infer<typeof BriefEnvelope>;
+
+/** GET /pulls/:id/brief. `generating` and `stale` are computed on read. */
+export const BriefResponse = z.object({
+  brief: BriefModelOutput.nullable(),
+  meta: BriefEnvelope.omit({ brief: true, missing_inputs: true }).nullable(),
+  generating: z.boolean(),
+  stale: z.boolean(),
+  missing_inputs: z.array(BriefMissingInput),
+});
+export type BriefResponse = z.infer<typeof BriefResponse>;
+
+// ---- File references: `path`, `path:start` or `path:start-end` ----
+export interface FileRef {
+  path: string;
+  start: number | null;
+  end: number | null;
+}
+
+const FILE_REF_RE = /^(.+):(\d+)(?:-(\d+))?$/;
+
+/** Split a file ref. A suffix that is not a valid 1-based range (zero, or end
+ *  before start) is not a range: the whole string stays the path. */
+export function parseFileRef(ref: string): FileRef {
+  const m = FILE_REF_RE.exec(ref);
+  if (!m) return { path: ref, start: null, end: null };
+  const start = Number(m[2]);
+  const end = m[3] === undefined ? null : Number(m[3]);
+  if (!Number.isSafeInteger(start) || start < 1) return { path: ref, start: null, end: null };
+  if (end !== null && (!Number.isSafeInteger(end) || end < start)) {
+    return { path: ref, start: null, end: null };
+  }
+  return { path: m[1] as string, start, end: end === start ? null : end };
+}
+
+export function formatFileRef(path: string, start?: number | null, end?: number | null): string {
+  if (start == null || !Number.isInteger(start) || start < 1) return path;
+  if (end == null || !Number.isInteger(end) || end <= start) return `${path}:${start}`;
+  return `${path}:${start}-${end}`;
+}

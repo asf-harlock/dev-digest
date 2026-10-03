@@ -37,6 +37,14 @@ export function SafeMarkdown({ children }: { children: string }) {
               {children}
             </a>
           ),
+          table: ({ children }) => (
+            <div style={s.tableWrap}>
+              <table style={s.table}>{children}</table>
+            </div>
+          ),
+          th: ({ children }) => <th style={s.th}>{children}</th>,
+          td: ({ children }) => <td style={s.td}>{children}</td>,
+          hr: () => <hr style={s.hr} />,
           img: ({ src, alt }) => (src ? <img src={src} alt={alt ?? ""} style={s.img} /> : null),
         }}
       >

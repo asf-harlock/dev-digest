@@ -1,0 +1,14 @@
+{
+  "name": "PR Overview shows the PR Brief section in its no-brief state",
+  "description": "From PR #482, the default Overview tab shows the PR Brief section with its Generate brief button. The flow never clicks it (no model call). It relies on the freshly-seeded DB having no pr_brief row and on the seeded repo having no clone (clonePath: null). See e2e/README.md.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "Add rate limiting to public API endpoints"], "label": "seeded PR title row is visible" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["wait", "--text", "PR Brief"], "label": "PR Brief section renders on Overview" },
+    { "cmd": ["wait", "--text", "Generate brief"], "label": "no-brief state offers the Generate brief button" }
+  ]
+}

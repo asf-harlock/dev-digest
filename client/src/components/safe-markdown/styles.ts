@@ -27,6 +27,18 @@ export const s = {
   } satisfies CSSProperties,
   a: { color: "var(--accent-text)", textDecoration: "underline" } satisfies CSSProperties,
   img: { maxWidth: "100%" } satisfies CSSProperties,
+  /** GFM tables (common in PR bodies) scroll sideways instead of overflowing. */
+  tableWrap: { overflowX: "auto", margin: "0 0 10px" } satisfies CSSProperties,
+  table: { borderCollapse: "collapse", fontSize: "0.95em" } satisfies CSSProperties,
+  th: {
+    textAlign: "left",
+    fontWeight: 650,
+    padding: "6px 10px",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  td: { padding: "6px 10px", border: "1px solid var(--border)", verticalAlign: "top" } satisfies CSSProperties,
+  hr: { border: 0, borderTop: "1px solid var(--border)", margin: "14px 0" } satisfies CSSProperties,
   blockquote: {
     margin: "0 0 10px",
     padding: "2px 0 2px 12px",

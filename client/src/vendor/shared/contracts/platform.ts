@@ -208,8 +208,12 @@ export const PrMeta = z.object({
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 
+export const PrFileStatus = z.enum(['added', 'modified', 'removed', 'renamed']);
+export type PrFileStatus = z.infer<typeof PrFileStatus>;
+
 export const PrFile = z.object({
   path: z.string(),
+  status: PrFileStatus.optional(),
   additions: z.number().int(),
   deletions: z.number().int(),
   patch: z.string().nullish(),
@@ -324,6 +328,87 @@ export const ContextPathsBody = z.object({
   paths: z.array(z.string()),
 });
 export type ContextPathsBody = z.infer<typeof ContextPathsBody>;
+
+// ---- SPEC-07: per-PR context ----
+/** Status of a PR-context entry in the list / sent to the model. */
+export const PrContextEntryStatus = z.enum([
+  'attached',
+  'missing',
+  'too_large',
+  'unreadable',
+  'over_budget',
+  'truncated',
+]);
+export type PrContextEntryStatus = z.infer<typeof PrContextEntryStatus>;
+
+/** Status of a preview read (`GET /pulls/:id/context/preview`). */
+export const PrContextPreviewStatus = z.enum(['attached', 'missing', 'too_large', 'unreadable']);
+export type PrContextPreviewStatus = z.infer<typeof PrContextPreviewStatus>;
+
+export const PrContextOrigin = z.enum(['added', 'modified', 'default_branch']);
+export type PrContextOrigin = z.infer<typeof PrContextOrigin>;
+
+export const PrContextEntry = z.object({
+  path: z.string(),
+  kind: z.enum(['specs', 'docs', 'insights']),
+  /** Origin badge: file changed in this PR, or read from the default branch. */
+  origin: PrContextOrigin,
+  status: PrContextEntryStatus,
+  tokens: z.number().int(),
+  /** Head SHA the document was read at (null when never read). */
+  read_at_sha: z.string().nullish(),
+  /** Injection patterns detected live in the text (never persisted). */
+  warnings: z.array(z.string()),
+});
+export type PrContextEntry = z.infer<typeof PrContextEntry>;
+
+export const PrContextSuggestion = z.object({
+  path: z.string(),
+  reason: z.string(),
+});
+export type PrContextSuggestion = z.infer<typeof PrContextSuggestion>;
+
+export const PrContextAttachable = z.object({
+  path: z.string(),
+  kind: z.enum(['specs', 'docs', 'insights']),
+  origin: PrContextOrigin,
+});
+export type PrContextAttachable = z.infer<typeof PrContextAttachable>;
+
+export const PrContextResponse = z.object({
+  entries: z.array(PrContextEntry),
+  suggestions: z.array(PrContextSuggestion),
+  attachable: z.array(PrContextAttachable),
+  budget: z.object({ used: z.number().int(), limit: z.number().int() }),
+  /** Null when the attached list is empty. */
+  fingerprint: z.string().nullable(),
+  /** False when the repo has no local clone (documents are unreadable). */
+  cloned: z.boolean(),
+  /** True when the PR is large enough to be reviewed map-reduce. */
+  map_reduce: z.boolean(),
+});
+export type PrContextResponse = z.infer<typeof PrContextResponse>;
+
+/** Body of `PUT /pulls/:id/context`: full ordered list, last save wins. */
+export const PrContextSaveBody = z.object({
+  paths: z.array(z.string()).max(20),
+});
+export type PrContextSaveBody = z.infer<typeof PrContextSaveBody>;
+
+export const PrContextPreview = z.object({
+  path: z.string(),
+  kind: z.enum(['specs', 'docs', 'insights']),
+  origin: PrContextOrigin,
+  /** Wrapped tokens of the document (0 when it could not be read). */
+  tokens: z.number().int(),
+  /** Commit the text was read at (null when never read). */
+  read_at_sha: z.string().nullish(),
+  status: PrContextPreviewStatus,
+  text: z.string().nullable(),
+  /** Where it was read: PR head SHA or the default branch. */
+  read_from: z.enum(['head', 'default_branch']).nullish(),
+});
+export type PrContextPreview = z.infer<typeof PrContextPreview>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

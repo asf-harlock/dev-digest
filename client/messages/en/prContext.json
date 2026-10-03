@@ -1,0 +1,70 @@
+{
+  "loadError": "Couldn't load the PR context",
+  "notCloned": "This repository isn't cloned locally, so documents can't be read. Clone it to attach context.",
+  "attached": {
+    "title": "Attached documents",
+    "empty": "No documents attached to this PR yet."
+  },
+  "attachable": {
+    "title": "Available documents",
+    "filter": "Filter documents",
+    "noMatch": "No documents match",
+    "clearFilter": "Clear filter",
+    "empty": "No documents are available to attach yet. A .md file under specs/, docs/ or insights/ that is committed to this PR or the default branch becomes attachable.",
+    "limit": "The limit of {max} attached documents is reached."
+  },
+  "suggestions": {
+    "title": "Suggested",
+    "add": "Add"
+  },
+  "kind": {
+    "specs": "spec",
+    "docs": "doc",
+    "insights": "insights"
+  },
+  "origin": {
+    "added": "added in this PR",
+    "modified": "modified in this PR",
+    "default_branch": "default branch"
+  },
+  "status": {
+    "attached": "attached",
+    "missing": "missing",
+    "too_large": "too large",
+    "unreadable": "unreadable",
+    "over_budget": "over budget",
+    "truncated": "truncated"
+  },
+  "row": {
+    "tokens": "≈ {tokens} tokens",
+    "warning": "possible injection",
+    "preview": "Preview",
+    "moveUp": "Move {path} up",
+    "moveDown": "Move {path} down",
+    "moveUpShort": "Move up",
+    "moveDownShort": "Move down"
+  },
+  "footer": {
+    "total": "≈ {used, number} of {limit, number} tokens",
+    "reserve": "Agent and skill documents keep at least {min, number} tokens per review call.",
+    "saving": "saving…",
+    "saveFailed": "Couldn't save the list. The previous list was restored.",
+    "mapReduce": "This PR is large and is reviewed in parts; PR context is sent with each part."
+  },
+  "preview": {
+    "attach": "Attach",
+    "attached": "Attached",
+    "readAt": "at {sha}",
+    "error": "Couldn't load the preview.",
+    "readFrom": {
+      "head": "Read at the PR head",
+      "default_branch": "Read from the default branch"
+    },
+    "status": {
+      "attached": "No text available.",
+      "missing": "This document doesn't exist.",
+      "too_large": "This document is too large to preview.",
+      "unreadable": "This document can't be read."
+    }
+  }
+}

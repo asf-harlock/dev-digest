@@ -14,6 +14,7 @@ import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
+import { ContextTab } from "./_components/ContextTab";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
 import { usePullDetail, usePulls } from "../../../../../lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,13 +60,25 @@ export default function PRDetailPage() {
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
+  // One URLSearchParams, every change applied, a single router.replace — two
+  // back-to-back setters would each start from the stale `search` and the
+  // second would drop the first's change.
+  const setParams = (changes: Record<string, string | null | undefined>) => {
     const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
+    for (const [key, val] of Object.entries(changes)) {
+      if (val == null) sp.delete(key);
+      else sp.set(key, val);
+    }
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  const setParam = (key: string, val: string | null) => setParams({ [key]: val });
+  // A deep link target only makes sense on the tab it was set for.
+  const setTab = (t: string) =>
+    setParams(t === tab ? { tab: t } : { tab: t, file: null, line: null });
+  const onOpenFile = (file: string, line?: number) =>
+    setParams({ tab: "diff", file, line: line != null ? String(line) : null });
+  const targetFile = search.get("file");
+  const targetLine = search.get("line");
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -142,6 +155,7 @@ export default function PRDetailPage() {
             headSha={pr.head_sha}
             repoId={repoId}
             repoFullName={repoFullName}
+            onOpenFile={onOpenFile}
           />
         )}
 
@@ -173,6 +187,8 @@ export default function PRDetailPage() {
           />
         )}
 
+        {tab === "context" && <ContextTab prId={prId} />}
+
         {tab === "diff" && (
           <DiffTab
             prId={prId}
@@ -181,6 +197,8 @@ export default function PRDetailPage() {
             canComment={pr.status === "open"}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            targetFile={targetFile}
+            targetLine={targetLine}
           />
         )}
       </div>

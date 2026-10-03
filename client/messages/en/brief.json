@@ -15,5 +15,55 @@
     "blame": "blame",
     "noHistory": "No history available for this line.",
     "noCommits": "No commits found for this line."
-  }
+  },
+  "title": "PR Brief",
+  "generate": "Generate brief",
+  "generating": "Generating brief… this can take up to a minute.",
+  "regenerate": "Regenerate brief",
+  "retry": "Retry",
+  "empty": {
+    "title": "No brief exists yet",
+    "body": "Generate a short summary of why this PR exists and where the risk is. This makes one model call."
+  },
+  "summary": "Summary",
+  "staleNote": "Generated for an older commit ({sha})",
+  "staleNoSha": "Generated for an older commit",
+  "riskAreas": "Risk areas",
+  "severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "reviewFocus": "Review focus — read these first",
+  "noFocus": "No specific places to focus on.",
+  "missingTitle": "Inputs that were missing or limited",
+  "missing": {
+    "intent_missing": "The PR intent has not been classified.",
+    "intent_other_sha": "The intent was classified for an older commit.",
+    "blast_degraded": "The blast radius map is incomplete.",
+    "specs_missing": "No spec documents were available — attach Project Context docs in an agent or skill Context tab.",
+    "specs_over_budget": "Attached spec documents were skipped — each is larger than the brief's spec token budget: {paths}",
+    "description_empty": "The PR description is empty.",
+    "issue_not_referenced": "No linked issue is referenced.",
+    "issue_unreachable": "The linked issue could not be reached.",
+    "files_truncated": "Only part of the changed files was considered.",
+    "prompt_trimmed": "Some context was trimmed to fit the prompt."
+  },
+  "error": {
+    "failed": "Brief generation failed: {message}",
+    "failedGeneric": "Brief generation failed.",
+    "timeout": "Generating is taking longer than expected. Try again in a moment.",
+    "pollFailed": "Could not read the brief status. Reload to check again.",
+    "configError": "No API key is configured for the brief model.",
+    "settingsLink": "Open Settings"
+  },
+  "fileNotInPr": "File not in this PR's diff",
+  "contextHint": {
+    "title": "Specs come from Project Context",
+    "body": "— the markdown docs in this repo (specs, PRDs, architecture rules). The brief uses the ones attached to your enabled agents or skills in their Context tab. The repo must be cloned for them to be read.",
+    "agents": "Agents",
+    "skills": "Skills",
+    "projectContext": "Project Context"
+  },
+  "contextStale": "Generated with different PR context"
 }

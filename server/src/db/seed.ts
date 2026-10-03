@@ -176,7 +176,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .returning();
   }
 
-  // pr_files (subset). Roles below are per `smart-diff/classify-file.ts`:
+  // pr_files (subset). Roles below are per `_shared/smart-diff-roles.ts`:
   // ratelimit.ts/webhooks.ts/users.ts → core, config.ts → wiring (it matches
   // the `config.ts` wiring pattern), the four rows added for Smart Diff
   // cover tests/docs/boilerplate so all five groups have at least one file.
@@ -264,6 +264,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       {
         prId: pr!.id,
         path: 'docs/rate-limiting.md',
+        status: 'added',
         additions: 9,
         deletions: 0,
         patch:

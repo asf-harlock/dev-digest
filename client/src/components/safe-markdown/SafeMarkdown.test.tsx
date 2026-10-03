@@ -41,4 +41,15 @@ describe("SafeMarkdown", () => {
     expect(ok).toHaveAttribute("href", "https://example.com");
     expect(ok).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it("renders GFM tables, task lists and rules from a PR body", () => {
+    const md = ["| Step | Done |", "|---|---|", "| lint | yes |", "", "- [x] typecheck", "", "---"].join("\n");
+    const { container } = render(<SafeMarkdown>{md}</SafeMarkdown>);
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Step" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "lint" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(container.querySelector("hr")).not.toBeNull();
+  });
 });

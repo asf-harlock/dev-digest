@@ -1,8 +1,8 @@
 /* IntentCard — specs/03-intent-layer.md §9. Renders the PR's declared intent
    & scope (D8: top of the Overview tab, before anything else) in the PR Brief
    design's "Intent" card: label inside the card, the intent as an italic
-   quote, ✓ In scope / ✕ Out of scope columns, and — only when risks are
-   supplied (PR Brief, a later lesson) — a Risk areas row. Confidence, the
+   quote and ✓ In scope / ✕ Out of scope columns (the PR Brief's Risk areas
+   live in their own card, `../RiskAreas`). Confidence, the
    staleness badge and re-run stay as compact header controls, and any
    missing/unreachable source is still shown as an honest note (D4). Renders
    an empty state — never a fabricated placeholder — when the PR hasn't been
@@ -12,10 +12,11 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, EmptyState, Icon } from "@devdigest/ui";
-import type { PrIntentRecord, Risk } from "@devdigest/shared";
+import type { PrIntentRecord } from "@devdigest/shared";
 import { useIntentClassification } from "../../../../../../../lib/hooks/intent";
+import { isContextStale, usePrContext } from "../../../../../../../lib/hooks/pr-context";
 import { notify } from "../../../../../../../lib/toast";
-import { CONFIDENCE_META, RISK_META, SCOPE_META } from "./constants";
+import { CONFIDENCE_META, SCOPE_META } from "./constants";
 import { isIntentStale, unresolvedSources } from "./helpers";
 import { s } from "./styles";
 
@@ -23,15 +24,13 @@ export function IntentCard({
   prId,
   intent,
   headSha,
-  risks,
 }: {
   prId: string | null;
   intent: PrIntentRecord | null | undefined;
   headSha?: string | null;
-  /** Risk areas from the PR Brief; the section is hidden when absent/empty. */
-  risks?: Risk[];
 }) {
   const t = useTranslations("intent");
+  const { data: prContext } = usePrContext(prId);
   // Tracks the background job until the new classification lands (the POST
   // alone returns in milliseconds), and reports progress as toasts.
   const { start, isClassifying } = useIntentClassification(prId, intent?.classified_at, {
@@ -45,14 +44,20 @@ export function IntentCard({
   if (!intent) {
     return (
       <section style={s.wrap}>
-        <EmptyState
-          icon="Target"
-          title={t("empty.title")}
-          body={isClassifying ? t("classifying.status") : t("empty.body")}
-          cta={t("empty.cta")}
-          onCta={start}
-          ctaLoading={isClassifying}
-        />
+        <div style={s.card}>
+          <div style={s.header}>
+            <Icon.Target size={14} style={s.headerIcon} />
+            <span style={s.label}>{t("title")}</span>
+          </div>
+          <EmptyState
+            icon="Target"
+            title={t("empty.title")}
+            body={isClassifying ? t("classifying.status") : t("empty.body")}
+            cta={t("empty.cta")}
+            onCta={start}
+            ctaLoading={isClassifying}
+          />
+        </div>
       </section>
     );
   }
@@ -60,7 +65,7 @@ export function IntentCard({
   const meta = CONFIDENCE_META[intent.confidence];
   const notes = unresolvedSources(intent.sources);
   const stale = isIntentStale(intent.classified_for_sha, headSha);
-  const riskList = risks ?? [];
+  const contextStale = isContextStale(intent.context_fingerprint, prContext?.fingerprint);
 
   return (
     <section style={s.wrap}>
@@ -75,6 +80,11 @@ export function IntentCard({
             {stale && (
               <Badge color="var(--warn)" bg="var(--warn-bg)" icon="Clock">
                 {t("stale")}
+              </Badge>
+            )}
+            {contextStale && (
+              <Badge color="var(--warn)" bg="var(--warn-bg)" icon="Clock">
+                {t("contextStale")}
               </Badge>
             )}
             <Button
@@ -102,27 +112,6 @@ export function IntentCard({
           <ScopeColumn kind="in" label={t("inScope")} items={intent.in_scope} empty={t("scopeEmpty")} />
           <ScopeColumn kind="out" label={t("outOfScope")} items={intent.out_of_scope} empty={t("scopeEmpty")} />
         </div>
-
-        {riskList.length > 0 && (
-          <div style={s.divider}>
-            <div style={s.listLabel("var(--text-muted)")}>
-              <Icon.AlertTriangle size={13} />
-              {t("riskAreas")}
-            </div>
-            <div style={s.chips}>
-              {riskList.map((risk, i) => {
-                const rm = RISK_META[risk.severity];
-                const RiskIcon = Icon[rm.icon];
-                return (
-                  <span key={i} style={s.chip} title={risk.explanation}>
-                    <RiskIcon size={14} style={s.riskIcon(rm.c)} />
-                    {risk.title}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {notes.length > 0 && (
           <div style={s.notesBlock}>

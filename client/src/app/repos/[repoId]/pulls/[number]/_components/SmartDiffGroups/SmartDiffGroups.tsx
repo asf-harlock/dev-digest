@@ -18,11 +18,16 @@ export function SmartDiffGroups({
   files,
   commenting,
   findings,
+  targetPath = null,
+  highlightLine = null,
 }: {
   groups: SmartDiffGroup[];
   files: PrFile[];
   commenting?: DiffCommentApi;
   findings: DiffFindingsApi;
+  /** Deep-link target: the group holding it opens. Optional. */
+  targetPath?: string | null;
+  highlightLine?: number | null;
 }) {
   const filesByPath = React.useMemo(() => fileByPath(files), [files]);
   return (
@@ -34,6 +39,8 @@ export function SmartDiffGroups({
           filesByPath={filesByPath}
           commenting={commenting}
           findings={findings}
+          targetPath={targetPath}
+          highlightLine={highlightLine}
         />
       ))}
     </div>
@@ -45,14 +52,23 @@ function SmartDiffGroupCard({
   filesByPath,
   commenting,
   findings,
+  targetPath,
+  highlightLine,
 }: {
   group: SmartDiffGroup;
   filesByPath: Map<string, PrFile>;
   commenting?: DiffCommentApi;
   findings: DiffFindingsApi;
+  targetPath?: string | null;
+  highlightLine?: number | null;
 }) {
   const t = useTranslations("prReview");
-  const [open, setOpen] = React.useState(!COLLAPSED_BY_DEFAULT.includes(group.role));
+  const hasTarget = !!targetPath && group.files.some((f) => f.path === targetPath);
+  const [open, setOpen] = React.useState(!COLLAPSED_BY_DEFAULT.includes(group.role) || hasTarget);
+  // A deep link into a collapsed group opens it (collapsed groups unmount).
+  React.useEffect(() => {
+    if (hasTarget) setOpen(true);
+  }, [hasTarget, targetPath]);
 
   const groupFiles = group.files
     .map((f) => filesByPath.get(f.path))
@@ -97,7 +113,13 @@ function SmartDiffGroupCard({
       </div>
       {open && (
         <div style={s.groupBody}>
-          <DiffViewer files={groupFiles} commenting={commenting} findings={findings} />
+          <DiffViewer
+            files={groupFiles}
+            commenting={commenting}
+            findings={findings}
+            targetPath={hasTarget ? targetPath : null}
+            highlightLine={highlightLine}
+          />
         </div>
       )}
     </div>

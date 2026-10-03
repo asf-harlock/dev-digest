@@ -10,7 +10,7 @@ import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
 import { SmartDiffGroups } from "../SmartDiffGroups";
-import { groupFindingsByPath, latestFindingsPerAgent } from "./helpers";
+import { groupFindingsByPath, latestFindingsPerAgent, resolveDeepLink } from "./helpers";
 import { s } from "./styles";
 
 type DiffOrder = "smart" | "original";
@@ -25,10 +25,17 @@ interface DiffTabProps {
    *  FindingsPanel already thread through on the other tabs. */
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Raw `?file=` / `?line=` query values (Overview deep links). */
+  targetFile?: string | null;
+  targetLine?: string | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment, repoFullName, headSha }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, repoFullName, headSha, targetFile, targetLine }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tBrief = useTranslations("brief");
+  const target = React.useMemo(() => resolveDeepLink(files, targetFile, targetLine), [files, targetFile, targetLine]);
+  const targetPath = target.status === "found" ? target.path : null;
+  const highlightLine = target.status === "found" ? target.line : null;
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   // Comments start hidden so the diff is clean by default — toggle to reveal.
@@ -116,13 +123,27 @@ export function DiffTab({ prId, filesCount, files, canComment, repoFullName, hea
         </div>
       </div>
 
+      {target.status === "missing" && (
+        <div style={s.loadingNote} role="status">
+          <Icon.AlertTriangle size={14} />
+          {tBrief("fileNotInPr")}
+        </div>
+      )}
+
       {showSmartLoading ? (
         <div style={s.loadingNote}>
           <Icon.RefreshCw size={14} />
           {t("smartDiff.loading")}
         </div>
       ) : showSmart && smartDiff ? (
-        <SmartDiffGroups groups={smartDiff.groups} files={files} commenting={commenting} findings={findings} />
+        <SmartDiffGroups
+          groups={smartDiff.groups}
+          files={files}
+          commenting={commenting}
+          findings={findings}
+          targetPath={targetPath}
+          highlightLine={highlightLine}
+        />
       ) : (
         // Original order, or the smart-diff query failed / returned no groups.
         // NOTE: switching between this flat view and SmartDiffGroups — via the
@@ -131,7 +152,13 @@ export function DiffTab({ prId, filesCount, files, canComment, repoFullName, hea
         // tree, so every FileCard/CodeLine/InlineComposer remounts and resets
         // its per-file open state (and drops any in-progress comment draft).
         // Accepted for now; see the plan for the tracked follow-up.
-        <DiffViewer files={files} commenting={commenting} findings={findings} />
+        <DiffViewer
+          files={files}
+          commenting={commenting}
+          findings={findings}
+          targetPath={targetPath}
+          highlightLine={highlightLine}
+        />
       )}
     </section>
   );

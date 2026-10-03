@@ -169,7 +169,7 @@ export class ReviewService {
     void (async () => {
       try {
         const diff = await loadDiff(this.container, this.repo, workspaceId, pull, repo);
-        const { intent } = await classifyIntent(
+        const { intent, contextFingerprint } = await classifyIntent(
           this.container,
           this.repo,
           { workspaceId, pull, repoRef: { owner: repo.owner, name: repo.name }, diff },
@@ -178,6 +178,7 @@ export class ReviewService {
         await this.repo.upsertIntent(pull.id, intent, {
           classifiedAt: new Date(),
           classifiedForSha: pull.headSha,
+          contextFingerprint,
         });
       } catch (err) {
         logger?.error(

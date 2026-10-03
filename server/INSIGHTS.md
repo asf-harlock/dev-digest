@@ -72,6 +72,12 @@ needed none of those and cannot drift.
   feature that reads a user-chosen path must reject `..`, absolute paths and
   symlinks itself (precedent: `repo-intel/pipeline/walk.ts:89`).
   `server/src/adapters/git/simple-git.ts:77-88,129-131`
+  **2026-10-01** — `fetchPullHead` has no caller, and its refspec
+  `pull/N/head:pr-N` lacks `+`, so a re-fetch after a force-push fails
+  `non-fast-forward` (rc=1). `git fetch origin <sha>` (no local ref) works
+  against GitHub in ~0.8 s and avoids it. The clone's `origin` URL embeds the
+  token (`https://x-access-token:…@github.com/…`): never log the remote URL or
+  raw git stderr unredacted. Verified on scratch clones for SPEC-07.
 
 - **2026-09-26** — A module that maps another module's facade result cannot
   type its `helpers.ts` with that result's type. `no-cross-module-import` blocks
@@ -82,6 +88,17 @@ needed none of those and cannot drift.
   `container.repoIntel.…()` call in `service.ts`. That call site is the only
   place drift is caught, so never cast it. `server/src/modules/blast/helpers.ts`
   (`BlastFacadeResult`), `server/.dependency-cruiser.cjs`
+  **2026-09-30** — moved to `server/src/modules/_shared/blast-map.ts` (SPEC-06),
+  so `brief/` can reuse it too. `blast/helpers.ts` no longer exists, but comments
+  in `repo-intel/service.ts:530,768` still cite it.
+
+- **2026-09-30** — A `ProjectContextEntry` that can be used has
+  `status: 'attached'`. There is no `'ok'` status, and a plan assumed one. When
+  the repo is not cloned, `resolveProjectContext` does not return `[]`. It
+  returns entries marked `unreadable` with empty `text` (`failAll()`). Before
+  building a prompt section, filter to `attached` entries with non-empty text,
+  or an empty `wrapUntrusted` block gets emitted.
+  `server/src/modules/_shared/project-context.ts:310,340`
 
 
 - **2026-09-26** — `repoIntel.getBlastRadius` returns a thinner result than its
@@ -163,6 +180,10 @@ needed none of those and cannot drift.
   `server/test/reviews-helpers.test.ts` (`INTENT_FALLBACK_PROVIDER/MODEL
   mirrors FEATURE_MODELS`) — copy that pattern for any other feature-model
   fallback constant.
+  **2026-09-30** — `brief/repository.ts` is a fourth copy: SPEC-06's plan
+  first called `resolveFeatureModel` from `settings/feature-models.ts`, and the
+  cross-model review caught it as a `no-cross-module-import` blocker before
+  code was written. A shared `_shared/` resolver is now overdue.
 
 - **2026-09-20** — Same `no-cross-module-import` rule, other escape hatch: when
   the thing two modules need is a PURE FUNCTION over data both already hold
@@ -283,6 +304,18 @@ needed none of those and cannot drift.
 
 ## Tool & Library Notes
 
+- **2026-09-30** — An LLM call cannot be cancelled. `StructuredRequest` has
+  `timeoutMs` but no `signal` (`vendor/shared/adapters.ts:55-62`). The
+  adapters apply `timeoutMs` per attempt, through a non-cancelling
+  `withTimeout` race inside the `maxRetries+1` loop (`adapters/llm/openai.ts:88-110`),
+  so one `completeStructured` can run for about 3 × `timeoutMs` plus transport
+  retries. A `Promise.race` deadline on top frees the caller, not the HTTP
+  request. For an in-memory per-key lock, this means releasing the lock when
+  the deadline fires lets a second paid call start while the first is still
+  running. Hold the lock until the underlying promise settles, and discard a
+  late result with an expired flag (`brief/service.ts` `withDeadline`).
+  `onboarding-tour/service.ts:48-58` still releases at the deadline.
+
 - **2026-09-18** — Two dependency-cruiser settings decide whether `pnpm arch`
   (`server/.dependency-cruiser.cjs`) checks anything at all, and both fail
   SILENTLY with a green "no dependency violations found". (1) Listing
@@ -300,6 +333,16 @@ needed none of those and cannot drift.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-01** — The brief says "No spec documents were available — attach
+  Project Context docs" even though a doc IS attached: the doc was skipped
+  whole, not missing. Two size gates drop real specs silently: the brief's
+  `SPEC_DOCS_TOKEN_BUDGET` (was 4 000; this repo's specs are 6–10k tokens;
+  raised to 10 000 in 97b8614, and the message now names the skipped doc) and
+  `MAX_CONTEXT_FILE_BYTES` = 32 KB (`_shared/context-paths.ts:18`), which still
+  rejects `specs/06-pr-brief.md` (34 962 B) as `too_large` for any agent.
+  Diagnose by token-counting the file with `TiktokenTokenizer` and `wc -c`
+  before reading resolver code. SPEC-07 gives PR context a 64 KB cap.
+
 - **2026-09-17** — `Run failed: 401 User not found.` mid-agent-run is OpenRouter
   rejecting the key, not a bug in the run pipeline. `container.buildLlm` only
   checks that the secret is a non-empty string
@@ -313,6 +356,12 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-09-30** — SPEC-06 PR Brief built via `/run-plan`. It added the
+  `brief/` module (GET/POST `/pulls/:id/brief`, atomic jsonb-merge cache in
+  `pr_brief.json`). It moved `linked-issue`, `smart-diff-roles`, `blast-map`
+  and `hunk-headers` into `_shared/`. There are no brief tests yet
+  (test-writer was off). See Tool & Library Notes and Codebase Patterns.
 
 - **2026-09-23** — Built the full Intent Layer feature (`specs/03-intent-layer.md`):
   `pr_intent`/`findings` schema extension (migration `0015`), the
@@ -382,6 +431,15 @@ needed none of those and cannot drift.
   threaded through the run executor, repository and the PR-list route.
 
 ## Open Questions
+
+- **2026-10-02** — `detectInjectionPatterns` flags documents that *discuss*
+  prompt injection. In the browser, `specs/04-project-context.md` attached as PR
+  context showed the "possible injection" badge (EC-25), because the spec quotes
+  the patterns it defends against. It's harmless, since the badge is advisory
+  and the text is still wrapped as untrusted. But every security spec in
+  `specs/` will warn, so users may learn to ignore the badge. Unresolved:
+  whether to exempt fenced code or quoted examples.
+  `modules/_shared/injection-detection.ts`
 
 - **2026-09-30** — `test/onboarding-tour.it.test.ts` passes 27/27 alone but
   1–3 different cases fail per run inside the full parallel `pnpm test`

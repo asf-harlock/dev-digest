@@ -63,6 +63,8 @@ export const PrIntentRecord = Intent.extend({
   pr_id: z.string(),
   classified_at: z.string().nullish(),
   classified_for_sha: z.string().nullish(),
+  /** SPEC-07: fingerprint of the PR context it was classified with. */
+  context_fingerprint: z.string().nullish(),
 });
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 

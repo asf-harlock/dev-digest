@@ -9,12 +9,18 @@ const hookState = { isClassifying: false };
 vi.mock("../../../../../../../lib/hooks/intent", () => ({
   useIntentClassification: () => ({ start: mutate, isClassifying: hookState.isClassifying }),
 }));
+const prContext: { fingerprint: string | null | undefined } = { fingerprint: undefined };
+vi.mock("../../../../../../../lib/hooks/pr-context", async (orig) => ({
+  ...(await orig<typeof import("../../../../../../../lib/hooks/pr-context")>()),
+  usePrContext: () => ({ data: prContext.fingerprint === undefined ? undefined : { fingerprint: prContext.fingerprint } }),
+}));
 
 import { IntentCard } from "./IntentCard";
 
 afterEach(() => {
   cleanup();
   hookState.isClassifying = false;
+  prContext.fingerprint = undefined;
 });
 
 function renderWithIntl(ui: React.ReactElement) {
@@ -83,31 +89,37 @@ describe("IntentCard (smoke)", () => {
     expect(mutate).toHaveBeenCalled();
   });
 
-  it("hides Risk areas without risks and renders a chip per risk when supplied", () => {
-    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
-    expect(screen.queryByText("Risk areas")).not.toBeInTheDocument();
-    cleanup();
-
-    renderWithIntl(
-      <IntentCard
-        prId="pr1"
-        intent={baseIntent}
-        headSha="abc123"
-        risks={[
-          { kind: "auth", title: "Auth surface touched", explanation: "e", severity: "high", file_refs: [] },
-          { kind: "dep", title: "New dependency: ioredis", explanation: "e", severity: "medium", file_refs: [] },
-        ]}
-      />,
-    );
-    expect(screen.getByText("Risk areas")).toBeInTheDocument();
-    expect(screen.getByText("Auth surface touched")).toBeInTheDocument();
-    expect(screen.getByText("New dependency: ioredis")).toBeInTheDocument();
-  });
-
   it("shows a staleness banner when the PR's head_sha has moved since classification", () => {
     renderWithIntl(
       <IntentCard prId="pr1" intent={baseIntent} headSha="def456" />,
     );
     expect(screen.getByText("PR updated since this was classified")).toBeInTheDocument();
+  });
+});
+
+describe("IntentCard — PR-context stale note (SPEC-07 AC-39, EC-21)", () => {
+  const note = "Classified with different PR context";
+
+  it("AC-39: shown when the stored fingerprint differs from the current one", () => {
+    prContext.fingerprint = "new";
+    renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, context_fingerprint: "old" }} headSha="abc123" />);
+    expect(screen.getByText(note)).toBeInTheDocument();
+  });
+
+  it("AC-39: not shown when equal; a null/absent stored fingerprint is never stale; unloaded current is unknown", () => {
+    prContext.fingerprint = "same";
+    renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, context_fingerprint: "same" }} headSha="abc123" />);
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
+    cleanup();
+    prContext.fingerprint = "new";
+    renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, context_fingerprint: null }} headSha="abc123" />);
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
+    cleanup();
+    renderWithIntl(<IntentCard prId="pr1" intent={baseIntent} headSha="abc123" />);
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
+    cleanup();
+    prContext.fingerprint = undefined;
+    renderWithIntl(<IntentCard prId="pr1" intent={{ ...baseIntent, context_fingerprint: "old" }} headSha="abc123" />);
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
   });
 });

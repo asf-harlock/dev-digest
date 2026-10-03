@@ -21,6 +21,7 @@ export function CodeLine({
   commenting,
   findings,
   renderFinding,
+  highlighted = false,
 }: {
   ln: Line;
   path: string;
@@ -29,10 +30,16 @@ export function CodeLine({
   /** This line's Smart Diff findings (already anchored by FileCard), if any. */
   findings?: FindingRecord[];
   renderFinding?: (f: FindingRecord) => React.ReactNode;
+  /** Deep-link target: outline the row and scroll it into view. Default off. */
+  highlighted?: boolean;
 }) {
   const t = useTranslations("prReview");
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (highlighted) rowRef.current?.scrollIntoView?.({ block: "center" });
+  }, [highlighted]);
   const lineFindings = findings ?? [];
   // Bar + label reflect only live findings (dismissed ones never count toward a
   // severity signal); every finding, dismissed included, still renders its card.
@@ -53,11 +60,13 @@ export function CodeLine({
 
   return (
     <div
+      ref={rowRef}
+      data-highlighted={highlighted ? "true" : undefined}
       style={cs.rowWrap}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={{ ...lineRowFor(ln.kind), ...(topSeverity ? findingBarFor(SEVERITY_LINE_COLOR[topSeverity]) : {}) }}>
+      <div style={{ ...lineRowFor(ln.kind), ...(highlighted ? s.lineHighlighted : {}), ...(topSeverity ? findingBarFor(SEVERITY_LINE_COLOR[topSeverity]) : {}) }}>
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button

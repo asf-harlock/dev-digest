@@ -5,6 +5,7 @@ import type {
   PrMeta,
   PrDetail,
   PrStatus,
+  PrFileStatus,
   GitHubReviewPayload,
   CreateReviewCommentInput,
   PrReviewComment,
@@ -15,6 +16,15 @@ import type {
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
 const TIMEOUT = 30_000;
+
+/**
+ * GitHub file status -> pr_files.status (added | modified | removed | renamed).
+ * `copied`, `changed` and `unchanged` (and anything unknown) map to `modified`.
+ */
+function mapFileStatus(status: string | undefined): PrFileStatus {
+  if (status === 'added' || status === 'removed' || status === 'renamed') return status;
+  return 'modified';
+}
 
 function mapStatus(state: string, merged: boolean | undefined): PrStatus {
   if (merged) return 'merged';
@@ -105,6 +115,7 @@ export class OctokitGitHubClient implements GitHubClient {
             body: pr.body,
             files: files.map((f) => ({
               path: f.filename,
+              status: mapFileStatus(f.status),
               additions: f.additions,
               deletions: f.deletions,
               patch: f.patch,

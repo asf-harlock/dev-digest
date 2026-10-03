@@ -43,6 +43,14 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## What Works
 
+- **2026-10-02** — When the approved spec lives only on a docs branch (SPEC-07
+  was on `docs/spec-07-pr-context`, not on `L05-homework`), `/run-plan` and the
+  agents can't find `specs/NN-*.md`. Planning worked from
+  `git show <branch>:specs/NN-*.md`. Execution worked from a copy at
+  `.claude/sdd/SPEC-NN/spec.md` (git-ignored), named as the spec in every agent
+  prompt, which leaves the tracked tree untouched. The spec still has to land on
+  the implementation branch before the PR.
+
 - **2026-09-16** — `main` is trimmed, but the lessons' code is still in git.
   Before building a lesson feature, look for a prior implementation:
   `git log -S '<identifier>' --oneline --all`. The Run Cost feature came back
@@ -51,6 +59,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   Cheaper and more faithful than re-deriving it from the design mockups.
 
 ## What Doesn't Work
+
+- **2026-10-02** — A contract-first W1 whose plan names a contract without its
+  fields ships shapes too narrow for the spec, and the gaps surface only once
+  W2 consumers hit them. SPEC-07 needed a second contract pass for 4 gaps:
+  `PrContextPreview` lacked kind/origin/tokens/read_at_sha (AC-42),
+  `PrContextOrigin` couldn't express added vs modified (AC-2, and that needed
+  migration 0018 for `pr_files.status`), `RunSummary` had no
+  `context_fingerprint` (AC-38..40), and `ReadFileAtCommitResult` had no
+  `not_utf8` (EC-7). Before launching W1, check every AC/EC that names a
+  displayed or stored field against the plan's contract step, and list the
+  fields explicitly.
 
 - **2026-09-30** — Relaying a user's approval to a subagent does not let it edit
   `*/src/vendor/**`. The implementer's Edit on both `contracts/knowledge.ts`
@@ -108,6 +127,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `server/src/vendor/shared/contracts/trace.ts`
 
 ## Tool & Library Notes
+
+- **2026-10-01** — `/pr-self-review` via the Skill tool can load the USER-level
+  `~/.claude/skills/pr-self-review` (a PrestaShop `dt review` skill) instead of
+  this repo's `.claude/skills/pr-self-review` — same name, and the global one
+  wins. It writes no `.claude/pr-self-review/report.md`, so the push/PR hook
+  stays blocked. If the loaded skill mentions `dt`, PHPStan or `sites.json`,
+  ignore it and run `.claude/skills/pr-self-review/scripts/collect-diff.sh`,
+  `hard-rules.sh`, `run-gates.sh`, the reviewer fan-out, then `build-report.sh`.
+  Also: `collect-diff.sh` counts untracked files, so stash run artifacts
+  (`.claude/sdd/`, `.claude/workflow-retro/`, `.playwright-mcp/` — not ignored
+  on `main`) before collecting.
 
 - **2026-09-29** — Claude Code transcripts (`~/.claude/projects/<cwd with /
   and . → ->/<session>.jsonl`, subagents in `<session>/subagents/agent-<id>.jsonl`
@@ -205,6 +235,21 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Session Notes
 
+- **2026-10-02** — SPEC-07 PR Context via `/run-plan --tests`: planner (2
+  phases) → W1 → W2a ∥ W2c ∥ W2d → W2b → contract-gap pass (+ migration 0018)
+  → test-writer → verify #1 (7 Fails fixed) → 3 reviewers (1 WARNING, fixed) →
+  verify #2 → Playwright. Migrations 0017/0018 broke the running pulls list
+  (`column "context_paths" does not exist`) until `pnpm db:migrate`. Entries:
+  root What Works (spec on another branch), root What Doesn't Work (narrow W1
+  contracts), `server/` Open Questions (injection false positive).
+
+- **2026-10-01** — Landed SPEC-04/05/06 on `main` ahead of their code
+  (PR #17; specs must be on the base branch for PR review), fixed the brief's
+  spec budget, drafted SPEC-07 PR Context (spec-creator → researcher ×2 ∥).
+  In zsh, quote git pathspec globs (`git checkout B -- 'specs/04-*'`): unquoted,
+  zsh expands against the current tree and aborts with "no matches found".
+  Entries: root Tool Notes (pr-self-review shadowing), `server/` Recurring
+  Errors (spec size gates), `server/` Codebase Patterns (fetchPullHead, token URL).
 
 - **2026-09-29** — SPEC-04 Project Context (approved): spec-creator (Opus,
   2 phases) → researcher ×2 ∥ → answers → draft → lint → approved. Then

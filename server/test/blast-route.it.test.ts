@@ -8,7 +8,7 @@ import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
 import type { RepoIntel } from '../src/modules/repo-intel/types.js';
-import type { BlastFacadeResult } from '../src/modules/blast/helpers.js';
+import type { BlastFacadeResult } from '../src/modules/_shared/blast-map.js';
 import { BlastRepository } from '../src/modules/blast/repository.js';
 
 /**

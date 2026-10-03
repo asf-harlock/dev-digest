@@ -1,5 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, access, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
@@ -9,8 +10,20 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  ReadFileAtCommitResult,
+  EnsureCommitResult,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './diff-parser.js';
+import { parseLsTreeEntry } from './ls-tree.js';
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+/** Ceiling for the cheap local git reads (`ls-tree`, `cat-file`). */
+const LOCAL_GIT_TIMEOUT_MS = 10_000;
+
+/** Single-flight map: concurrent `ensureCommit` callers share one fetch. */
+const ensureInflight = new Map<string, Promise<EnsureCommitResult>>();
+/** Tail of the per-clone fetch chain (NFR-3). */
+const cloneQueue = new Map<string, Promise<void>>();
 
 /**
  * Depth fetched by `sync()`. Deeper than the shallow clone (CLONE_DEPTH=1) so the
@@ -27,8 +40,19 @@ const HISTORY_MAX_DAYS = 3650;
  * GitClient over simple-git. Repos clone to
  * `<cloneDir>/<owner>/<repo>`. We NEVER execute repo code — only git ops.
  */
+/** Limits injected by the container so the adapter never imports from `modules/`. */
+export interface SimpleGitClientLimits {
+  /** Largest PR-context document read from git, in bytes. */
+  prContextMaxFileBytes: number;
+  /** Timeout for the fetch of a PR head commit, in ms. */
+  prContextFetchTimeoutMs: number;
+}
+
 export class SimpleGitClient implements GitClient {
-  constructor(private cloneDir: string) {
+  constructor(
+    private cloneDir: string,
+    private limits: SimpleGitClientLimits,
+  ) {
     // Force non-interactive auth so an unauthenticated/private clone fails in
     // ~1s with a clear error instead of hanging on a credential prompt until the
     // job timeout. Set on process.env (inherited by git subprocesses) rather
@@ -164,6 +188,138 @@ export class SimpleGitClient implements GitClient {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** Run git with an argv array (no shell); resolves stdout as a Buffer. */
+  private runGit(
+    repo: RepoRef,
+    args: string[],
+    opts: { timeoutMs: number; maxBuffer: number },
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      execFile(
+        'git',
+        ['--literal-pathspecs', ...args],
+        {
+          cwd: this.clonePathFor(repo),
+          encoding: 'buffer',
+          timeout: opts.timeoutMs,
+          maxBuffer: opts.maxBuffer,
+          windowsHide: true,
+        },
+        (err, stdout) => (err ? reject(err) : resolve(stdout)),
+      );
+    });
+  }
+
+  async readFileAtCommit(repo: RepoRef, sha: string, path: string): Promise<ReadFileAtCommitResult> {
+    // Defence in depth: the resolver validates these too (UI-1, UI-3).
+    if (!FULL_SHA.test(sha)) return { ok: false, reason: 'fetch_failed' };
+    if (path.length === 0 || path.startsWith(':') || posix.normalize(path) !== path) {
+      return { ok: false, reason: 'not_found' };
+    }
+    let listing: Buffer;
+    try {
+      listing = await this.runGit(repo, ['ls-tree', '-l', '-z', sha, '--', path], {
+        timeoutMs: LOCAL_GIT_TIMEOUT_MS,
+        maxBuffer: 1024 * 1024,
+      });
+    } catch {
+      return { ok: false, reason: 'fetch_failed' };
+    }
+    const entry = parseLsTreeEntry(listing.toString('utf8'), path);
+    if (!entry) return { ok: false, reason: 'not_found' };
+    if (entry.mode === '120000') return { ok: false, reason: 'symlink' };
+    if (entry.mode === '160000' || entry.type === 'commit') return { ok: false, reason: 'submodule' };
+    if (entry.type !== 'blob' || (entry.mode !== '100644' && entry.mode !== '100755')) {
+      return { ok: false, reason: 'not_blob' };
+    }
+    if (entry.size === null || entry.size > this.limits.prContextMaxFileBytes) {
+      return { ok: false, reason: 'too_large' };
+    }
+    let buf: Buffer;
+    try {
+      buf = await this.runGit(repo, ['cat-file', 'blob', entry.oid], {
+        timeoutMs: LOCAL_GIT_TIMEOUT_MS,
+        maxBuffer: this.limits.prContextMaxFileBytes + 1,
+      });
+    } catch {
+      return { ok: false, reason: 'fetch_failed' };
+    }
+    if (buf.length > this.limits.prContextMaxFileBytes) return { ok: false, reason: 'too_large' };
+    // EC-7: a NUL byte or invalid UTF-8 is `not_utf8` (the resolver reports it unreadable).
+    if (buf.includes(0)) return { ok: false, reason: 'not_utf8' };
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+      return { ok: true, reason: 'ok', text, blobId: entry.oid };
+    } catch {
+      return { ok: false, reason: 'not_utf8' };
+    }
+  }
+
+  ensureCommit(repo: RepoRef, sha: string, prNumber: number): Promise<EnsureCommitResult> {
+    if (!FULL_SHA.test(sha)) return Promise.resolve({ ok: false, reason: 'invalid_sha' });
+    if (!Number.isInteger(prNumber) || prNumber < 1) {
+      return Promise.resolve({ ok: false, reason: 'fetch_failed' });
+    }
+    // NFR-3: at most one fetch per clone at a time. Same clone + SHA shares the
+    // in-flight result; a different SHA waits for it, then runs its own.
+    const clone = this.clonePathFor(repo);
+    const key = `${clone}\0${sha}`;
+    const same = ensureInflight.get(key);
+    if (same) return same;
+    const prev = cloneQueue.get(clone) ?? Promise.resolve();
+    const p = prev.then(() => this.doEnsureCommit(repo, sha, prNumber));
+    ensureInflight.set(key, p);
+    const tail = p.then(
+      () => undefined,
+      () => undefined,
+    );
+    cloneQueue.set(clone, tail);
+    void tail.then(() => {
+      ensureInflight.delete(key);
+      if (cloneQueue.get(clone) === tail) cloneQueue.delete(clone);
+    });
+    return p;
+  }
+
+  private async doEnsureCommit(repo: RepoRef, sha: string, prNumber: number): Promise<EnsureCommitResult> {
+    const deadline = Date.now() + this.limits.prContextFetchTimeoutMs;
+    const has = async () => {
+      try {
+        await this.runGit(repo, ['cat-file', '-e', `${sha}^{commit}`], {
+          timeoutMs: LOCAL_GIT_TIMEOUT_MS,
+          maxBuffer: 1024,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (await has()) return { ok: true };
+    const attempts = [
+      ['fetch', 'origin', sha],
+      ['fetch', 'origin', `+pull/${prNumber}/head:pr-${prNumber}`],
+    ];
+    let timedOut = false;
+    for (const args of attempts) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        timedOut = true;
+        break;
+      }
+      try {
+        await this.runGit(repo, args, { timeoutMs: remaining, maxBuffer: 1024 * 1024 });
+      } catch (err) {
+        if ((err as { killed?: boolean }).killed) {
+          timedOut = true;
+          break;
+        }
+        continue; // fall through to the next refspec
+      }
+      if (await has()) return { ok: true };
+    }
+    return { ok: false, reason: timedOut ? 'timeout' : 'fetch_failed' };
   }
 
   async readFile(repo: RepoRef, path: string): Promise<string> {

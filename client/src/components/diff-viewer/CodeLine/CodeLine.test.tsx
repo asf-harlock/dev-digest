@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord } from "@/lib/types";
@@ -6,7 +6,12 @@ import type { Line } from "../helpers";
 import prReviewMessages from "../../../../messages/en/prReview.json";
 import { CodeLine } from "./CodeLine";
 
-afterEach(cleanup);
+const scrollIntoView = vi.fn();
+HTMLElement.prototype.scrollIntoView = scrollIntoView;
+afterEach(() => {
+  cleanup();
+  scrollIntoView.mockClear();
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -108,5 +113,18 @@ describe("CodeLine", () => {
     expect(screen.queryByText("blocker")).not.toBeInTheDocument();
     expect(screen.queryByText("suggestion")).not.toBeInTheDocument();
     expect(screen.getByText("rendered:f1")).toBeInTheDocument();
+  });
+
+  it("SPEC-06 F3: highlighted defaults to off - no marker and no scrolling; on, it marks and scrolls the row", () => {
+    renderWithIntl(<CodeLine ln={LINE} path="src/config.ts" threads={[]} />);
+    expect(document.querySelector("[data-highlighted]")).toBeNull();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    cleanup();
+
+    renderWithIntl(<CodeLine ln={LINE} path="src/config.ts" threads={[]} highlighted />);
+    const row = document.querySelector('[data-highlighted="true"]');
+    expect(row).toHaveTextContent("stripeSecretKey: 'sk_live_x',");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(row);
   });
 });

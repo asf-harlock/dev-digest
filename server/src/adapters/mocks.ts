@@ -18,6 +18,8 @@ import type {
   CommitFilesPayload,
   IssueMeta,
   GitClient,
+  ReadFileAtCommitResult,
+  EnsureCommitResult,
   CloneOptions,
   UnifiedDiff,
   BlameLine,
@@ -252,6 +254,13 @@ export interface MockGitOptions {
   historyError?: Error;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
+  /**
+   * SPEC-07: blobs by `<sha>:<path>` for `readFileAtCommit`. A string is an ok
+   * read; an object gives a specific failure reason.
+   */
+  commitFiles?: Record<string, string | { reason: 'not_found' | 'symlink' | 'submodule' | 'not_blob' | 'too_large' | 'not_utf8' | 'fetch_failed' }>;
+  /** Result of `ensureCommit` (default ok). */
+  ensureCommit?: EnsureCommitResult;
 }
 
 export class MockGitClient implements GitClient {
@@ -299,6 +308,21 @@ export class MockGitClient implements GitClient {
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';
+  }
+  public ensured: { sha: string; prNumber: number }[] = [];
+  public commitReads: { sha: string; path: string }[] = [];
+  async ensureCommit(_repo: RepoRef, sha: string, prNumber: number): Promise<EnsureCommitResult> {
+    this.ensured.push({ sha, prNumber });
+    return this.opts.ensureCommit ?? { ok: true };
+  }
+  async readFileAtCommit(_repo: RepoRef, sha: string, path: string): Promise<ReadFileAtCommitResult> {
+    this.commitReads.push({ sha, path });
+    const hit = this.opts.commitFiles?.[`${sha}:${path}`];
+    if (hit === undefined) return { ok: false, reason: 'not_found' };
+    if (typeof hit === 'string') {
+      return { ok: true, reason: 'ok', text: hit, blobId: `blob-${hit.length}-${path}` };
+    }
+    return { ok: false, reason: hit.reason };
   }
 }
 

@@ -7,16 +7,20 @@
    by URL, rather than mocked at the hook level — DiffTab imports them
    directly and there's no seam to intercept short of the network. */
 import { describe, it, expect, afterEach, vi } from "vitest";
+const scrollIntoView = vi.fn();
+HTMLElement.prototype.scrollIntoView = scrollIntoView;
 import { render, screen, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PrFile, SmartDiffResponse } from "@devdigest/shared";
+import briefMessages from "../../../../../../../../messages/en/brief.json";
 import prReviewMessages from "../../../../../../../../messages/en/prReview.json";
 import shellMessages from "../../../../../../../../messages/en/shell.json";
 import { DiffTab } from "./DiffTab";
 
 afterEach(() => {
   cleanup();
+  scrollIntoView.mockClear();
   vi.unstubAllGlobals();
 });
 
@@ -51,12 +55,12 @@ function mockFetch(smartDiff: SmartDiffMock) {
   vi.stubGlobal("fetch", fetchMock);
 }
 
-function renderTab() {
+function renderTab(props: Partial<React.ComponentProps<typeof DiffTab>> = {}, files: PrFile[] = FILES) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ prReview: prReviewMessages, shell: shellMessages }}>
-        <DiffTab prId="pr1" filesCount={FILES.length} files={FILES} />
+      <NextIntlClientProvider locale="en" messages={{ prReview: prReviewMessages, shell: shellMessages, brief: briefMessages }}>
+        <DiffTab prId="pr1" filesCount={files.length} files={files} {...props} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
@@ -117,5 +121,57 @@ describe("DiffTab", () => {
     expect(screen.queryByText("Core logic")).not.toBeInTheDocument();
     expect(screen.queryByText("Docs")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Smart order" })).not.toBeInTheDocument();
+  });
+
+  describe("deep link (?file=&line=)", () => {
+    const DOC_PATCH = "@@ -1,2 +1,3 @@\n intro\n+added doc line\n outro";
+    const DEEP_FILES: PrFile[] = [
+      { path: "src/api/users.ts", additions: 1, deletions: 0, patch: "@@ -1,1 +1,2 @@\n a\n+core line" },
+      { path: "docs/rate-limiting.md", additions: 1, deletions: 0, patch: DOC_PATCH },
+    ];
+    const GROUPS_BODY: SmartDiffResponse = {
+      groups: [
+        { role: "core", files: [{ path: "src/api/users.ts", additions: 1, deletions: 0, finding_lines: [] }] },
+        { role: "docs", files: [{ path: "docs/rate-limiting.md", additions: 1, deletions: 0, finding_lines: [] }] },
+      ],
+      split_suggestion: { too_big: false, total_lines: 2, proposed_splits: [] },
+    };
+
+    it("SPEC-06 AC-15/AC-16: opens the collapsed target group and file, highlights the exact line and scrolls it into view", async () => {
+      mockFetch({ status: 200, body: GROUPS_BODY });
+      renderTab({ targetFile: "docs/rate-limiting.md", targetLine: "2" }, DEEP_FILES);
+
+      expect(await screen.findByText("added doc line")).toBeInTheDocument(); // docs starts collapsed
+      const marked = document.querySelectorAll('[data-highlighted="true"]');
+      expect(marked).toHaveLength(1);
+      expect(marked[0]).toHaveTextContent("added doc line");
+      expect(scrollIntoView.mock.contexts).toContain(marked[0]);
+      expect(screen.queryByText("File not in this PR's diff")).not.toBeInTheDocument();
+    });
+
+    it("SPEC-06 AC-15: works in the flat (Original order) view too", async () => {
+      mockFetch({ status: 500 });
+      renderTab({ targetFile: "docs/rate-limiting.md", targetLine: "2" }, DEEP_FILES);
+
+      const row = await screen.findByText("added doc line");
+      expect(row.closest('[data-highlighted="true"]')).not.toBeNull();
+    });
+
+    it("SPEC-06 EC-17: a line that is not rendered opens the file without highlighting anything", async () => {
+      mockFetch({ status: 200, body: GROUPS_BODY });
+      renderTab({ targetFile: "docs/rate-limiting.md", targetLine: "999" }, DEEP_FILES);
+
+      expect(await screen.findByText("added doc line")).toBeInTheDocument();
+      expect(document.querySelector("[data-highlighted]")).toBeNull();
+    });
+
+    it("SPEC-06 EC-16: a file that is not in the PR shows the notice and highlights nothing", async () => {
+      mockFetch({ status: 200, body: GROUPS_BODY });
+      renderTab({ targetFile: "users.ts", targetLine: "1" }, DEEP_FILES); // partial path: no fuzzy match
+
+      expect(await screen.findByText("File not in this PR's diff")).toBeInTheDocument();
+      expect(document.querySelector("[data-highlighted]")).toBeNull();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
   });
 });

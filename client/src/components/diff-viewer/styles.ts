@@ -11,6 +11,12 @@ export const s = {
     overflow: "hidden",
     background: "var(--bg-elevated)",
   } satisfies CSSProperties,
+  /** Deep-link target line (Review focus / risk refs) — optional, additive. */
+  lineHighlighted: {
+    outline: "2px solid var(--accent)",
+    outlineOffset: -2,
+    background: "var(--accent-bg)",
+  } satisfies CSSProperties,
   fileHeader: {
     display: "flex",
     alignItems: "center",

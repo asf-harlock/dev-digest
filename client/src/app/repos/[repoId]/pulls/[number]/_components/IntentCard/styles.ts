@@ -2,9 +2,10 @@ import type { CSSProperties } from "react";
 
 /** Co-located styles for IntentCard — matches the PR Brief design's "Intent"
  *  card: label inside the card, italic quoted intent, ✓/✕ scope columns with
- *  dot bullets, and a divider before Risk areas / source notes. */
+ *  dot bullets, and a divider before the source notes. */
 export const s = {
-  wrap: { marginBottom: 20 } satisfies CSSProperties,
+  /** Spacing comes from the PR Brief grid gap, not a margin. */
+  wrap: { display: "flex", flexDirection: "column", gap: 16, minWidth: 0 } satisfies CSSProperties,
   card: {
     padding: 24,
     borderRadius: 12,
@@ -98,22 +99,6 @@ export const s = {
     flexShrink: 0,
     transform: "translateY(-3px)",
   }),
-  divider: {
-    marginTop: 20,
-    paddingTop: 18,
-    borderTop: "1px solid var(--border)",
-  } satisfies CSSProperties,
-  chips: { display: "flex", flexWrap: "wrap", gap: 8 } satisfies CSSProperties,
-  chip: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "7px 12px",
-    borderRadius: 8,
-    border: "1px solid var(--border)",
-    fontSize: 13.5,
-    color: "var(--text-primary)",
-  } satisfies CSSProperties,
   notesBlock: {
     marginTop: 20,
     paddingTop: 18,
@@ -122,7 +107,6 @@ export const s = {
     flexDirection: "column",
     gap: 6,
   } satisfies CSSProperties,
-  riskIcon: (color: string): CSSProperties => ({ color, flexShrink: 0 }),
   noteRow: {
     display: "flex",
     alignItems: "flex-start",

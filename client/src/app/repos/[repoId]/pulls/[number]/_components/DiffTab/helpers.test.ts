@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, ReviewRecord } from "@devdigest/shared";
-import { groupFindingsByPath, latestFindingsPerAgent } from "./helpers";
+import { groupFindingsByPath, latestFindingsPerAgent, resolveDeepLink } from "./helpers";
 
 function finding(over: Partial<FindingRecord> = {}): FindingRecord {
   return {
@@ -77,5 +77,23 @@ describe("groupFindingsByPath", () => {
     expect(byPath.get("src/config.ts")?.map((f) => f.id)).toEqual(["a", "c"]);
     expect(byPath.get("src/api/users.ts")?.map((f) => f.id)).toEqual(["b"]);
     expect(byPath.has("does-not-exist.ts")).toBe(false);
+  });
+});
+
+describe("resolveDeepLink", () => {
+  const files = [{ path: "src/api/users.ts" }, { path: "docs/a.md" }];
+
+  it("SPEC-06 UI-8: matches the file by exact equality and accepts only a positive integer line", () => {
+    expect(resolveDeepLink(files, null, null)).toEqual({ status: "none" });
+    expect(resolveDeepLink(files, "src/api/users.ts", "42")).toEqual({ status: "found", path: "src/api/users.ts", line: 42 });
+    expect(resolveDeepLink(files, "src/api/users.ts", null)).toEqual({ status: "found", path: "src/api/users.ts", line: null });
+  });
+
+  it("SPEC-06 UI-8: rejects a partial path, and ignores a non-positive or non-integer line", () => {
+    expect(resolveDeepLink(files, "users.ts", "1")).toEqual({ status: "missing" });
+    expect(resolveDeepLink(files, "src/api", "1")).toEqual({ status: "missing" });
+    for (const bad of ["0", "-3", "1.5", "abc", "", "1e3", " 4", "007x"]) {
+      expect(resolveDeepLink(files, "src/api/users.ts", bad)).toEqual({ status: "found", path: "src/api/users.ts", line: null });
+    }
   });
 });

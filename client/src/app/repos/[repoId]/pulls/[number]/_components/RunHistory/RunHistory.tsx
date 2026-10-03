@@ -6,6 +6,7 @@ import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import { RunCostBadge } from "@/components/run-cost-badge";
 import { SeverityCounts, severityCounts, sortBySeverity } from "@/components/severity-counts";
 import { FindingsPreviewCard, anchorFrom } from "@/components/findings-preview";
+import { isContextStale } from "@/lib/hooks/pr-context";
 import type { RunSummary, PrCommit, ReviewRecord, FindingRecord } from "@devdigest/shared";
 
 /**
@@ -94,6 +95,7 @@ export function RunHistory({
   onOpenTrace,
   onGoToReview,
   onDelete,
+  currentContextFingerprint,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
@@ -105,6 +107,8 @@ export function RunHistory({
   /** Jump to this run's inline review accordion below (clicking the agent name). */
   onGoToReview?: (runId: string) => void;
   onDelete?: (runId: string) => void;
+  /** Current PR-context fingerprint; a run with a different stored one shows the stale note (AC-40). */
+  currentContextFingerprint?: string | null;
 }) {
   const t = useTranslations("prReview");
   // Hover preview anchor in viewport coords, keyed by run (fixed-position card).
@@ -206,6 +210,11 @@ export function RunHistory({
                   title={r.error}
                 >
                   {r.error}
+                </div>
+              )}
+              {isContextStale(r.context_fingerprint, currentContextFingerprint) && (
+                <div role="status" style={{ fontSize: 12, color: "var(--warn)" }}>
+                  {t("timeline.contextStale")}
                 </div>
               )}
               {settled && (() => {

@@ -67,7 +67,7 @@ Each module owns its routes (`modules/<name>/routes.ts`). Grouped by domain:
 flowchart TB
   subgraph Repos_PRs["Repos & PRs"]
     repos["repos<br/>/repos · /repos/lookup"]
-    pulls["pulls<br/>/pulls/:id · /pulls/:id/comments · /repos/:id/pulls/lookup"]
+    pulls["pulls<br/>/pulls/:id · /pulls/:id/comments · /pulls/:id/context · /repos/:id/pulls/lookup"]
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
@@ -127,6 +127,9 @@ agent or a skill; the run executor reads them at run time and sends them as
 | `POST /repos/:id/context/rescan` | — | `ContextListing`. Runs `container.git.sync` (NOT `resyncRepo`) under a per-repo in-memory mutex, raced against 30 s. On a failed or slow fetch the on-disk listing is returned with `warning: 'fetch_failed' \| 'timeout'`. |
 | `PUT /agents/:id/context` | `{ paths: string[] }` — the full ordered list, last save wins | updated `Agent`. A changed list bumps `version` and snapshots `context_paths` into `agent_versions.config_json`; an identical list is a no-op. |
 | `PUT /skills/:id/context` | `{ paths: string[] }` | updated `Skill`. No `version` bump, no `skill_versions` row. |
+| `GET /pulls/:id/context` | — | `PrContextResponse` `{ entries, suggestions, attachable, budget: {used, limit}, fingerprint, cloned, map_reduce }` (SPEC-07). Entries are read from git at `pull_requests.head_sha` (never the working tree); `status` is `attached \| missing \| too_large \| unreadable \| over_budget \| truncated`; `warnings` are computed live. `fingerprint` is null for an empty list; `cloned: false` when the repo has no clone on disk. 404 for a PR outside the workspace. |
+| `PUT /pulls/:id/context` | `{ paths: string[] }` — full ordered list (max 20), last save wins | fresh `PrContextResponse`. Writes only `pull_requests.context_paths`; starts no brief, intent or run. 422 `validation_error` for >20 paths or a path failing UI-1 (relative, no `:` first char, no `..`/`.`/empty segment, no backslash/control char, `.md`, ≤512 chars, SPEC-04 globs and excludes). 404 for a PR outside the workspace. |
+| `GET /pulls/:id/context/preview?path=` | `path` (UI-1 rules) | `PrContextPreview` `{ path, status, text, read_from }` plus `kind`, `origin`, `tokens`, `read_at_sha`. Reads at the head SHA when the path is attached or among the PR's changed files, else at the default-branch clone. Status `attached \| missing \| too_large \| unreadable`. 422 invalid path, 404 unknown PR. |
 
 An attachment path must be relative, free of `..`/`.`/empty segments, end in
 `.md`, match the globs and sit outside the excluded directories — anything else is

@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { pgTable, uuid, text, integer, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { repos } from './repos';
 
@@ -24,6 +25,8 @@ export const pullRequests = pgTable(
     filesCount: integer('files_count').notNull().default(0),
     status: text('status').notNull().default('needs_review'),
     body: text('body'),
+    // SPEC-07: ordered repo-relative paths attached as PR context.
+    contextPaths: jsonb('context_paths').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     openedAt: timestamp('opened_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }),
   },
@@ -41,6 +44,8 @@ export const prFiles = pgTable('pr_files', {
   path: text('path').notNull(),
   additions: integer('additions').notNull().default(0),
   deletions: integer('deletions').notNull().default(0),
+  // added | modified | removed | renamed (SPEC-07 AC-2); GitHub's copied/changed/unchanged map to modified.
+  status: text('status').notNull().default('modified'),
   patch: text('patch'),
 }, (t) => ({
   // The diff tab and the PR re-import both read/delete by pr_id.

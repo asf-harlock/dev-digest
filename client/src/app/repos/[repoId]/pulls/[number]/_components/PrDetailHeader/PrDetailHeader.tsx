@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, Button, Tabs } from "@devdigest/ui";
 import { RunReviewDropdown } from "../RunReviewDropdown";
 import { s } from "./styles";
+import { usePrContext } from "@/lib/hooks/pr-context";
 import type { PrDetail } from "@/lib/types";
 
 interface PrDetailHeaderProps {
@@ -28,6 +30,9 @@ export function PrDetailHeader({
   onRunStart,
   onRunsStarted,
 }: PrDetailHeaderProps) {
+  const t = useTranslations("prReview");
+  const { data: prContext } = usePrContext(prId);
+  const contextCount = prContext?.entries.length ?? 0;
   const handleRunStart = useCallback(() => {
     onRunStart();
   }, [onRunStart]);
@@ -116,6 +121,7 @@ export function PrDetailHeader({
           { key: "overview", label: "Overview", icon: "FileText" },
           { key: "findings", label: "Agent runs", icon: "AlertOctagon", count: findingsCount || undefined },
           { key: "diff", label: "Files changed", icon: "Code", count: pr.files_count },
+          { key: "context", label: t("tabs.context"), icon: "FileText", count: contextCount || undefined },
         ]}
       />
     </div>

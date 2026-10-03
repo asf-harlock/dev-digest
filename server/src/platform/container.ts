@@ -14,6 +14,7 @@ import { runBus, type RunBus } from './sse.js';
 import { LocalSecretsProvider } from '../adapters/secrets/local.js';
 import { LocalNoAuthProvider } from '../adapters/auth/local.js';
 import { OctokitGitHubClient } from '../adapters/github/octokit.js';
+import { PR_CONTEXT_FETCH_TIMEOUT_MS, PR_CONTEXT_MAX_FILE_BYTES } from '../modules/_shared/context-paths.js';
 import { SimpleGitClient } from '../adapters/git/simple-git.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
@@ -93,7 +94,10 @@ export class Container {
 
   get git(): GitClient {
     if (this.overrides.git) return this.overrides.git;
-    this._git ??= new SimpleGitClient(this.config.cloneDir);
+    this._git ??= new SimpleGitClient(this.config.cloneDir, {
+      prContextMaxFileBytes: PR_CONTEXT_MAX_FILE_BYTES,
+      prContextFetchTimeoutMs: PR_CONTEXT_FETCH_TIMEOUT_MS,
+    });
     return this._git;
   }
 

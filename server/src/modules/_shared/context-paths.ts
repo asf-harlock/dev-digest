@@ -20,6 +20,16 @@ export const MAX_CONTEXT_FILE_BYTES = 32 * 1024;
 export const MAX_CONTEXT_LISTING_FILES = 500;
 /** Cap on the wrapped project-context block sent to the model, in tokens. */
 export const PROJECT_CONTEXT_TOKEN_BUDGET = 16_000;
+/** SPEC-07: cap on the wrapped PR-context block, in tokens. */
+export const PR_CONTEXT_TOKEN_BUDGET = 10_000;
+/** SPEC-07: a document is truncated only while at least this many tokens remain. */
+export const PR_CONTEXT_TRUNCATION_FLOOR = 500;
+/** SPEC-07: largest PR-context document read from git (64 KB). */
+export const PR_CONTEXT_MAX_FILE_BYTES = 64 * 1024;
+/** SPEC-07: timeout for the fetch of a PR head commit. */
+export const PR_CONTEXT_FETCH_TIMEOUT_MS = 30_000;
+/** SPEC-07: most documents attachable to one PR. */
+export const MAX_PR_CONTEXT_PATHS = 20;
 /** Times a file is re-read while checking it was not modified mid-read. */
 export const MAX_READ_ATTEMPTS = 2;
 /** Longest accepted attachment path. */

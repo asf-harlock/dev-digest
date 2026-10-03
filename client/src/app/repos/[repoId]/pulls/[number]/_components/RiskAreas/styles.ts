@@ -1,0 +1,60 @@
+import type { CSSProperties } from "react";
+
+/** Same card chrome as the other PR Brief blocks (label inside the card). */
+export const s = {
+  card: {
+    padding: 24,
+    borderRadius: 12,
+    border: "1px solid var(--border)",
+    background: "var(--bg-elevated)",
+    minWidth: 0,
+  } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 } satisfies CSSProperties,
+  headerIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  label: {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  empty: { margin: 0, fontSize: 14, color: "var(--text-muted)" } satisfies CSSProperties,
+  list: { margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
+  item: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    minWidth: 0,
+  } satisfies CSSProperties,
+  titleRow: { display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 } satisfies CSSProperties,
+  riskIcon: (color: string): CSSProperties => ({ color, flexShrink: 0, alignSelf: "center" }),
+  severity: (color: string): CSSProperties => ({
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color,
+    flexShrink: 0,
+  }),
+  title: { fontSize: 13.5, color: "var(--text-primary)", minWidth: 0, overflowWrap: "anywhere" } satisfies CSSProperties,
+  refs: { display: "flex", flexWrap: "wrap", gap: 6, minWidth: 0 } satisfies CSSProperties,
+  /** Long repo paths wrap inside the card instead of overflowing it (NFR-6: ≥ 24px target). */
+  refBtn: {
+    border: "none",
+    background: "var(--bg-hover)",
+    borderRadius: 5,
+    minHeight: 24,
+    minWidth: 24,
+    maxWidth: "100%",
+    padding: "4px 8px",
+    fontSize: 12,
+    lineHeight: 1.45,
+    textAlign: "left",
+    overflowWrap: "anywhere",
+    color: "var(--accent-text)",
+    cursor: "pointer",
+  } satisfies CSSProperties,
+} as const;

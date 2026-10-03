@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
@@ -9,7 +9,11 @@ import type { AgentRunRow, FindingRow, ReviewRow } from '../../../db/rows.js';
 /** Map one `agent_runs` row (+ its joined agent name) onto the `RunSummary`
  *  contract. Shared by `listRunsForPull` (many rows) and `getRunSummary` (one
  *  row) so the two never drift. Exported for the colocated unit test. */
-export function toRunSummary(run: AgentRunRow, agentName: string | null): RunSummary {
+export function toRunSummary(
+  run: AgentRunRow,
+  agentName: string | null,
+  contextFingerprint: string | null = null,
+): RunSummary {
   return {
     run_id: run.id,
     agent_id: run.agentId,
@@ -27,8 +31,12 @@ export function toRunSummary(run: AgentRunRow, agentName: string | null): RunSum
     ran_at: run.ranAt ? run.ranAt.toISOString() : null,
     score: run.score,
     blockers: run.blockers,
+    context_fingerprint: contextFingerprint,
   };
 }
+
+/** SPEC-07: the PR-context fingerprint recorded in the run's trace (null when absent). */
+const traceFingerprint = sql<string | null>`${t.runTraces.trace}->>'context_fingerprint'`;
 
 /** In-flight runs for a PR (status='running') — the server-side source of
  *  truth for "which agents are running now". Joined with the agent name. */
@@ -68,12 +76,13 @@ export async function listRunsForPull(
   prId: string,
 ): Promise<RunSummary[]> {
   const rows = await db
-    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .select({ run: t.agentRuns, agentName: t.agents.name, fingerprint: traceFingerprint })
     .from(t.agentRuns)
     .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .leftJoin(t.runTraces, eq(t.runTraces.runId, t.agentRuns.id))
     .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
     .orderBy(desc(t.agentRuns.ranAt));
-  return rows.map(({ run, agentName }) => toRunSummary(run, agentName));
+  return rows.map(({ run, agentName, fingerprint }) => toRunSummary(run, agentName, fingerprint));
 }
 
 /** One run by id, workspace-scoped — same `RunSummary` shape as
@@ -85,12 +94,13 @@ export async function getRunSummary(
   runId: string,
 ): Promise<RunSummary | undefined> {
   const [row] = await db
-    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .select({ run: t.agentRuns, agentName: t.agents.name, fingerprint: traceFingerprint })
     .from(t.agentRuns)
     .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .leftJoin(t.runTraces, eq(t.runTraces.runId, t.agentRuns.id))
     .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.id, runId)));
   if (!row) return undefined;
-  return toRunSummary(row.run, row.agentName);
+  return toRunSummary(row.run, row.agentName, row.fingerprint);
 }
 
 /**

@@ -13,6 +13,16 @@ import {
   formatContextNote,
   resolveProjectContext,
 } from '../_shared/project-context.js';
+import {
+  dropPrDocsIdenticalToProject,
+  formatPrContextNote,
+  formatPrContextSummary,
+  resolvePrContext,
+  usableClonePath,
+  type PrContextDoc,
+  type ResolvedPrContext,
+} from '../_shared/pr-context.js';
+import { PROJECT_CONTEXT_TOKEN_BUDGET, sanitizePathForLog } from '../_shared/context-paths.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -38,6 +48,19 @@ export type RunOutcome = {
   grounding: string;
   raw: Review;
 };
+
+/** A resolved PR-context document as a trace entry; `origin` is exactly `'pr'` (the client matches on it). */
+function toPrTraceEntry(d: PrContextDoc): ProjectContextEntry {
+  return {
+    path: d.path,
+    kind: d.kind,
+    origin: 'pr',
+    sha: d.sha,
+    tokens: d.tokens,
+    status: d.status,
+    text: d.text,
+  };
+}
 
 /**
  * Owns the background execution of queued agent runs (extracted from
@@ -125,6 +148,27 @@ export class ReviewRunExecutor {
       intent = undefined;
     }
 
+    // SPEC-07 — PR context: the attached list is read ONCE here from the pull
+    // handed in at the start, so every agent run and its fingerprint agree
+    // (EC-13). No LLM call. Best-effort: a resolver failure degrades to none.
+    let prContext: ResolvedPrContext | null = null;
+    if ((pull.contextPaths ?? []).length > 0) {
+      try {
+        prContext = await resolvePrContext({
+          git: this.container.git,
+          tokenizer: this.container.tokenizer,
+          repo: { owner: repo.owner, name: repo.name },
+          clonePath: await usableClonePath(repo.clonePath),
+          pr: { number: pull.number, headSha: pull.headSha, contextPaths: pull.contextPaths },
+        });
+        runLog.info(formatPrContextSummary(prContext));
+        for (const note of prContext.notes) runLog.info(formatPrContextNote(note));
+      } catch (err) {
+        runLog.info(`pr context: resolver failed — continuing without it: ${(err as Error).message}`);
+        prContext = null;
+      }
+    }
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -132,7 +176,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent, prContext);
         logger?.info(
           {
             runId,
@@ -165,6 +209,7 @@ export class ReviewRunExecutor {
     runId: string,
     parentLog: RunLogger,
     intent: Awaited<ReturnType<ReviewRepository['getIntent']>>,
+    prContext: ResolvedPrContext | null = null,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -177,6 +222,11 @@ export class ReviewRunExecutor {
     // Project Context (SPEC-04). Declared OUTSIDE the try so a failure or cancel
     // after it was resolved still persists what was sent (EC-18).
     let projectContext: ProjectContextEntry[] = [];
+    // PR-context entries (origin 'pr') ahead of the agent/skill ones, and the
+    // PR documents actually sent. Same lifetime as `projectContext` (EC-18).
+    let prEntries: ProjectContextEntry[] = prContext ? prContext.entries.map(toPrTraceEntry) : [];
+    let prSent: { path: string; text: string }[] = prContext ? prContext.sent : [];
+    const fingerprint = prContext?.fingerprint ?? null;
 
     try {
       // Resolve the agent's LLM provider. (container.llm throws if the provider
@@ -223,16 +273,41 @@ export class ReviewRunExecutor {
       // each enabled skill's, read from the default-branch clone. No LLM call
       // (AC-26). Best-effort like the other enrichments: a resolver failure
       // must not fail the run, so it degrades to "no project context" + a log.
-      try {
-        const resolved = await resolveProjectContext({
+      const resolveProject = (budget: number) =>
+        resolveProjectContext({
           git: this.container.git,
           tokenizer: this.container.tokenizer,
           repo: { owner: repo.owner, name: repo.name },
           clonePath: repo.clonePath,
           agentPaths: agent.contextPaths,
           skills: skills.map((s) => ({ name: s.name, body: s.body, contextPaths: s.contextPaths })),
+          budget,
         });
+      try {
+        // AC-20/24: resolve once at the full budget to find the AC-24 duplicates, then
+        // re-resolve with 16k minus the PR tokens actually sent (only when any were).
+        let resolved = await resolveProject(PROJECT_CONTEXT_TOKEN_BUDGET);
         projectContext = resolved.entries;
+        if (prContext) {
+          // AC-24: a PR copy identical to the default-branch copy is not sent twice.
+          const { kept, dropped } = dropPrDocsIdenticalToProject(prContext.entries, projectContext);
+          for (const d of dropped) {
+            runLog.info(
+              `pr context: ${sanitizePathForLog(d.path)} identical to the default-branch copy — sent once`,
+            );
+          }
+          const keptPaths = new Set(kept.map((d) => d.path));
+          prEntries = kept.map(toPrTraceEntry);
+          prSent = prContext.sent.filter((d) => keptPaths.has(d.path));
+          const sentTokens = kept.reduce(
+            (n, d) => n + (d.status === 'attached' || d.status === 'truncated' ? d.tokens : 0),
+            0,
+          );
+          if (sentTokens > 0) {
+            resolved = await resolveProject(PROJECT_CONTEXT_TOKEN_BUDGET - sentTokens);
+            projectContext = resolved.entries;
+          }
+        }
         for (const note of resolved.notes) runLog.info(formatContextNote(note));
       } catch (err) {
         runLog.info(`project context: resolver failed — continuing without it: ${(err as Error).message}`);
@@ -285,6 +360,8 @@ export class ReviewRunExecutor {
         // SPEC-04 — attached project documents. Omitted when none, so
         // assemblePrompt drops `## Project context` (byte-identical prompt).
         ...(attachedDocs.length ? { projectContext: attachedDocs } : {}),
+        // SPEC-07 — attached PR documents. Omitted when none were sent.
+        ...(prSent.length ? { prContext: prSent } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -388,8 +465,11 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: attachedDocs.map((d) => d.path),
-        ...(projectContext.length > 0 ? { project_context: projectContext } : {}),
+        specs_read: [...new Set([...prSent.map((d) => d.path), ...attachedDocs.map((d) => d.path)])],
+        ...(prEntries.length + projectContext.length > 0
+          ? { project_context: [...prEntries, ...projectContext] }
+          : {}),
+        ...(fingerprint ? { context_fingerprint: fingerprint } : {}),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
@@ -419,7 +499,7 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, projectContext))
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, [...prEntries, ...projectContext], fingerprint))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
@@ -525,6 +605,7 @@ export class ReviewRunExecutor {
     grounding: string,
     durationMs = 0,
     projectContext: ProjectContextEntry[] = [],
+    fingerprint: string | null = null,
   ): RunTrace {
     return {
       config: {
@@ -542,6 +623,7 @@ export class ReviewRunExecutor {
       memory_pulled: [],
       specs_read: attachedContext(projectContext).map((d) => d.path),
       ...(projectContext.length > 0 ? { project_context: projectContext } : {}),
+      ...(fingerprint ? { context_fingerprint: fingerprint } : {}),
       log: this.container.runBus.buffer(runId).map((e) => ({ t: e.t, kind: e.kind, msg: e.msg })),
     };
   }

@@ -78,6 +78,8 @@ export async function getFeatureModelOverride(
 export interface UpsertIntentMeta {
   classifiedAt?: Date;
   classifiedForSha?: string;
+  /** SPEC-07: fingerprint of the PR context it was classified with. */
+  contextFingerprint?: string | null;
 }
 
 export async function upsertIntent(
@@ -95,6 +97,7 @@ export async function upsertIntent(
     sources: intent.sources,
     classifiedAt: meta.classifiedAt ?? null,
     classifiedForSha: meta.classifiedForSha ?? null,
+    contextFingerprint: meta.contextFingerprint ?? null,
   };
   await db
     .insert(t.prIntent)
@@ -109,6 +112,7 @@ export async function upsertIntent(
         sources: values.sources,
         classifiedAt: values.classifiedAt,
         classifiedForSha: values.classifiedForSha,
+        contextFingerprint: values.contextFingerprint,
       },
     });
 }
@@ -127,5 +131,6 @@ export async function getIntent(
     sources: row.sources,
     classifiedAt: row.classifiedAt ?? undefined,
     classifiedForSha: row.classifiedForSha ?? undefined,
+    contextFingerprint: row.contextFingerprint ?? null,
   };
 }

@@ -51,7 +51,12 @@ describe('toRunSummary', () => {
       ran_at: '2026-01-01T00:00:00.000Z',
       score: 87,
       blockers: 1,
+      context_fingerprint: null,
     });
+  });
+
+  it('carries the PR-context fingerprint from the run trace', () => {
+    expect(toRunSummary(mkRun(), null, 'fp-1').context_fingerprint).toBe('fp-1');
   });
 
   it('a null/undefined agent name (no join match, or agent deleted) maps to null, never undefined', () => {

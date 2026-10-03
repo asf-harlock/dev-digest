@@ -10,6 +10,7 @@ import { Badge, Icon } from "@devdigest/ui";
 import type { ProjectContextEntry } from "@devdigest/shared";
 import { TraceSection } from "../TraceSection";
 import { STATUS_COLORS } from "./constants";
+import { isPrOrigin, prFirst } from "./helpers";
 import { s } from "./styles";
 
 function EntryRow({ entry }: { entry: ProjectContextEntry }) {
@@ -24,7 +25,7 @@ function EntryRow({ entry }: { entry: ProjectContextEntry }) {
         </span>
         <span style={s.meta}>{t("trace.projectContext.tokens", { tokens: entry.tokens })}</span>
         <span className="mono" style={s.meta}>
-          {entry.origin}
+          {isPrOrigin(entry.origin) ? t("trace.projectContext.originPr") : entry.origin}
         </span>
         <Badge color={c.color} bg={c.bg}>
           {t(`trace.projectContext.status.${entry.status}`)}
@@ -54,7 +55,7 @@ export function ProjectContextSection({ entries }: { entries: ProjectContextEntr
       {entries.length === 0 ? (
         <span style={s.none}>{t("trace.projectContext.none")}</span>
       ) : (
-        entries.map((e, i) => <EntryRow key={`${e.path}:${i}`} entry={e} />)
+        prFirst(entries).map((e, i) => <EntryRow key={`${e.path}:${i}`} entry={e} />)
       )}
     </TraceSection>
   );

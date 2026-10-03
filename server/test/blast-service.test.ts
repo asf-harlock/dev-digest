@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { BlastService } from '../src/modules/blast/service.js';
 import { NotFoundError } from '../src/platform/errors.js';
 import type { Container } from '../src/platform/container.js';
-import type { BlastFacadeResult } from '../src/modules/blast/helpers.js';
+import type { BlastFacadeResult } from '../src/modules/_shared/blast-map.js';
 import type { BlastPull } from '../src/modules/blast/repository.js';
 
 /**
