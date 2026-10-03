@@ -9,7 +9,11 @@ const rowBase = {
   boxSizing: "border-box",
   padding: "6px 12px",
   borderRadius: 7,
-  border: "1px solid var(--border)",
+  // Longhand, not the `border` shorthand: `rowSelected` / `rowMissing` override
+  // only the colour / style, and React warns when the two forms are mixed.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "var(--border)",
   background: "var(--bg-elevated)",
 } satisfies CSSProperties;
 
