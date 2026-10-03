@@ -4,8 +4,9 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Drawer, ErrorState, Skeleton } from "@devdigest/ui";
 import { usePreviewContextFile } from "@/lib/hooks/core";
-import { DEFAULT_KIND, KIND_COLORS } from "../context-doc-list/constants";
+import { ATTACH_LIMIT_KB, DEFAULT_KIND, KIND_COLORS, PREVIEW_LIMIT_KB } from "../context-doc-list/constants";
 import { SafeMarkdown } from "../safe-markdown";
+import { sizeKb } from "./helpers";
 import { s } from "./styles";
 
 export interface ContextDocPreviewProps {
@@ -84,9 +85,25 @@ export function ContextDocPreview({ repoId, path, layout, onClose, action }: Con
           )}
         </div>
       )}
-      <div style={s.body}>
-        <SafeMarkdown>{file.content ?? ""}</SafeMarkdown>
-      </div>
+      {file.unattachable_reason === "too_large" && file.content != null && (
+        <div role="note" style={s.note}>
+          <strong>{t("preview.tooLargeTitle")}</strong>
+          <span>{t("preview.tooLargeBody", { size: sizeKb(file.size), limit: ATTACH_LIMIT_KB })}</span>
+        </div>
+      )}
+      {file.content != null ? (
+        <div style={s.body}>
+          <SafeMarkdown>{file.content}</SafeMarkdown>
+        </div>
+      ) : file.unattachable_reason === "too_large" ? (
+        <p role="note" style={s.unavailable}>
+          {t("preview.tooLargeToPreview", { size: sizeKb(file.size), limit: PREVIEW_LIMIT_KB })}
+        </p>
+      ) : file.unattachable_reason === "not_utf8" ? (
+        <p role="note" style={s.unavailable}>
+          {t("preview.notUtf8")}
+        </p>
+      ) : null}
     </>
   );
 

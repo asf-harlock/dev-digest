@@ -36,8 +36,12 @@
     "injection": "Injection detected",
     "injectionNamed": "Injection patterns: {patterns}",
     "unattachable": {
-      "too_large": "Too large (over 32 KB)",
+      "too_large": "Too large (over {limit} KB)",
       "not_utf8": "Not UTF-8 text"
+    },
+    "unattachableHint": {
+      "too_large": "Agents and skills can attach documents up to {limit} KB. You can still preview it; split it into smaller documents to attach it.",
+      "not_utf8": "Only UTF-8 text documents can be attached or previewed."
     }
   },
   "preview": {
@@ -47,7 +51,11 @@
     "injectionPatterns": "Matched patterns:",
     "injectionLine": "line {line}",
     "select": "Select a document’s Preview to read it here.",
-    "loadError": "Couldn’t load this document"
+    "loadError": "Couldn’t load this document",
+    "tooLargeTitle": "Too large to attach",
+    "tooLargeBody": "This document is {size} KB, over the {limit} KB limit for agents and skills. You can read it here, but it can’t be attached. Split it into smaller documents to attach it.",
+    "tooLargeToPreview": "This document is {size} KB, too large to preview here (limit {limit} KB). Open it in your editor or on the code host.",
+    "notUtf8": "This document isn’t UTF-8 text, so it can’t be previewed."
   },
   "rescan": {
     "label": "Rescan",

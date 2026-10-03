@@ -14,6 +14,7 @@ import { buildSpecFile, computeUsedBy } from './helpers.js';
 import {
   CONTEXT_STATE_NOT_CLONED,
   CONTEXT_STATE_OK,
+  MAX_CONTEXT_PREVIEW_BYTES,
   READ_BATCH,
   RESCAN_TIMEOUT_MS,
   RESCAN_WARNING_FETCH_FAILED,
@@ -63,7 +64,11 @@ export class ContextService {
     return this.buildListing(workspaceId, repo);
   }
 
-  /** One document with its `content`, for the preview drawer. */
+  /**
+   * One document with its `content`, for the preview drawer. Reads up to
+   * `MAX_CONTEXT_PREVIEW_BYTES`, so a document too large to attach is still
+   * previewable (it comes back `attachable: false`, `too_large`, WITH content).
+   */
   async file(workspaceId: string, repoId: string, path: string): Promise<SpecFile> {
     const check = validateContextPath(path, this.rules);
     if (!check.ok) throw new ValidationError(check.reason);
@@ -71,7 +76,7 @@ export class ContextService {
     if (!repo.clonePath || !(await cloneDirExists(repo.clonePath))) {
       throw new NotFoundError('Repository is not cloned');
     }
-    const read = await readContextFile(repo.clonePath, path);
+    const read = await readContextFile(repo.clonePath, path, MAX_CONTEXT_PREVIEW_BYTES);
     if (read.status === 'missing' || read.status === 'unreadable') {
       throw new NotFoundError('Document not found');
     }

@@ -5,6 +5,7 @@
  */
 export {
   MAX_CONTEXT_FILE_BYTES,
+  MAX_CONTEXT_PREVIEW_BYTES,
   MAX_CONTEXT_LISTING_FILES,
   PROJECT_CONTEXT_TOKEN_BUDGET,
 } from '../_shared/context-paths.js';

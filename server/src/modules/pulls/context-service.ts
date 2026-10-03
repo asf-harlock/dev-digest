@@ -7,6 +7,7 @@ import type { Container } from '../../platform/container.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 import {
   MAX_PR_CONTEXT_PATHS,
+  PR_CONTEXT_MAX_FILE_BYTES,
   PR_CONTEXT_TOKEN_BUDGET,
   dedupePaths,
   kindForPath,
@@ -157,7 +158,7 @@ export class PrContextService {
     if (!clonePath) {
       return { path, kind, origin, status: 'unreadable', text: null, tokens: 0, read_at_sha: null, read_from: 'default_branch' };
     }
-    const read = await readContextFile(clonePath, path);
+    const read = await readContextFile(clonePath, path, PR_CONTEXT_MAX_FILE_BYTES);
     const sha = await this.container.git.currentHead({ owner: repo.owner, name: repo.name }).catch(() => null);
     if (read.status !== 'ok') {
       const status =

@@ -14,8 +14,13 @@
  *   Matching is case-sensitive over `/`-separated repo-relative paths.
  */
 
-/** Largest document that can be attached / previewed (32 KB). */
-export const MAX_CONTEXT_FILE_BYTES = 32 * 1024;
+/** Largest document that can be attached to an agent or skill (64 KB — same as PR context). */
+export const MAX_CONTEXT_FILE_BYTES = 64 * 1024;
+/**
+ * Largest document the preview route reads. Above `MAX_CONTEXT_FILE_BYTES` a
+ * document is still previewable but stays `attachable: false` / `too_large`.
+ */
+export const MAX_CONTEXT_PREVIEW_BYTES = 256 * 1024;
 /** Most files a listing returns (the rest are counted in `total`). */
 export const MAX_CONTEXT_LISTING_FILES = 500;
 /** Cap on the wrapped project-context block sent to the model, in tokens. */

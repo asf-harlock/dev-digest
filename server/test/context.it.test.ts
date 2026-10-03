@@ -75,7 +75,8 @@ d('SPEC-04 project context (routes + persistence)', () => {
     repoId = repo!.id;
     await put('docs/architecture-invariants.md', '# Invariants\nmodule `api/` does not import `db/` directly');
     await put('specs/feature.md', '# Feature');
-    await put('docs/big.md', 'x'.repeat(40 * 1024));
+    // Prose, not one long run: js-tiktoken is quadratic on a single repeated character.
+    await put('docs/big.md', 'Lorem ipsum dolor sit amet.\n'.repeat(3000)); // 84 000 B: over the 64 KB attach cap, under the preview cap
     await put('docs/bin.md', Buffer.from([0xff, 0xfe, 0x00]));
     await put('README.md', 'not listed');
     await put('node_modules/p/docs/x.md', 'excluded');
@@ -146,6 +147,18 @@ d('SPEC-04 project context (routes + persistence)', () => {
       }
       const missing = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/file?path=docs/none.md` });
       expect(missing.statusCode).toBe(404);
+    });
+
+    it('preview of a doc too large to attach returns its content, still unattachable; past the preview cap no content', async () => {
+      const big = (await app.inject({ method: 'GET', url: `/repos/${repoId}/context/file?path=docs/big.md` })).json();
+      expect(big).toMatchObject({ attachable: false, unattachable_reason: 'too_large', size: 84_000 });
+      expect(big.content).toHaveLength(84_000);
+      expect(big.tokens).toBeGreaterThan(0);
+      await put('docs/huge.md', 'Lorem ipsum dolor sit amet.\n'.repeat(11_000)); // 308 000 B: over the 256 KB preview cap
+      const huge = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/file?path=docs/huge.md` });
+      expect(huge.statusCode).toBe(200);
+      expect(huge.json()).toMatchObject({ attachable: false, unattachable_reason: 'too_large' });
+      expect(huge.json().content).toBeUndefined();
     });
 
     it('AC-1: rescan syncs through the git port (default branch) and returns the fresh listing', async () => {

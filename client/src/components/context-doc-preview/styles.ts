@@ -38,6 +38,18 @@ export const s = {
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
   } satisfies CSSProperties,
+  note: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    padding: "10px 12px",
+    borderRadius: 6,
+    border: "1px solid var(--warn)",
+    background: "var(--warn-bg)",
+    color: "var(--warn)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  unavailable: { margin: 0, fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
   body: { fontSize: 14, color: "var(--text-secondary)", overflowWrap: "anywhere" } satisfies CSSProperties,
   skeletons: { display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
 } as const;
