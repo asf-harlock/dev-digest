@@ -14,10 +14,12 @@ export interface RequestContext {
 export async function getContext(
   container: Container,
   req: FastifyRequest,
-): Promise<RequestContext> {
+): Promise<Readonly<RequestContext>> {
   const [user, workspace] = await Promise.all([
     container.auth.currentUser(req),
     container.auth.currentWorkspace(req),
   ]);
-  return { workspaceId: workspace.id, userId: user.id };
+  // Frozen so a handler can't re-point workspaceId mid-request and read
+  // another tenant's rows through a later query.
+  return Object.freeze({ workspaceId: workspace.id, userId: user.id });
 }
