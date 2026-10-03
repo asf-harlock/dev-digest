@@ -110,6 +110,13 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Tool & Library Notes
 
+- **2026-10-03** — `format.relativeTime(date)` from next-intl 3.26 does not
+  measure from the current time. The server `NextIntlClientProvider` injects
+  `now = getNow()` at request time (`NextIntlClientProviderServer.js:28`), so a
+  timestamp that arrives later by polling (a failure, a scan) renders in the
+  future: "in 3 minutes". Use `useRelativeTime()` (`src/lib/relative-time.ts`),
+  never a bare `format.relativeTime`.
+
 - **2026-09-29** — A failing `getByRole` prints the whole "Here are the
   accessible roles" list, and `DEBUG_PRINT_LIMIT` does NOT cap it (it only caps
   the `prettyDOM` dump). A 300-node render produced 69 KB of vitest output for

@@ -2,7 +2,8 @@
 
 import React from "react";
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useRelativeTime } from "@/lib/relative-time";
 import { Badge, Button } from "@devdigest/ui";
 import type { OnboardingTourGenerateRequest, OnboardingTourResponse, TourRankingMode } from "@devdigest/shared";
 import { DEFAULT_WINDOW_DAYS, parseWindowDays, RankingToggle } from "../RankingToggle";
@@ -34,7 +35,7 @@ export function TourHeader({
   const [days, setDays] = React.useState(String(DEFAULT_WINDOW_DAYS));
   const activityMode = mode === "activity" && data.can_use_activity;
   const windowDays = parseWindowDays(days);
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const meta = data.tour.meta;
   const key = statusBadgeKey(meta);
   const freshness = freshnessState(data.stale, lastIndexedSha);
@@ -57,7 +58,7 @@ export function TourHeader({
           <span style={s.sep} aria-hidden="true">·</span>
           <span>
             {generatedAt
-              ? t("tour.meta.generated", { time: format.relativeTime(new Date(generatedAt)) })
+              ? t("tour.meta.generated", { time: relativeTime(generatedAt) })
               : t("tour.meta.notGenerated")}
           </span>
           <span style={s.sep} aria-hidden="true">·</span>
@@ -85,9 +86,9 @@ export function TourHeader({
           {failed && (
             <Badge icon="AlertTriangle" color="var(--warn)" bg="var(--warn-bg)">
               {meta?.last_error_at
-                ? t("tour.regenFailed", { time: format.relativeTime(new Date(meta.last_error_at)) })
+                ? t("tour.regenFailed", { time: relativeTime(meta.last_error_at) })
                 : generatedAt
-                  ? t("tour.regenFailedOlder", { time: format.relativeTime(new Date(generatedAt)) })
+                  ? t("tour.regenFailedOlder", { time: relativeTime(generatedAt) })
                   : t("tour.regenFailedNoTime")}
             </Badge>
           )}

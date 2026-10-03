@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useRelativeTime } from "@/lib/relative-time";
 import { Button, Icon, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { ContextDocList } from "@/components/context-doc-list";
@@ -20,7 +21,7 @@ import { s } from "./styles";
  */
 export function ContextPageView() {
   const t = useTranslations("context");
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const { repoId } = useParams<{ repoId: string }>();
   const { activeRepo } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
@@ -97,7 +98,7 @@ export function ContextPageView() {
             <>
               <span>{t("footer.files", { count: files.length })}</span>
               {total > files.length && <span>{t("footer.showing", { shown: files.length, total })}</span>}
-              <span>{t("footer.lastScan", { time: format.relativeTime(new Date(data.scanned_at)) })}</span>
+              <span>{t("footer.lastScan", { time: relativeTime(data.scanned_at) })}</span>
             </>
           ) : null}
         </div>

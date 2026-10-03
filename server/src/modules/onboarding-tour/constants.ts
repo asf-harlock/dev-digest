@@ -85,8 +85,13 @@ export const TOUR_FEATURE_ID = 'onboarding' as const;
 export const TOUR_PROMPT_FILE = 'onboarding.system.md';
 export const TOUR_LANGUAGE = 'English';
 export const TOUR_SCHEMA_NAME = 'OnboardingTourEnrichment';
-/** Model call ceiling (Q10). The client gives up at 200 s, so no internal retries. */
-export const TOUR_LLM_TIMEOUT_MS = 120_000;
+/**
+ * Model call ceiling (Q10, SPEC-05 NFR-2). The client stops polling at 200 s, so
+ * no internal retries. In activity mode the history fetch (≤ HISTORY_BUDGET_MS)
+ * runs first, so the worst case (240 s) outlasts the poll: the client then shows
+ * "taking longer than expected" and the tour still lands on the next load.
+ */
+export const TOUR_LLM_TIMEOUT_MS = 180_000;
 export const TOUR_LLM_MAX_RETRIES = 0;
 /** Token budget for the facts block, counted with the container tokenizer (Q-1). */
 export const TOUR_TOKEN_BUDGET = 24_000;

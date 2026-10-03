@@ -324,6 +324,13 @@ needed none of those and cannot drift.
   running. Hold the lock until the underlying promise settles, and discard a
   late result with an expired flag (`brief/service.ts` `withDeadline`).
   `onboarding-tour/service.ts:48-58` still releases at the deadline.
+  **Correction 2026-10-03:** OpenRouter (`reviewer-core/src/llm/openrouter.ts`,
+  the provider most features use) ignored `timeoutMs` entirely until now. Its
+  SDK client has a fixed 90 s timeout with 2 SDK retries, so every call was cut
+  at 90 s per attempt, whatever the caller asked. The onboarding tour reported
+  "Model call timed out" at its 120 s deadline while the model never got more
+  than 90 s. It now passes `{ timeout: req.timeoutMs }` per request. When a
+  timeout looks wrong, check the provider's SDK client options first.
 
 - **2026-09-18** — Two dependency-cruiser settings decide whether `pnpm arch`
   (`server/.dependency-cruiser.cjs`) checks anything at all, and both fail
@@ -369,6 +376,9 @@ needed none of those and cannot drift.
 
 ## Session Notes
 
+- **2026-10-03** — Onboarding tour "Last regeneration failed": the OpenRouter
+  adapter ignored `timeoutMs` (fixed), and the tour timeout was raised to 180 s
+  (SPEC-05 NFR-2). Corrected the 2026-09-30 LLM-timeout entry.
 - **2026-10-03** — Raised the agent/skill attach cap to 64 KB and made
   oversized docs previewable (SPEC-04 EC-4/EC-11 amended, EC-27/EC-28 added).
   Found the tiktoken repeated-character cliff via a timed-out fixture.

@@ -154,7 +154,7 @@ in to activity-based ranking, which needs clone history.
 ## Non-functional requirements
 
 - **NFR-1** The system (shall) make at most one model call per generation and zero model calls when the tour page is read.
-- **NFR-2** The system (shall) abort the model call after 120 s.
+- **NFR-2** The system (shall) abort the model call after 180 s.
 - **NFR-3** The system (shall) produce an identical skeleton, reading path and critical-path list for the same index SHA, ranking mode and window.
 - **NFR-4** The system (shall) leave `file_rank.rank` and `file_rank.hotness` unchanged by any tour generation in either ranking mode.
 - **NFR-5** The system (shall) scope every tour read and write to the caller's workspace through `getContext()` and a join on `repos.workspace_id`.

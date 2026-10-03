@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { useTranslations, useFormatter } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useRelativeTime } from "@/lib/relative-time";
 import { EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
@@ -23,7 +24,7 @@ import { s } from "./styles";
  */
 export function ConventionsListView() {
   const t = useTranslations("conventions");
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const { repoId, activeRepo, reposLoaded } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
   const { data, isLoading, isError, refetch } = useConventions(repoId);
@@ -83,7 +84,7 @@ export function ConventionsListView() {
             <p style={s.subtitle}>
               {data ? t("page.candidateCount", { count: candidates.length }) : t("page.scanning")}
               {data?.scan
-                ? ` · ${t("page.lastScan", { time: format.relativeTime(new Date(data.scan.created_at)) })}`
+                ? ` · ${t("page.lastScan", { time: relativeTime(data.scan.created_at) })}`
                 : ""}
             </p>
           </div>
