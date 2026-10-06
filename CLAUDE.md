@@ -110,6 +110,9 @@ terminal is not gated.
 - Secrets live in `~/.devdigest/secrets.json` (mode 0600), not in the DB.
   `LocalSecretsProvider` is the only read chokepoint.
 - `server/` and `client/` use pnpm; `e2e/` and `reviewer-core/` use npm.
+- The shell is zsh on macOS. Quote globs (`grep --include='*.ts'`, or use the
+  Grep tool) — unquoted they fail with `no matches found`. `sed` is BSD:
+  in-place is `sed -i '' …`. Change code with Edit, not `sed`.
 
 ## Do not touch
 

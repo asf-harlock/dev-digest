@@ -140,6 +140,16 @@ draws exist or are meant to be new; for a contract, check it against both
 
 Every non-Clear status produces a question. Do not resolve it yourself.
 
+**Contract coverage.** Then walk every value the UI shows, the server
+returns or a row stores — each badge, label, stale note, meta field, enum
+value, error reason — and trace it to the contract field that carries it,
+its type, and the table/column that stores it. Check both `@devdigest/shared`
+copies and the schema, not only the spec text. A value with no field, an
+enum missing a case, or a field that needs a new column (a migration) is a
+gap: it becomes a blocking question now, so the contract step of the plan
+is complete before any workstream starts. Gaps found mid-run cost an extra
+implementer each and a stop on the user.
+
 ### Step 4 — recommend improvements
 
 Offer concrete recommendations where the work could be done better: a
@@ -176,6 +186,11 @@ Recommend one, with the reason — but the user decides.
 |---|---|---|---|---|
 | AC-1 | "КОЛИ …, the system (shall) …" | specs/04-…md:12 | Clear | checked by … |
 | DIAG:<section> | <what the diagram shows> | specs/04-…md:40 | Ambiguous | … |
+
+### Contract coverage
+| Requirement | Value shown / stored | Contract field (both copies) | Type | Stored in | Gap |
+|---|---|---|---|---|---|
+| AC-2 | "Added in this PR" badge | `PrContextEntry.origin` | `'added' \| 'modified' \| …` | `pr_files.status` (new column → migration) | yes → Q1 |
 
 ### Clarifying questions
 1. [AC-2] <question> — <why the answer changes the plan>
