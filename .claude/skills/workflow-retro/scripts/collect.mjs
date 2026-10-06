@@ -397,6 +397,119 @@ const sharedGreps = Object.entries(grepBy)
   .filter(([, who]) => who.length > 1)
   .map(([pattern, who]) => ({ pattern, who }));
 
+// ---------- topology ----------
+// Structural candidates — merge, fold, split, concurrency, model — computed
+// from the numbers above so a proposal can say "merge X with Y" or "lower
+// concurrency 4 → 3" with a number behind it. Candidates, not verdicts: the
+// rubric's Topology lens accepts or rejects each one with a reason.
+const label = (a) => `${a.meta.agentType ?? 'agent'}:${a.id.slice(0, 7)}`;
+const callsOf = (a) => Object.values(a.tools).reduce((s, n) => s + n, 0);
+const liveAt = (t, self) =>
+  agents.filter((a) => a !== self && a.segments.some((sg) => sg.start <= t && t <= sg.end)).length;
+const topology = [];
+
+// A verifier or reviewer must stay independent of what it checks, so it is
+// only ever paired with another agent of its own type ("resume instead").
+const isChecker = (a) =>
+  /verifier|reviewer/.test(a.meta.agentType ?? '') || /\b(review|verify|re-?check)\b/i.test(a.meta.description ?? '');
+const merges = [];
+for (let i = 0; i < agents.length; i++)
+  for (let j = i + 1; j < agents.length; j++) {
+    const [a, b] = [agents[i], agents[j]];
+    if (a.meta.agentType !== b.meta.agentType && (isChecker(a) || isChecker(b))) continue;
+    const ra = Object.keys(a.reads);
+    const rb = Object.keys(b.reads);
+    if (ra.length < 3 || rb.length < 3) continue;
+    const shared = ra.filter((p) => p in b.reads);
+    const overlap = shared.length / Math.min(ra.length, rb.length);
+    if (shared.length < 3 || overlap < 0.5) continue;
+    const sameType = a.meta.agentType === b.meta.agentType;
+    merges.push({
+      kind: 'merge',
+      agents: [label(a), label(b)],
+      sharedFiles: shared.length,
+      overlap: +overlap.toFixed(2),
+      freshSecond: b.tokens.fresh,
+      suggestion: sameType
+        ? `resume ${label(a)} instead of launching ${label(b)} — same type, ${Math.round(overlap * 100)}% of the smaller read set shared`
+        : `merge ${label(b)} into ${label(a)} (one agent, both briefs) — ${shared.length} files read by both`,
+    });
+  }
+merges.sort((x, y) => y.overlap * y.sharedFiles - x.overlap * x.sharedFiles);
+topology.push(...merges.slice(0, 8));
+
+for (const a of agents) {
+  const calls = callsOf(a);
+  // Checkers are never folded: a reviewer or verifier must stay independent.
+  if (calls <= 6 && a.freshShare < 0.02 && !isChecker(a))
+    topology.push({
+      kind: 'fold',
+      agents: [label(a)],
+      toolCalls: calls,
+      fresh: a.tokens.fresh,
+      suggestion: `fold ${label(a)} into the orchestrator or its neighbour — ${calls} tool calls, ${a.tokens.fresh} fresh tokens`,
+    });
+  // A share of fresh tokens means little in a small run: 3 equal agents are 33% each.
+  if (a.resumes >= 3 || (a.freshShare >= 0.3 && agents.length >= 5))
+    topology.push({
+      kind: 'split',
+      agents: [label(a)],
+      resumes: a.resumes,
+      freshShare: a.freshShare,
+      suggestion: `split ${label(a)} — a fresh agent per phase/layer, resume only for fixes (${a.resumes} resumes, ${Math.round(a.freshShare * 100)}% of fresh tokens)`,
+    });
+  const top = a.models.some((m) => /opus|fable/i.test(m));
+  if (top && a.readShare >= 0.8)
+    topology.push({
+      kind: 'model',
+      agents: [label(a)],
+      from: a.models.join(', '),
+      to: 'sonnet',
+      readShare: a.readShare,
+      suggestion: `run ${label(a)} on Sonnet for one comparable run — ${Math.round(a.readShare * 100)}% read-only calls`,
+    });
+  const failedGates = a.gates.filter((g) => !g.pass).length;
+  if (!top && a.resumes >= 3 && failedGates >= 2)
+    topology.push({
+      kind: 'model',
+      agents: [label(a)],
+      from: a.models.join(', '),
+      to: 'opus',
+      resumes: a.resumes,
+      failedGates,
+      suggestion: `try ${label(a)} on Opus — ${a.resumes} resumes and ${failedGates} failed gates on a cheaper model`,
+    });
+}
+
+// Failures (tool errors, failed gates) split by whether ≥ 2 other agents were
+// active at that moment. Many failures under load and few alone → lower concurrency.
+const failures = agents.flatMap((a) =>
+  [...a.errors.map((x) => x.ts), ...a.gates.filter((g) => !g.pass).map((g) => g.ts)].map((ts) => ({
+    a,
+    load: liveAt(Date.parse(ts), a),
+  })),
+);
+const underLoad = failures.filter((f) => f.load >= 2).length;
+const alone = failures.length - underLoad;
+let concurrency = null;
+if (maxParallel >= 3 && underLoad >= 2 && underLoad > alone) {
+  concurrency = { from: maxParallel, to: maxParallel - 1 };
+  topology.push({
+    kind: 'concurrency',
+    ...concurrency,
+    failuresUnderLoad: underLoad,
+    failuresAlone: alone,
+    suggestion: `lower concurrency ${maxParallel} → ${maxParallel - 1} — ${underLoad} failures with ≥ 2 other agents active vs ${alone} otherwise`,
+  });
+} else if (maxParallel <= 1 && agents.length >= 3) {
+  concurrency = { from: maxParallel, to: 2 };
+  topology.push({
+    kind: 'concurrency',
+    ...concurrency,
+    suggestion: `raise concurrency ${maxParallel} → 2+ — ${agents.length} agents ran strictly one at a time; check which launches did not depend on the previous result`,
+  });
+}
+
 // ---------- output ----------
 const sum = (k) => main.tokens[k] + agents.reduce((s, a) => s + a.tokens[k], 0);
 const slim = (a) => ({
@@ -452,6 +565,7 @@ const result = {
   launchOrder: agents.map((a, i) => `${i + 1}. ${a.meta.agentType} — ${a.meta.description}`),
   timeline,
   duplication: { sharedReads, rereads, sharedGreps },
+  topology,
   quality: {
     gates: gateSummary,
     gateRuns: allGates,
@@ -464,10 +578,19 @@ const result = {
 };
 
 const out = opt('--out');
+// metrics.json is committed: the home directory becomes `~`, and the two
+// other forms that carry the username — the slugified project dir under
+// ~/.claude/projects and the per-uid temp dir — are shortened too.
+const metricsText = () =>
+  JSON.stringify(result, null, 2)
+    .replaceAll(homedir(), '~')
+    .replaceAll(process.cwd().replace(/[/.]/g, '-'), '<project>')
+    .replaceAll(homedir().replace(/[/.]/g, '-'), '<home>') // a slug cut short by trunc()
+    .replace(/\/private\/tmp\/claude-\d+\//g, '$TMPDIR/');
 if (out) {
   mkdirSync(join(out, 'reports'), { recursive: true });
   mkdirSync(join(out, 'prompts'), { recursive: true });
-  writeFileSync(join(out, 'metrics.json'), JSON.stringify(result, null, 2));
+  writeFileSync(join(out, 'metrics.json'), metricsText());
   for (const a of agents)
     writeFileSync(
       join(out, 'reports', `${a.meta.agentType ?? 'agent'}-${a.id.slice(0, 7)}.md`),
@@ -506,6 +629,7 @@ if (out) {
     gatesFirstTryPass: Object.values(gateSummary).filter((g) => g.firstTryPass).length,
     gates: Object.keys(gateSummary).length,
     flags: agents.flatMap((a) => a.flags.map((f) => `${a.meta.agentType}: ${f}`)),
+    topology: topology.reduce((m, c) => ({ ...m, [c.kind]: (m[c.kind] ?? 0) + 1 }), {}),
   };
   const prev = existsSync(histFile)
     ? readFileSync(histFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -513,7 +637,7 @@ if (out) {
   const rows = prev.filter((r) => !(r.run === runName && r.session === sessionId)).concat(row);
   writeFileSync(histFile, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
   result.history = { file: histFile, previous: rows.slice(0, -1).slice(-5) };
-  writeFileSync(join(out, 'metrics.json'), JSON.stringify(result, null, 2));
+  writeFileSync(join(out, 'metrics.json'), metricsText());
 }
 
 console.log(JSON.stringify(result, null, 2));

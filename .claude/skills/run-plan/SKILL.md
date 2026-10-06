@@ -73,6 +73,17 @@ which phase it is in and resume from there (the user can say "restart").
   report to the user and stop.
 - `--tests` → now run `test-writer` with the plan path and the spec's AC/EC
   list; ask it to put the ID in each test name (`it('AC-3: …')`).
+- **Migrations.** If the diff adds a file under `server/src/db/migrations/`,
+  ask the user once, right after the gates pass, whether to apply it, then run
+  `cd server && pnpm db:migrate` — before any browser check, Playwright step
+  or e2e flow. Migrations never run on boot, so skipping this shows the user
+  `column "…" does not exist`.
+- **A pending question does not stop the run.** When one item needs the
+  user's answer (a migration, a contract gap, a scope call), ask it and in the
+  same turn keep going with everything that does not depend on it — the next
+  workstream, `test-writer`, verify #1 on the other items. Record the item as
+  `pending` in `state.json`, and build it once the answer arrives. End the
+  turn waiting only when nothing independent is left to run.
 
 ## Phase 2 — verify #1 (what is missing)
 
@@ -133,8 +144,10 @@ Report to the user, briefly:
 - verify-2 verdict;
 - next step: the repo's pre-PR gate (`.claude/skills/pr-self-review/`), then a PR.
 
-Then run `engineering-insights` (record mode). Do not commit, push or open a
-PR unless the user asks.
+Then run `engineering-insights` (record mode), then `/workflow-retro` with a
+`--from` window starting at this run's Phase 0 — its `report.md`,
+`metrics.json` and `history.jsonl` row ship with the run's branch. Do not
+commit, push or open a PR unless the user asks.
 
 ## Rules
 

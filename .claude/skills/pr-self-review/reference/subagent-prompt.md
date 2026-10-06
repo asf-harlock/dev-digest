@@ -12,7 +12,7 @@ Slot values:
 | `<AGENT>` | the key in `.agents` |
 | `<FILES>` | `.agents["<AGENT>"].files`, one per line with its `.states` |
 | `<SKILLS>` | `.agents["<AGENT>"].skills` |
-| `<PATCH>` | `scripts/patch-slice.sh <AGENT>` — never the whole `diff.patch` |
+| `<PATCH>` | `.claude/pr-self-review/slices/<AGENT>.patch`, written first with `scripts/patch-slice.sh <AGENT> > .claude/pr-self-review/slices/<AGENT>.patch` — a path, never the diff inline (a slice can be hundreds of KB) and never the whole `diff.patch` |
 | `<MODULE_DOCS>` | the `CLAUDE.md` + `INSIGHTS.md` of every package the files touch |
 | `<KNOWN>` | every finding already in `hard-rules.json` + `gate-findings.json`, as `file:line — title` |
 
@@ -27,11 +27,9 @@ edits and make none.
 
 <FILES>
 
-The diff for exactly these files:
-
-```diff
-<PATCH>
-```
+The diff for exactly these files is in `<PATCH>` — read it first. Generated
+files (`migrations/meta/*.json`, retro `metrics.json`) may be most of it:
+spot-check those with `grep`, read the rest in full.
 
 ## Load these skills first, and no others
 
@@ -79,7 +77,10 @@ Three findings you can defend beat twenty you cannot.
 
 ## Output
 
-Return ONLY this JSON. No prose before or after.
+Write ONLY this JSON, with the Write tool, to
+`.claude/pr-self-review/agents/<AGENT>.json` — the one file you may write.
+No prose before or after it in the file. Then reply with the single word
+`written`, or with the error if the write failed.
 
 {
   "bucket": "<AGENT>",
@@ -104,7 +105,9 @@ Return ONLY this JSON. No prose before or after.
 
 ---
 
-Write each reply verbatim to `.claude/pr-self-review/agents/<AGENT>.json`.
+The reviewer writes its own reply to `.claude/pr-self-review/agents/<AGENT>.json`,
+so the orchestrator never re-types findings. Launch it as `general-purpose`
+(it needs Write); everything else in its prompt keeps it read-only.
 `id`, `kind`, `psr_bucket` and `psr_source` are filled in by
 `build-report.sh` — subagents never mint them, so the dedupe stays
 reproducible.
