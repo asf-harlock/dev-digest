@@ -144,7 +144,7 @@ Resumes: 1 · errors: exit 6.
 | resume plan-verifier:aba6d27 instead of launching plan-verifier:a6e3dbb — same type, 67% of the smaller read set shared | reject | Verify #2 — definition of done, має бути свіжим і незалежним від verify #1. |
 | merge test-writer:a35d8ea into implementer:ac7dbe7 (one agent, both briefs) — 5 files read by both | reject | Та сама причина, що й для a41d954. |
 | fold architecture-reviewer:a832ab3 into the orchestrator or its neighbour — 5 tool calls, 19193 fresh tokens | reject | Незалежний reviewer; перенесення в Opus-оркестратор подорожчає, а не здешевшає. |
-| fold architecture-reviewer:acacd64 into the orchestrator or its neighbour — 2 tool calls, 13024 fresh tokens | accept (умовно) | Re-review A1 = «чи зникнув import adapter → modules». Коли це правило буде в `.dependency-cruiser.cjs`, re-review = `pnpm arch` (див. «For engineering-insights»). |
+| fold architecture-reviewer:acacd64 into the orchestrator or its neighbour — 2 tool calls, 13024 fresh tokens | reject | Reviewer має лишатися незалежним (`/run-plan` Rules). Замість fold: правило `adapters → modules` у `.dependency-cruiser.cjs` зробить цю перевірку детермінованою (`pnpm arch`), див. «For engineering-insights». Відтепер `collect.mjs` не пропонує fold для checker-ів. |
 | (manual) merge implementer #7 «contract gap fixes» and #8 «AC-2 origin badge» | accept | Обидва — прогалини контракту; розділені лише через питання про міграцію. Закривається пропозицією #1 (прогалини стають питаннями Phase 1). |
 | (manual) concurrency | reject | Скрипт не дав кандидата: maxParallel 3, із 6 помилок жодна не повʼязана з навантаженням (cwd, zsh-глоб, BSD sed). |
 

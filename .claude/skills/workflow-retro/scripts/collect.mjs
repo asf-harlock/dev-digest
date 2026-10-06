@@ -440,7 +440,8 @@ topology.push(...merges.slice(0, 8));
 
 for (const a of agents) {
   const calls = callsOf(a);
-  if (calls <= 6 && a.freshShare < 0.02)
+  // Checkers are never folded: a reviewer or verifier must stay independent.
+  if (calls <= 6 && a.freshShare < 0.02 && !isChecker(a))
     topology.push({
       kind: 'fold',
       agents: [label(a)],
@@ -448,7 +449,8 @@ for (const a of agents) {
       fresh: a.tokens.fresh,
       suggestion: `fold ${label(a)} into the orchestrator or its neighbour — ${calls} tool calls, ${a.tokens.fresh} fresh tokens`,
     });
-  if (a.resumes >= 3 || a.freshShare >= 0.3)
+  // A share of fresh tokens means little in a small run: 3 equal agents are 33% each.
+  if (a.resumes >= 3 || (a.freshShare >= 0.3 && agents.length >= 5))
     topology.push({
       kind: 'split',
       agents: [label(a)],
@@ -576,8 +578,15 @@ const result = {
 };
 
 const out = opt('--out');
-// metrics.json is committed: the home directory becomes `~`.
-const metricsText = () => JSON.stringify(result, null, 2).replaceAll(homedir(), '~');
+// metrics.json is committed: the home directory becomes `~`, and the two
+// other forms that carry the username — the slugified project dir under
+// ~/.claude/projects and the per-uid temp dir — are shortened too.
+const metricsText = () =>
+  JSON.stringify(result, null, 2)
+    .replaceAll(homedir(), '~')
+    .replaceAll(process.cwd().replace(/[/.]/g, '-'), '<project>')
+    .replaceAll(homedir().replace(/[/.]/g, '-'), '<home>') // a slug cut short by trunc()
+    .replace(/\/private\/tmp\/claude-\d+\//g, '$TMPDIR/');
 if (out) {
   mkdirSync(join(out, 'reports'), { recursive: true });
   mkdirSync(join(out, 'prompts'), { recursive: true });

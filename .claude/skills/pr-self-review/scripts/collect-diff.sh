@@ -51,6 +51,16 @@ if [ "$HASH_ONLY" = "1" ]; then
   exit 0
 fi
 
+# ---- a new run starts with no reviewer replies ------------------------------
+# build-report.sh merges every agents/*.json, so a reply left over from an
+# earlier run would leak its findings (or hide a CRITICAL) into this report.
+# The previous run's replies and slices are kept one generation back.
+for d in agents slices; do
+  rm -rf "$PSR_DIR/$d.prev"
+  [ -d "$PSR_DIR/$d" ] && mv "$PSR_DIR/$d" "$PSR_DIR/$d.prev"
+  mkdir -p "$PSR_DIR/$d"
+done
+
 # ---- file list, one "path<TAB>state" line per source ------------------------
 collect_states() {
   if [ "$BASE_MODE" = "merge-base" ]; then

@@ -90,10 +90,11 @@ WARNING, never a CRITICAL. It is a coverage hole, not a proven failure.
 Read `reference/subagent-prompt.md` and launch **one `Task` per agent** named in
 `changeset.json` → `.agents`, **all in a single message** so they run in
 parallel. Each gets only its own files, only the skills its routing row names,
-and only its own slice of the diff:
+and only its own slice of the diff, written to a file and passed as a path:
 
 ```sh
-.claude/skills/pr-self-review/scripts/patch-slice.sh <agent>
+.claude/skills/pr-self-review/scripts/patch-slice.sh <agent> \
+  > .claude/pr-self-review/slices/<agent>.patch
 ```
 
 An agent handed the whole diff reviews files that are not its job and produces
@@ -102,9 +103,12 @@ duplicates the merge step then throws away.
 Skip the fan-out entirely when `changeset.json` → `.stats.degraded` is `true`
 (over 150 files or 15 000 review lines). Say so; the report records it.
 
-Write each agent's JSON reply verbatim to
-`.claude/pr-self-review/agents/<agent>.json`. Do not edit the findings — the
-next step grounds, dedupes and scores them, and it must be reproducible.
+Each agent writes its own JSON reply to
+`.claude/pr-self-review/agents/<agent>.json` and answers `written`. Check
+that every expected file exists and parses (`jq . <file>`); never edit the
+findings — the next step grounds, dedupes and scores them, and it must be
+reproducible. `collect-diff.sh` empties `agents/` and `slices/` at the start
+of every run (the previous run is kept in `agents.prev/`).
 
 ## Step 4 — Build the report
 

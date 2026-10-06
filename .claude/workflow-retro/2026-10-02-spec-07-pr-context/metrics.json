@@ -1,7 +1,7 @@
 {
   "session": {
     "id": "0e83e3f6-c109-464e-ac0b-b42970ecdf35",
-    "transcript": "~/.claude/projects/-Users-harlock-Downloads-Sites-devdigest/0e83e3f6-c109-464e-ac0b-b42970ecdf35.jsonl",
+    "transcript": "~/.claude/projects/<project>/0e83e3f6-c109-464e-ac0b-b42970ecdf35.jsonl",
     "start": "2026-10-02T14:58:20.681Z",
     "end": "2026-10-02T18:33:39.414Z",
     "wallMin": 215.3,
@@ -1766,7 +1766,7 @@
       },
       {
         "actor": "plan-verifier:aba6d27",
-        "path": "/private/tmp/claude-501/-Users-harlock-Downloads-Sites-devdigest/0e83e3f6-c109-464e-ac0b-b42970ecdf35/scratchpad/gates.txt",
+        "path": "$TMPDIR/<project>/0e83e3f6-c109-464e-ac0b-b42970ecdf35/scratchpad/gates.txt",
         "n": 2
       },
       {
@@ -1801,7 +1801,7 @@
       },
       {
         "actor": "general-purpose:a70b725",
-        "path": "~/.claude/projects/-Users-harlock-Downloads-Sites-devdigest/0e83e3f6-c109-464e-ac0b-b42970ecdf35/tool-results/brkextzoe.txt",
+        "path": "~/.claude/projects/<project>/0e83e3f6-c109-464e-ac0b-b42970ecdf35/tool-results/brkextzoe.txt",
         "n": 2
       },
       {

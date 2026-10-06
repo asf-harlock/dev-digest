@@ -1,7 +1,7 @@
 {
   "session": {
     "id": "7d88bec8-0195-49e4-baff-00819c86541a",
-    "transcript": "~/.claude/projects/-Users-harlock-Downloads-Sites-devdigest/7d88bec8-0195-49e4-baff-00819c86541a.jsonl",
+    "transcript": "~/.claude/projects/<project>/7d88bec8-0195-49e4-baff-00819c86541a.jsonl",
     "start": "2026-09-30T08:12:12.592Z",
     "end": "2026-09-30T10:54:52.986Z",
     "wallMin": 162.7,
@@ -1787,7 +1787,7 @@
       },
       {
         "actor": "researcher:a69ae90",
-        "path": "/private/tmp/claude-501/-Users-harlock-Downloads-Sites-devdigest/7d88bec8-0195-49e4-baff-00819c86541a/scratchpad/uswds.js",
+        "path": "$TMPDIR/<project>/7d88bec8-0195-49e4-baff-00819c86541a/scratchpad/uswds.js",
         "n": 4
       },
       {
@@ -2219,7 +2219,7 @@
         "gate": "scripts/e2e.sh",
         "ts": "2026-09-30T10:29:12.356Z",
         "pass": true,
-        "cmd": "git status --short | head; git log --oneline 567ed70..HEAD; (./scripts/e2e.sh > /private/tmp/claude-501/-Users-harlock-Downloads-Sites-devdi…",
+        "cmd": "git status --short | head; git log --oneline 567ed70..HEAD; (./scripts/e2e.sh > $TMPDIR/<home>-Downloads-Sites-devdi…",
         "tail": "depcruise src --config .dependency-cruiser.cjs --output-type err ✔ no dependency violations found (541 modules, 1670 dependencies cruised) == core > @devdigest/reviewer-core@0.0.0 typecheck > tsc --noEmit -p tsconfig.json == e2e tc > @devdigest/e2e@0.0.0 typecheck > tsc --noEmit -p tsconfig.json",
         "actor": "plan-verifier:a40bb21"
       },
