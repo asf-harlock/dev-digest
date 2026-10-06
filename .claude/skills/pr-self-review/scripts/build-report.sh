@@ -35,6 +35,18 @@ awk -f "$SCRIPT_DIR/hunks.awk" "$PSR_DIR/diff.patch" \
               | group_by(.path) | map({key: .[0].path, value: map([.s,.e])}) | from_entries' \
   > "$PSR_DIR/.hunks.json"
 
+# every expected reviewer must have replied with parseable JSON. A missing or
+# corrupt reply used to fall back to "no findings" — a silent pass that also
+# dropped every OTHER agent's findings, CRITICALs included.
+if [ "$(jq -r '.stats.degraded' "$CHANGESET")" != "true" ]; then
+  for a in $(jq -r '.agents | keys[]' "$CHANGESET"); do
+    f="$PSR_DIR/agents/$a.json"
+    [ -f "$f" ] || psr_die "build-report: no reply from reviewer '$a' ($f). Re-run that reviewer; no report was written."
+    jq -e '.findings | type == "array"' "$f" >/dev/null 2>&1 \
+      || psr_die "build-report: reply from reviewer '$a' is not valid JSON with a findings array ($f). No report was written."
+  done
+fi
+
 # agent findings, normalised
 jq -s '[ .[] as $a | ($a.findings // [])[] | . + {psr_bucket: $a.bucket, psr_source: "agent", kind: "finding"} ]' \
   "$PSR_DIR"/agents/*.json 2>/dev/null > "$PSR_DIR/.agent-findings.json" || echo '[]' > "$PSR_DIR/.agent-findings.json"

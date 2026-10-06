@@ -74,9 +74,10 @@ What the fields mean, and their limits:
   the judgement it writes.
 - `topology` lists **structural candidates**, each with a ready `suggestion`
   line: `merge` (two agents sharing ≥ 3 read files and ≥ 50% of the smaller
-  read set — same type → "resume instead of launching"), `fold` (≤ 6 tool
-  calls and < 2% of fresh tokens), `split` (≥ 3 resumes or ≥ 30% of fresh
-  tokens), `model` (Opus/Fable with ≥ 80% read-only calls → Sonnet; a cheaper
+  read set — same type → "resume instead of launching"; a reviewer or
+  verifier is never merged with another type), `fold` (≤ 6 tool calls and
+  < 2% of fresh tokens; never a reviewer or verifier), `split` (≥ 3 resumes,
+  or ≥ 30% of fresh tokens in a run of ≥ 5 agents), `model` (Opus/Fable with ≥ 80% read-only calls → Sonnet; a cheaper
   model with ≥ 3 resumes and ≥ 2 failed gates → Opus), `concurrency`
   (`maxParallel` ≥ 3 and most failures happened with ≥ 2 other agents active →
   N → N−1; ≥ 3 agents never overlapping → raise it). Candidates, not verdicts.
@@ -89,6 +90,9 @@ What the fields mean, and their limits:
   phase, verify rounds with Pass/Fail/Blocked/Unverified counts, review rounds
   with findings by severity), `resumes`, `errorsByKind`
   (`denied` / `exit` / `missing-path` / `other`).
+- `metrics.json` is redacted on write (home dir, project slug, per-uid temp
+  dir); stdout is not. When `report.md` quotes a path, write it as `~/…` or
+  `<project>` — never the username.
 - `history.previous` holds the last ≤ 5 earlier retros. Compare only runs of
   the same kind (same `agentTypes`); say "no comparable run" otherwise.
 - The numbers include this retro's own first call; say so in one line.

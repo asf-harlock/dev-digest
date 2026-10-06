@@ -64,7 +64,7 @@ No comparable run: the earlier retros in `history.previous` are spec/`/run-plan`
 | Hard | ok | 0 errors. 2.2 active min, the longest of the three, matching the largest slice. |
 | Easy | ok | — |
 | Duplicated | ok (minor) | Re-read `history.jsonl` and `agents/README.md` twice (`rereads`). |
-| Missed | ok | It caught that the redaction misses `-Users-harlock-…` and `/private/tmp/claude-501/…`, a gap in this session's own work. |
+| Missed | ok | It caught that the redaction misses the slugified project dir and the per-uid temp dir (both carry the OS username), a gap in this session's own work. |
 | Hand-off | ok | 6 853 chars of JSON, used unchanged. |
 | Prompt | ok | It was told not to read the generated `metrics.json` in full, and did not. |
 
