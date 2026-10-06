@@ -45,14 +45,15 @@ comparable. To find the timestamps, run once without a window and read
 `timeline`, then re-run with the window into the same `--out` (the history row
 is replaced, not duplicated). `session.window` records what was used.
 
-The output directory is git-ignored and holds:
+The output directory holds:
 
-| File | Holds |
-|---|---|
-| `metrics.json` | session span, totals, orchestrator, per-agent metrics and `flags`, launch order, timeline, duplication, `quality`, `history` |
-| `reports/<type>-<id7>.md` | every hand-back of that agent, in order |
-| `prompts/<type>-<id7>.md` | its launch prompt, then every resume message |
-| `../history.jsonl` | one row per retro (shared by all runs); re-running a retro replaces its row |
+| File | Holds | Git |
+|---|---|---|
+| `metrics.json` | session span, totals, orchestrator, per-agent metrics and `flags`, launch order, timeline, duplication, `topology`, `quality`, `history` | committed |
+| `report.md` | your judgement (Step 4) | committed |
+| `reports/<type>-<id7>.md` | every hand-back of that agent, in order | ignored |
+| `prompts/<type>-<id7>.md` | its launch prompt, then every resume message | ignored |
+| `../history.jsonl` | the ledger — one row per retro (shared by all runs); re-running a retro replaces its row | committed |
 
 Read `metrics.json` whole. Open `reports/` and `prompts/` **one agent at a
 time**. Never read the raw `.jsonl` transcripts whole — they are megabytes;
@@ -71,6 +72,14 @@ What the fields mean, and their limits:
   the run's fresh tokens, a permission denial, ≥ 2 resumes. Confirm or reject
   each one under the Fit lens — a reading-heavy agent may still need Opus for
   the judgement it writes.
+- `topology` lists **structural candidates**, each with a ready `suggestion`
+  line: `merge` (two agents sharing ≥ 3 read files and ≥ 50% of the smaller
+  read set — same type → "resume instead of launching"), `fold` (≤ 6 tool
+  calls and < 2% of fresh tokens), `split` (≥ 3 resumes or ≥ 30% of fresh
+  tokens), `model` (Opus/Fable with ≥ 80% read-only calls → Sonnet; a cheaper
+  model with ≥ 3 resumes and ≥ 2 failed gates → Opus), `concurrency`
+  (`maxParallel` ≥ 3 and most failures happened with ≥ 2 other agents active →
+  N → N−1; ≥ 3 agents never overlapping → raise it). Candidates, not verdicts.
 - `quality` is **outcome, not cost**: `gates` (per gate — runs, fails,
   `firstTryPass`, `finalPass`; a gate is `lint-spec`, `pnpm test|typecheck|
   lint|arch`, `scripts/check.sh`, `pr-self-review` scripts, …, detected only
@@ -97,11 +106,18 @@ not softened.
 
 ## Step 3 — proposals
 
-Each proposal names **one file** (`.claude/agents/<name>.md`,
-`.claude/skills/<name>/…`, or "orchestrator prompt") and the change, gives the
-evidence, and the expected effect (fewer tokens, one less resume, a miss
-closed). Rank by effect. At most 7. Prefer a change to the definition over
-advice to the orchestrator — definitions persist, advice does not.
+First fill the Topology section: accept or reject every `topology`
+candidate with a reason (`reference/rubric.md`, Topology lens).
+
+Each proposal starts with one **action verb** from the rubric (Merge, Fold,
+Split, Drop, Concurrency, Model, Reorder, Edit) naming the agents — "merge
+`researcher` R2 into R1", "concurrency 4 → 3 for the implementers", not
+"consider reducing duplication". It names **one file**
+(`.claude/agents/<name>.md`, `.claude/skills/<name>/…`, or "orchestrator
+prompt") and the change, gives the evidence, and the expected effect as a
+number from `metrics.json` where one exists (−N fresh tokens, one less resume,
+a miss closed). Rank by effect. At most 7. Prefer a change to the definition
+over advice to the orchestrator — definitions persist, advice does not.
 
 Never edit agent or skill files in this skill. Offer to apply the proposals
 the user picks.
@@ -110,6 +126,9 @@ the user picks.
 
 Write `report.md` next to `metrics.json` with the template in
 `reference/rubric.md`, in the user's language (identifiers stay English).
+Leave `report.md`, `metrics.json` and `history.jsonl` for the user to commit
+with the run's branch — they are the evidence that the retro ran. Never commit
+`prompts/` or `reports/`.
 Reply with: the path, a 5-line summary (agents, fresh tokens, active time,
 the biggest problem, the top proposal), and the question which proposals to
 apply. If the run also taught something about the code, say that

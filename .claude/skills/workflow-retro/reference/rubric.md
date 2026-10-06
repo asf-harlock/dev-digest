@@ -22,6 +22,32 @@ Orchestrator (this session) — same lenses, plus:
   not by the agent.
 - **User time.** Idle gaps waiting for the user (`spanMin − activeMin`) caused
   by a question that had a safe default.
+- **Topology.** Was this the right *set* of agents? Take every entry in
+  `metrics.topology` and accept or reject it in the Topology section, with a
+  reason. Reject a candidate whose two agents must stay independent (a reviewer
+  and the verifier that checks the same diff, two parallel reviewers), or whose
+  "fold" would move a model call into an Opus orchestrator. Add a structural
+  change the script cannot see when evidence supports it (e.g. two agents
+  whose reports the orchestrator always relayed together).
+
+## Proposal actions
+
+Every proposal starts with exactly one of these verbs, naming the agents:
+
+| Action | Shape | Typical source |
+|---|---|---|
+| **Merge** | "merge `<X>` into `<Y>`" / "resume `<X>` instead of launching `<Y>`" | `topology` `merge`, a fact found twice |
+| **Fold** | "fold `<X>` into the orchestrator / into `<Y>`" | `topology` `fold` |
+| **Split** | "split `<X>` into `<X1>` (…) and `<X2>` (…)" | `topology` `split`, a resume chain |
+| **Drop** | "drop `<X>` — `<Y>` already covers it" | a report nobody relayed |
+| **Concurrency** | "concurrency `<N>` → `<M>` for `<phase>`" | `topology` `concurrency`, Order lens |
+| **Model** | "`<X>`: `<model>` → `<model>`" | `topology` `model`, `flags` |
+| **Reorder** | "launch `<X>` before / together with `<Y>`" | Order lens |
+| **Edit** | "`<file>`: add / remove / change `<rule>`" | any lens; a prompt or definition gap |
+
+A proposal written as advice without one of these verbs ("be more careful",
+"consider") is dropped. At least one accepted topology candidate becomes a
+proposal unless all were rejected; say so in that case.
 
 Verdict per lens: **ok**, **issue** (with evidence) or **n/a**. No numeric
 scores — they suggest a precision the evidence does not have.
@@ -77,10 +103,16 @@ resumes, gates first-try, orchestrator share — one line each with Δ; or
 ## Duplication
 <sharedReads, rereads, facts found twice — one line each, with who>
 
+## Topology
+| Candidate | Verdict | Reason |
+|---|---|---|
+| <topology[].suggestion, verbatim> | accept / reject | <evidence or the independence it would break> |
+<or "No candidates"; add rows for structural changes the script missed, marked "(manual)">
+
 ## Proposals
-| # | File | Change | Evidence | Expected effect |
-|---|---|---|---|---|
-| 1 | `.claude/agents/<name>.md` | … | … | … |
+| # | Action | File | Change | Evidence | Expected effect |
+|---|---|---|---|---|---|
+| 1 | Merge | `.claude/skills/<name>/SKILL.md` | merge `<X>` into `<Y>`: … | … | … |
 
 ## For engineering-insights (not recorded here)
 <codebase learnings this run surfaced, one line each, or "None">

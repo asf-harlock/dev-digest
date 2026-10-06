@@ -34,5 +34,7 @@ test-results/
 # emdash worktree config (local)
 .emdash.json
 
-# workflow-retro run reports (metrics.json, per-agent prompts/reports)
-.claude/workflow-retro/
+# workflow-retro: report.md, metrics.json and history.jsonl are committed;
+# the raw per-agent prompts and hand-backs stay local
+.claude/workflow-retro/*/prompts/
+.claude/workflow-retro/*/reports/

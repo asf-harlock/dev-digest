@@ -133,8 +133,10 @@ Report to the user, briefly:
 - verify-2 verdict;
 - next step: the repo's pre-PR gate (`.claude/skills/pr-self-review/`), then a PR.
 
-Then run `engineering-insights` (record mode). Do not commit, push or open a
-PR unless the user asks.
+Then run `engineering-insights` (record mode), then `/workflow-retro` with a
+`--from` window starting at this run's Phase 0 — its `report.md`,
+`metrics.json` and `history.jsonl` row ship with the run's branch. Do not
+commit, push or open a PR unless the user asks.
 
 ## Rules
 
