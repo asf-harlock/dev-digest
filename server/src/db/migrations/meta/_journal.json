@@ -134,6 +134,13 @@
       "when": 1790957997887,
       "tag": "0018_green_ironclad",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791309061190,
+      "tag": "0019_zippy_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { FeatureModelChoice, type FeatureModelId } from '@devdigest/shared';
+import { FeatureModelChoice, type FeatureModelId, type Onboarding } from '@devdigest/shared';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 
@@ -11,6 +11,7 @@ import * as t from '../../db/schema.js';
 export type TourRepoRow = typeof t.repos.$inferSelect;
 export interface StoredTourRow {
   json: unknown;
+  headSha: string | null;
   generatedAt: Date;
 }
 
@@ -27,7 +28,7 @@ export class OnboardingTourRepository {
 
   async getStored(workspaceId: string, repoId: string): Promise<StoredTourRow | undefined> {
     const [row] = await this.db
-      .select({ json: t.onboarding.json, generatedAt: t.onboarding.generatedAt })
+      .select({ json: t.onboarding.json, headSha: t.onboarding.headSha, generatedAt: t.onboarding.generatedAt })
       .from(t.onboarding)
       .innerJoin(t.repos, eq(t.onboarding.repoId, t.repos.id))
       .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.onboarding.repoId, repoId)));
@@ -50,13 +51,17 @@ export class OnboardingTourRepository {
     return parsed.success ? parsed.data : undefined;
   }
 
-  /** Insert or replace the repo's single tour. Returns false when the repo is not in the workspace. */
-  async upsert(workspaceId: string, repoId: string, json: unknown, generatedAt: Date): Promise<boolean> {
+  /**
+   * Insert or replace the repo's single tour, keeping `head_sha` in step with
+   * the tour's `meta.index_sha`. Returns false when the repo is not in the workspace.
+   */
+  async upsert(workspaceId: string, repoId: string, tour: Onboarding, generatedAt: Date): Promise<boolean> {
     if (!(await this.getRepo(workspaceId, repoId))) return false;
+    const headSha = tour.meta.index_sha || null;
     await this.db
       .insert(t.onboarding)
-      .values({ repoId, json, generatedAt })
-      .onConflictDoUpdate({ target: t.onboarding.repoId, set: { json, generatedAt } });
+      .values({ repoId, json: tour, headSha, generatedAt })
+      .onConflictDoUpdate({ target: t.onboarding.repoId, set: { json: tour, headSha, generatedAt } });
     return true;
   }
 }

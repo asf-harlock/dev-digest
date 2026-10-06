@@ -122,5 +122,7 @@ export const onboarding = pgTable('onboarding', {
     .primaryKey()
     .references(() => repos.id, { onDelete: 'cascade' }),
   json: jsonb('json').notNull(),
+  /** Index SHA the tour was built from; compared with `lastIndexedSha` on read to flag it stale. */
+  headSha: text('head_sha'),
   generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 });

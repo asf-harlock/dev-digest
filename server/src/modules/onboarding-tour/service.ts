@@ -129,7 +129,7 @@ export class OnboardingTourService {
     return {
       stored,
       generating: generating.has(repoId),
-      stale: stored && computeStale(tour.meta.index_sha, currentSha),
+      stale: stored && computeStale(storedRow?.headSha, currentSha),
       tour,
       model_hint: hint,
       file_count: state?.filesIndexed ?? 0,

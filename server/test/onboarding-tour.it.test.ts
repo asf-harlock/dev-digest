@@ -251,6 +251,7 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
     expect(body.stale).toBe(false);
     const rows = await pg.handle.db.select().from(t.onboarding).where(eq(t.onboarding.repoId, repoId));
     expect(rows).toHaveLength(1);
+    expect(rows[0]?.headSha).toBe('sha1');
   });
 
   it('stale is computed on read from the index SHA', async () => {
@@ -259,6 +260,18 @@ d('SPEC-05 onboarding tour (routes + persistence)', () => {
       expect((await get()).json().stale).toBe(true);
     } finally {
       ctl.sha = 'sha1';
+    }
+    expect((await get()).json().stale).toBe(false);
+  });
+
+  it('stale reads the stored head_sha column, not the tour JSON', async () => {
+    await pg.handle.db.update(t.onboarding).set({ headSha: 'sha0' }).where(eq(t.onboarding.repoId, repoId));
+    try {
+      const body = (await get()).json();
+      expect(body.tour.meta.index_sha).toBe('sha1');
+      expect(body.stale).toBe(true);
+    } finally {
+      await pg.handle.db.update(t.onboarding).set({ headSha: 'sha1' }).where(eq(t.onboarding.repoId, repoId));
     }
     expect((await get()).json().stale).toBe(false);
   });
