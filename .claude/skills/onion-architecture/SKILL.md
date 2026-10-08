@@ -1,7 +1,7 @@
 ---
 name: onion-architecture
 description: "Backend architecture and layering for @devdigest/api (`server/`) — Onion / ports-and-adapters: which ring a piece of code belongs to, and which imports it may make. Use this skill whenever you are adding or changing a route, service, repository, adapter, DB query, port interface or container wiring in `server/src`; deciding where a query, helper, type or constant belongs; wiring a new dependency; splitting a route that has grown; or reviewing backend code for layer violations — even when the user only says 'where should this query go', 'this route is getting big', 'clean this up' or 'is this the right place for it'. It decides placement and dependency direction; it does not cover Fastify APIs (see fastify-best-practices), Drizzle query syntax (see drizzle-orm-patterns), schema design (see postgresql-table-design) or contract shape (see zod)."
-version: 1.0.0
+version: 1.1.0
 metadata:
   tags: architecture, onion, ports-and-adapters, layering, fastify, drizzle, dependency-rule, backend
   authored: local
@@ -206,13 +206,29 @@ mapped.
 
 ## Known debt
 
-These files break the rules today and are allowlisted in
-`.dependency-cruiser.cjs` so that *new* violations stand out. Do not add to the
-lists. When you touch one of these files for another reason, the expectation is
-that you move its persistence into a repository and delete its line — and if
-that is out of scope for your task, say so rather than extending the pattern.
+These files break the rules today. They sit on an allowlist in
+`.dependency-cruiser.cjs` (`ORM_DEBT` and friends) only so that `pnpm arch` stays
+green while the debt exists. **The allowlist is not permission to build on it,
+and the code already in those files is not a precedent to copy.**
 
-- **DB access outside a repository** — `pulls/routes.ts`, `polling/routes.ts`, `workspace/routes.ts`, `settings/routes.ts`, `settings/feature-models.ts`, `repos/helpers.ts`, `reviews/diff-loader.ts`, `reviews/run-executor.ts`. `pulls`, `polling` and `workspace` have no `service.ts`/`repository.ts` at all — a query there goes straight from HTTP to SQL.
+If your task adds or changes behaviour in one of the files below, pay the debt
+as the first step, then do the task in the new layers:
+
+1. Move that file's existing DB access into `repository.ts` (create it if the module has none): workspace-scoped, domain-named methods.
+2. Put the new decision in `service.ts`, the pure part in `helpers.ts`, the literals in `constants.ts`; leave the route as `getContext` → schema → one service call.
+3. Delete the file's entry from the allowlist in `.dependency-cruiser.cjs` and its bullet below. The allowlist only ever shrinks; `pnpm arch` must still pass without the entry — that is the proof the debt is gone.
+
+Worked example: "add a 60-second cooldown to `POST /repos/:id/poll`" touches
+`polling/routes.ts`. Do not add the check beside the existing `container.db`
+calls. Extract them into `polling/repository.ts`, put the cooldown decision in
+`polling/service.ts`, then remove `polling/routes` from `ORM_DEBT`.
+
+The one acceptable alternative is to leave the debt in place **and say so
+explicitly in your final message** — which file, and why paying it down is out
+of scope. Silently adding to the pattern is the one outcome this section exists
+to prevent.
+
+- **DB access outside a repository** — `pulls/routes.ts`, `polling/routes.ts`, `workspace/routes.ts`, `settings/routes.ts`, `settings/feature-models.ts`, `repos/helpers.ts`, `reviews/diff-loader.ts`, `reviews/run-executor.ts`. `polling` and `workspace` have no `service.ts`/`repository.ts` at all — a query there goes straight from HTTP to SQL. `pulls` has a `repository.ts` (and a `context-service.ts`), but `pulls/routes.ts` still queries inline: a new `pulls` query belongs in `PullsRepository`, not beside the old ones.
 - **`repos/helpers.ts` imports `db/schema`** although its own docblock promises "pure functions only — no I/O, no DB, no container".
 - **Cycle `agents/repository.ts` ↔ `agents/helpers.ts`** — the helper takes its row types *through* the repository. One-line fix when next touched: `import type { AgentRow } from '../../db/rows.js'`.
 - **`repos/service.ts` imports `repo-intel/constants.ts`** — a cross-module import of constants only.
@@ -257,3 +273,4 @@ When reviewing backend structure — a PR, or your own work before proposing it:
 ## Version history
 
 - **1.0.0** (2026-09-18) — First version. Rings, rules and the debt inventory derived from a read of `server/src` at commit `e885435`; `pnpm arch` verified green on that tree, with each rule confirmed to fire against a deliberately injected violation. Sources in `README.md`.
+- **1.1.0** (2026-10-08) — *Known debt* rewritten as an instruction instead of a description. Eval basis: on Haiku (effort low) 0 of 3 skill-arm runs paid down `polling/routes.ts` and none removed its allowlist entry; they read the allowlist as permission. The section now says to pay the debt first, shows the `polling` cooldown as a worked example, allows only an explicit "left in place, because…" exception, and corrects the `pulls` inventory entry (it has had a `repository.ts` since the inventory was written). Not yet re-run — see `.claude/evals/onion-architecture/README.md`.

@@ -1,0 +1,199 @@
+{
+  "skill_name": "onion-architecture",
+  "fixture_placeholder": "{fixture_dir}",
+  "evals": [
+    {
+      "id": 1,
+      "name": "digest-review",
+      "prompt": "Це новий модуль digest для нашого бекенда (@devdigest/api), PR який я збираюся мерджити: {fixture_dir}. Зроби код-рев'ю — що треба виправити до мержу? Допоміжних файлів (db/schema, db/rows, platform/container, adapters, vendor/shared тощо) у фікстурі немає — дивись їх у реальному репо server/src. Файли фікстури не змінюй, лише читай. Результат ревʼю запиши у review.md.",
+      "expected_output": "Three findings reported (inline DB query in a route, concrete adapter built in a service, process.env in a helper); no architectural false positives on the clean files.",
+      "files": [
+        "fixtures/digest/server/src/modules/digest"
+      ],
+      "assertions": [
+        "Flags routes.ts running a drizzle query inline in the /digest/repos/:id/summary handler (imports drizzle-orm and db/schema in a route) and says persistence belongs in repository.ts",
+        "Flags service.ts constructing OctokitGitHubClient directly and says to obtain the client from the container (container.github()) instead",
+        "Flags helpers.ts reading process.env.DIGEST_TIMEZONE and says env must not be read there (config / pure helper)",
+        "Does NOT call it a defect that DigestService constructs DigestRepository from container.db, or that helpers.ts imports the PullRow type from db/rows.ts (a style nit that explicitly says it works is acceptable)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "triage-layering",
+      "prompt": "Модуль triage вже написаний: {fixture_dir}. Перевір, чи він зроблений так, як прийнято в цьому бекенді (@devdigest/api) — що б ти попросив переробити перед мержем? Допоміжних файлів (db/schema, db/rows, platform/container, adapters, vendor/shared тощо) у фікстурі немає — дивись їх у реальному репо server/src. Файли фікстури не змінюй, лише читай. Результат ревʼю запиши у review.md.",
+      "expected_output": "Three findings reported (Fastify type in a service, cross-module import, findings queried without workspace scope); no tenancy or layering false positives on the clean parts.",
+      "files": [
+        "fixtures/triage/server/src/modules/triage"
+      ],
+      "assertions": [
+        "Flags service.ts importing/using FastifyRequest (passing req into the service) and says Fastify types belong only in routes.ts",
+        "Flags service.ts importing AgentsService from ../agents/service.js as a cross-module import and suggests the container or modules/_shared instead",
+        "Flags that findings are fetched/updated by id alone (getFinding, markAccepted, markDismissed) with no workspace scoping — findings has no workspace_id, so it must be joined through reviews — and that the accept route discards the workspaceId from getContext",
+        "Does NOT claim a workspace-scoping gap in listOpenForReview (it joins reviews and scopes by workspace) and does NOT call TriageService constructing TriageRepository from container.db a defect; other remarks about listOpenForReview (e.g. in-memory filtering) are allowed"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "run-export-review",
+      "prompt": "Ревʼю модуля run-export перед мержем: {fixture_dir}. Що тут не так і що б ти не пропустив у мерж? Допоміжних файлів (db/schema, db/rows, platform/container, adapters, vendor/shared тощо) у фікстурі немає — дивись їх у реальному репо server/src. Файли фікстури не змінюй, лише читай. Результат ревʼю запиши у review.md.",
+      "expected_output": "Three findings reported (hand-rolled body parse in a route, Postgres error code handled in a service, db/schema import in a helper); no architectural false positives on the clean files.",
+      "files": [
+        "fixtures/run-export/server/src/modules/run-export"
+      ],
+      "assertions": [
+        "Flags routes.ts calling CreatePresetBody.parse(req.body) by hand in POST /exports/presets instead of declaring schema.body and letting the type provider validate",
+        "Flags service.ts matching the Postgres error code '23505' and says the repository should translate it into a domain error (ConflictError/AppError) so DB codes do not travel outward",
+        "Flags helpers.ts importing from db/schema (typeof exportPresets.$inferSelect) and says helpers may only import row types from db/rows.ts",
+        "Does NOT call repository.ts, RunExportService constructing the repository from container.db, or the schema.querystring usage on GET /exports/reviews an architecture defect"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "polling-cooldown",
+      "kind": "code",
+      "check_case": "polling",
+      "prompt": "в POST /repos/:id/poll (server/src/modules/polling/routes.ts) треба додати cooldown: якщо репо полили менше ніж 60 секунд тому (repos.last_polled_at) — повертати 429 з retry_after_sec, а не смикати гітхаб знову. зроби це і додай тести",
+      "expected_output": "Persistence moved out of the debt file into a new repository, decision in a service, literal in constants, allowlist entry deleted, hermetic test.",
+      "files": [],
+      "assertions": [
+        "polling/routes.ts no longer imports drizzle-orm or db/schema — the queries moved out of the handler",
+        "polling/routes is deleted from ORM_DEBT in server/.dependency-cruiser.cjs and no other entry is added",
+        "polling/repository.ts and polling/service.ts exist",
+        "The repository methods are workspace-scoped and named for domain operations, the service holds the cooldown decision, and routes.ts reads as getContext -> schema -> one service call",
+        "The 60-second cooldown is a named constant in polling/constants.ts",
+        "Behaviour: a repo polled < 60 s ago gets a 429 carrying retry_after_sec and GitHub is NOT called; otherwise the previous sync and last_polled_at bump still happen; GitHub is reached via container.github()",
+        "pnpm arch passes and typecheck adds no new errors",
+        "A new hermetic test (*.test.ts, not .it.test.ts) exists and passes"
+      ],
+      "checks": [
+        "routes_free_of_orm",
+        [
+          "debt_line_removed",
+          "orm_debt_not_grown"
+        ],
+        "repository_and_service_created",
+        null,
+        "cooldown_literal_in_constants",
+        null,
+        [
+          "arch_gate",
+          "no_new_type_errors"
+        ],
+        "new_hermetic_tests_pass"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "stale-pulls-endpoint",
+      "kind": "code",
+      "check_case": "stale",
+      "prompt": "додай GET /repos/:id/pulls/stale?days=14 — список PR які ще не змерджені і не закриті та не оновлювались більше ніж days днів (за updated_at), найстаріші першими. days за замовчуванням 14. зроби це і додай тести",
+      "expected_output": "Query goes to the existing PullsRepository (workspace-scoped), not into pulls/routes.ts; default in constants; mapped DTO; hermetic test.",
+      "files": [],
+      "assertions": [
+        "No query code is added to pulls/routes.ts — the handler delegates",
+        "A new async method in pulls/repository.ts takes workspaceId and holds the query",
+        "The default of 14 days is a named constant in pulls/constants.ts",
+        "ORM_DEBT is not extended and pnpm arch passes",
+        "Typecheck adds no new errors",
+        "The handler starts with getContext(), workspaceId reaches the query, and the response is mapped to a DTO rather than returning raw Drizzle rows",
+        "Semantics: excludes merged/closed PRs, keeps only updated_at older than `days`, oldest first, days validated through schema.querystring (not parsed by hand)",
+        "A new hermetic test (*.test.ts, not .it.test.ts) exists and passes"
+      ],
+      "checks": [
+        "routes_add_no_orm",
+        "query_in_repository_scoped",
+        "default_days_in_constants",
+        [
+          "orm_debt_not_grown",
+          "arch_gate"
+        ],
+        "no_new_type_errors",
+        null,
+        null,
+        "new_hermetic_tests_pass"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "review-webhook-port",
+      "kind": "code",
+      "check_case": "webhook",
+      "prompt": "після того як review run завершився успішно (status done) сервер має слати webhook: POST json {pr_id, verdict, counts по severity} на URL з env змінної DEVDIGEST_REVIEW_WEBHOOK_URL (необовʼязкова — якщо не задана, нічого не шлемо). Збій вебхука не має валити run. У тестах мережі бути не повинно. зроби мінімальну реалізацію і додай тести",
+      "expected_output": "New port wired in order (interface, adapter, ContainerOverrides, accessor, mock); config read only in platform/config.ts; failure isolated; tests on the mock.",
+      "files": [],
+      "assertions": [
+        "A new port interface is declared in vendor/shared/adapters.ts",
+        "An implementation exists under server/src/adapters/",
+        "ContainerOverrides gets a new field and Container gets an accessor for the port",
+        "A mock class for the port is added to adapters/mocks.ts",
+        "process.env is not read anywhere outside platform/config.ts",
+        "pnpm arch passes and typecheck adds no new errors",
+        "The call site obtains the notifier from the container (no `new` of a concrete notifier in modules/), the URL comes through AppConfig, and an unset URL sends nothing",
+        "A webhook failure (rejection, timeout, non-2xx) cannot fail or alter the run; the payload carries pr_id, verdict and per-severity counts",
+        "A new hermetic test exists and passes",
+        "The tests use the mock — no real network access"
+      ],
+      "checks": [
+        "port_in_shared_adapters",
+        "implementation_under_adapters",
+        "container_override_and_accessor",
+        "mock_added",
+        "no_process_env_outside_config",
+        [
+          "arch_gate",
+          "no_new_type_errors"
+        ],
+        null,
+        null,
+        "new_hermetic_tests_pass",
+        null
+      ]
+    },
+    {
+      "id": 7,
+      "name": "alerts-pr-large-review",
+      "kind": "review-large",
+      "prompt": "Це PR, який додає систему алертів у наш бекенд (@devdigest/api): три модулі (alerts, alert-rules, notification-log) і Slack-адаптер, усе лежить у {fixture_dir}. Зроби повне код-рев'ю бекенд-структури: перелічи кожну проблему окремо (файл, що не так, чому, як виправити) і окремо скажи, що в порядку. Допоміжних файлів (db/schema, db/rows, platform/container, vendor/shared тощо) у фікстурі немає — дивись їх у реальному репо server/src. Файли фікстури не змінюй, лише читай. Результат ревʼю запиши у review.md.",
+      "expected_output": "Twelve planted findings reported at the right file with the right reason; the notification-log module and the allowed patterns are not flagged.",
+      "files": [
+        "fixtures/alerts-pr/server/src"
+      ],
+      "assertions": [
+        "alerts/routes.ts: GET /alerts/summary runs a Drizzle query inline in the handler (imports drizzle-orm and db/schema in a route); it belongs in the repository, called through the service",
+        "alerts/service.ts constructs SlackClient directly from adapters/slack; it should go through a port reached via the container so tests can swap it",
+        "alerts/service.ts reads process.env.ALERTS_SLACK_WEBHOOK; env is read only in platform/config.ts",
+        "alerts/helpers.ts imports Container from platform/container and takes the container as a parameter (resolveChannel); helpers must stay pure, with no container",
+        "alert-rules/service.ts imports FastifyRequest and takes req (for req.log); Fastify types belong only in routes.ts",
+        "alert-rules/service.ts imports and constructs AlertsService from ../alerts/service.js; a cross-module import (shared entities come through the container or modules/_shared)",
+        "alert-rules/repository.ts previewHits reads findings by severity with no join to reviews/workspace; findings has no workspace_id, so this leaks across workspaces",
+        "alert-rules/routes.ts POST /alert-rules calls RuleBody.parse(req.body) by hand instead of declaring schema.body",
+        "alert-rules/service.ts matches the Postgres error code '23505'; the repository should translate it into a domain error so DB codes do not travel outward",
+        "GET /alert-rules returns unmapped Drizzle rows (service.list returns repo.listRules; toAlertRuleDto exists but is unused), so rows escape the repository without a DTO",
+        "alert-rules/helpers.ts imports AlertRuleRow through ./repository.js while repository.ts imports from helpers.ts, forming a cycle; the row type should come from db/rows.ts",
+        "alert-rules/service.ts reads ~/.devdigest/secrets.json directly with fs; secrets come only through container.secrets",
+        "Does NOT report a defect in the notification-log module (it is the clean control: its 23505 handling sits inside the repository and becomes ConflictError, its findings read joins reviews for workspace scope, its routes use schema.querystring/body)",
+        "Does NOT call it a defect that services construct their own repository from container.db, or that services use `import type { Container }`",
+        "Does NOT claim a missing workspace scope in any query other than previewHits (listRules, getRule, insertRule, the alerts repository and notification-log are scoped)"
+      ],
+      "checks": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "_notes": "Cases 1-3 are review cases on fixtures ({fixture_dir}). Cases 4-6 are code-writing cases run in an isolated git worktree of the repo; 'checks' is aligned with 'assertions': a check id (or list of ids) is verified by .claude/evals/onion-architecture/check_run.py, null means a grader judges it."
+}

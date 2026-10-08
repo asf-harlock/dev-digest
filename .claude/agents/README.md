@@ -8,7 +8,7 @@ each agent's own `.md` file; nothing here duplicates their prompt bodies.
 
 | Agent | Role | Tools | Model | Mode |
 |---|---|---|---|---|
-| [researcher](researcher.md) | Gathers facts (repo + external), never edits | `Read, Grep, Glob, Bash, WebFetch, WebSearch` | sonnet | default |
+| researcher (user-level, `~/.claude/agents/`) | Gathers facts (repo + external), never edits | `Read, Grep, Glob, Bash, WebFetch, WebSearch` + read-only guard hook | sonnet | default |
 | [implementation-planner](implementation-planner.md) | Reviews existing requirements, asks questions and single- vs multi-agent, then returns an Implementation Plan; never writes specs or edits | `Read, Grep, Glob, Bash` | sonnet | default |
 | [implementer](implementer.md) | Executes an approved plan across frontend/backend | `Read, Grep, Glob, Edit, Write, Bash, Skill` | sonnet | acceptEdits |
 | [test-writer](test-writer.md) | Writes UI/backend tests, never implementation | `Read, Grep, Glob, Bash, Edit, Write, Skill` | sonnet | acceptEdits |
@@ -34,16 +34,27 @@ itself; use `brainstorm` for design questions that are not a feature spec.
 
 ## researcher
 
+- **Location:** user-level, shared by every repo on this machine. Source lives
+  in `~/Downloads/Sites/helpers/claude/agents/researcher.md` and is installed
+  with `fleet setup-claude`. Don't add a project-level `researcher.md` here: it
+  would shadow the shared one.
 - **Responsibility:** find and verify facts — inside the repo (code, config,
   docs, git history) or externally (library docs, standards) — and report
-  them with evidence. Asks clarifying questions if scope is unclear.
-- **Permissions:** read-only (`Read, Grep, Glob, Bash` for read-only commands,
-  plus `WebFetch, WebSearch`). No `Write`/`Edit`.
+  them with evidence. If scope is unclear it returns `## Clarifying questions`
+  to the caller instead of guessing. A `spec-creator` research row counts as
+  clear.
+- **Permissions:** read-only, enforced by an agent-scoped PreToolUse hook
+  (`helpers/claude/hooks/researcher-guard.py`). Bash runs only allowlisted read
+  commands, auto-approved so parallel fan-out never stalls on a prompt.
+  Secret files (`.env*`, `secrets.json`, keys…) are blocked for
+  Bash/Read/Grep/Glob. No `Write`/`Edit`/`Skill`/`Agent`. The guard doesn't
+  allow `pnpm`, so it can read `pnpm arch` output but can't run it.
 - **Input artifact:** a question or claim to investigate, optionally scoped
   to a module or source type.
 - **Output artifact:** a fixed-section Markdown report — repository research
-  (`Findings` / `Evidence` / `References` / `Could not find`) and/or external
-  research, same section shape. No code changes.
+  (`Conclusion` / `Findings` / `Evidence` / `Could not determine`) and/or
+  external research (`Conclusion` / `Findings` / `Sources` / `Could not
+  determine`). No code changes.
 
 ## implementation-planner
 
