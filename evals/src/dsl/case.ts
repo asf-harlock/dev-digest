@@ -99,7 +99,7 @@ function runQualityCases(artifact: string, cases: QualityCase[], task: Task): vo
           logVerdict(c.name, verdict);
         }
       } finally {
-        record(c.name, { result, verdict, grounded, threshold });
+        record(c.name, { result, verdict, grounded, threshold, verdictRequired: Boolean(c.practices?.length) });
       }
 
       if (grounded !== undefined) {

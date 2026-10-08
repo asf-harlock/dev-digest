@@ -30,7 +30,14 @@ export interface Result {
 
 export interface RunOptions {
   systemPrompt?: string;
+  /** Auto-approved tools. NOT a restriction: under bypassPermissions every other tool stays available. */
   allowedTools?: string[];
+  /**
+   * The tools the session actually HAS (SDK `tools`); everything else is removed from the model's
+   * context. Pass this, not just allowedTools, whenever a tool must be unavailable. Left unset it
+   * means "SDK default set"; an empty allowedTools implies [] (see runClaude).
+   */
+  tools?: string[];
   maxTurns?: number;
   cwd?: string;
   model?: string;
@@ -59,12 +66,19 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     systemPrompt = (systemPrompt ?? "") + directive;
   }
 
+  // allowedTools only auto-approves; with bypassPermissions it does not hide Bash/Write/Edit. So a
+  // content-only run (no allowedTools) must also have its tool set emptied, matching the
+  // "you have NO tools" directive above. Runs that pass allowedTools but no `tools` (the workflow
+  // tier) keep the SDK default set — their traces assert on Agent/Skill, so don't narrow them blind.
+  const toolSet = opts.tools ?? (allowedTools.length === 0 ? [] : undefined);
+
   const options: Options = {
     model: opts.model ?? EVAL_MODEL,
     maxTurns: opts.maxTurns ?? MAX_TURNS,
-    permissionMode: "bypassPermissions", // safe: evals only read/plan and tools are allow-listed
+    permissionMode: "bypassPermissions", // evals only read/plan; `tools` (not allowedTools) is what enforces it
     systemPrompt,
     allowedTools,
+    ...(toolSet ? { tools: toolSet } : {}),
     cwd: opts.cwd ?? REPO_ROOT,
     // Default: do NOT load on-disk config — isolates the injected artifact. workflowTask overrides.
     settingSources: opts.settingSources ?? [],

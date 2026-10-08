@@ -32,11 +32,16 @@ export function skillTask(prompt: string, skillName: string, opts: RunOptions = 
  * or downgrade every finding to `cannot-verify`. So we hand it exactly the tools it declares in
  * frontmatter and let it run from REPO_ROOT (runClaude's default cwd), the way production does.
  * Both conditions (candidate + baseline) get the same tools so the measured lift stays fair.
+ *
+ * The declared set is passed as `tools` too — `allowedTools` alone only auto-approves, and under
+ * bypassPermissions the agent would still reach Bash (it did: every strict trace showed it).
+ * Consequence: Bash-based steps such as `pnpm arch` are unavailable here by design, and the agent
+ * body must say what to do then.
  */
 export function agentTask(prompt: string, agentName: string, opts: RunOptions = {}) {
   const systemPrompt = IS_BASELINE ? undefined : agentContent(agentName);
   const allowedTools = agentTools(agentName);
-  return runClaude(prompt, { allowedTools, ...opts, systemPrompt });
+  return runClaude(prompt, { allowedTools, tools: allowedTools, ...opts, systemPrompt });
 }
 
 /**
