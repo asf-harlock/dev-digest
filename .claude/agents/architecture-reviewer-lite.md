@@ -36,6 +36,12 @@ that merely looks similar. Do not spend turns hunting for files that are not
 there; read only the rules you need (Step 1) and any on-disk file a finding
 genuinely depends on.
 
+Review only what the diff changes: added or changed imports, calls,
+constructions and signatures, and files the diff creates, renames or moves.
+The name or location of a file the diff merely edits is pre-existing and out
+of scope — a rename of local variables inside it can never violate a
+placement or layering rule.
+
 ## Step 1 — ground in a deterministic check where one exists
 
 For `server/**` and `client/**`: run `pnpm arch` (dependency-cruiser) FIRST.
@@ -62,6 +68,16 @@ example, `no-concrete-adapter-in-modules` only matches imports from
 `src/adapters/`, not from a module's own `repository.ts`). When no pattern
 matches, cite the prose rule and say no machine gate covers it.
 
+Do that check in writing, not in your head: it fills the `Gate` column of the
+Findings table, and the `Severity` column is read off the `Gate` column (see
+"Filling Gate and Severity" below the report template).
+
+Onion rule 4's exception is literal: a service may construct its own slice's
+repository only *from `container.db`* (`new XRepository(container.db)`). A
+repository constructed without `container.db` — `new XRepository()`, or with a
+client it builds itself — is not the exception; it violates rule 4 (prose-only,
+no machine gate).
+
 For `reviewer-core/**` and `e2e/**`: no `pnpm arch` gate and no dedicated
 skill exist for either package (confirmed — neither has a
 `.dependency-cruiser.cjs`). Ground findings directly in that module's own
@@ -74,6 +90,16 @@ explicitly in the finding that no machine gate exists for this rule — do not
 imply there is one. Also follow that module's own "Read when" pointers for the
 area the diff touches (e.g. `reviewer-core/docs/grounding.md` for the citation
 gate) so the rule you cite is the one that actually governs the change.
+
+reviewer-core has two documented invariants; check every diff there against both:
+- **ZERO I/O** (`reviewer-core/CLAUDE.md`, "The invariant") — any `fs`,
+  `process.env`, `fetch`, DB or GitHub access → `reviewer-core-io`.
+- **The grounding gate** (`reviewer-core/CLAUDE.md`: "The score is recomputed
+  deterministically from findings that survived grounding"; detail in
+  `reviewer-core/docs/grounding.md`) — a pipeline path that emits findings
+  without passing them through `groundFindings()` (removed, skipped or
+  bypassed call) violates it. This is an architectural finding, not a
+  "semantic change" to set aside.
 
 ## Step 2 — severity and findings format
 
@@ -114,13 +140,29 @@ structure:
 (omit for reviewer-core/e2e — state "no machine gate exists for this module" instead)
 
 ### Findings
-| Severity | File:Line | Rule (optional) | Rationale | Suggestion |
-|---|---|---|---|---|
-| ... | ... | ... | ... | ... |
+| Gate | Severity | File:Line | Rule (optional) | Rationale | Suggestion |
+|---|---|---|---|---|---|
+| ... | ... | ... | ... | ... | ... |
 
 ### Grounding note
 - <for each finding derived from prose rather than a tool: say so explicitly>
 ```
+
+### Filling Gate and Severity
+
+Fill `Gate` first, then read `Severity` off it. Never the other way round.
+
+| Situation | Gate | Severity |
+|---|---|---|
+| A dependency-cruiser rule whose `from.path` matches the file AND whose `to.path` matches the added import | `match: <rule name>` | CRITICAL |
+| reviewer-core gains I/O (`fs`, `process.env`, `fetch`, DB) | `match: reviewer-core-io (closed CRITICAL list)` | CRITICAL |
+| A `[House]` rule or a `CLAUDE.md` line that no config pattern covers | `none` | WARNING |
+| A `[Convention]` rule | `none` | WARNING at most |
+
+`severity: 'error'` in the config is not a match — the patterns are. A module
+importing its own `./repository.js` never matches `no-concrete-adapter-in-modules`
+(its `to.path` is `^src/adapters/`), so a hard-wired `new XRepository()` is
+onion rule 4 → `Gate: none` → WARNING.
 
 When run by `/run-plan`, append after the report the `findings-json` block
 defined in `.claude/skills/run-plan/reference/findings.md` (`"reviewer":
@@ -152,3 +194,15 @@ file narrows your scope to the fix diff — follow it over Step 0.
 | `.claude/skills/pr-self-review/reference/severity-rubric.md` (repo, in-repo precedent) | severity rules reused verbatim (closed CRITICAL list, `[Convention]` cap, confidence thresholds) |
 | `.claude/skills/pr-self-review/reference/subagent-prompt.md` (repo, in-repo precedent) | findings JSON/table shape reused as this agent's own report format |
 | `reviewer-core/CLAUDE.md`, `e2e/CLAUDE.md` | the prose rules grounded against when no deterministic gate exists |
+
+## Before you answer
+
+Check the report against this list; fix it before sending.
+
+1. Every Findings row has `Gate` filled from the config patterns, and its
+   `Severity` is the one the "Filling Gate and Severity" table gives for that
+   `Gate`. No CRITICAL with `Gate: none`.
+2. Every finding is about something the diff changes. Zero findings is a
+   valid answer.
+3. Every finding quotes the offending code verbatim.
+4. The final message is the report and nothing else.

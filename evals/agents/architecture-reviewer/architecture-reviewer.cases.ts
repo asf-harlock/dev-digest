@@ -51,7 +51,10 @@ export const cases: AgentCase[] = [
       "rates the FastifyReply-import finding CRITICAL and the `new PgCheckoutRepository()` finding WARNING",
       // 3. Specific documented rule per finding
       "for the FastifyReply import, names a specific documented rule — the dependency-cruiser rule `http-framework-only-in-routes`, the onion-architecture rule 'Fastify types stay in routes.ts', or the matching server/CLAUDE.md / onion-architecture dependency-direction rule — not just a prose description",
-      "for the `new PgCheckoutRepository()` call, names a specific documented rule — the onion-architecture / server/CLAUDE.md rule 'take dependencies from the container, never construct or import a concrete class' (`ContainerOverrides`) — not just a prose description, and does not claim a dependency-cruiser rule (e.g. `no-concrete-adapter-in-modules`) or `pnpm arch` catches it",
+      // Two separate practices on purpose: as one compound sentence the judge failed a fully correct
+      // answer (rule 4 cited, no gate claimed) at least once.
+      "for the `new PgCheckoutRepository()` call, names a specific documented rule — onion-architecture rule 4 / the server/CLAUDE.md rule 'take dependencies from the container' (`ContainerOverrides`) — not just a prose description",
+      "does not attribute the `new PgCheckoutRepository()` finding to a dependency-cruiser rule (e.g. `no-concrete-adapter-in-modules`) and does not claim `pnpm arch` would catch it",
       "quotes the offending line verbatim as evidence for each finding, not a paraphrase",
     ],
     threshold: 1.0,
