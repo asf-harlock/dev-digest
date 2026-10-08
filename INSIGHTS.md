@@ -138,6 +138,13 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   Also: `collect-diff.sh` counts untracked files, so stash run artifacts
   (`.claude/sdd/`, `.claude/workflow-retro/`, `.playwright-mcp/` — not ignored
   on `main`) before collecting.
+  **2026-10-06:** hit again — the Skill tool still loads the user-level
+  PrestaShop skill; read `.claude/skills/pr-self-review/SKILL.md` directly.
+  The lasting fix is renaming the user-level skill (retro
+  `.claude/workflow-retro/2026-10-06-pr-self-review-l05/report.md`, proposal 4).
+  Correction: `.claude/workflow-retro/*/report.md`, `metrics.json` and
+  `history.jsonl` are now committed (only `prompts/` and `reports/` are
+  ignored), so they are not run artifacts to stash.
 
 - **2026-09-29** — Claude Code transcripts (`~/.claude/projects/<cwd with /
   and . → ->/<session>.jsonl`, subagents in `<session>/subagents/agent-<id>.jsonl`
@@ -234,6 +241,12 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   negation. `.gitignore:25-26`
 
 ## Session Notes
+
+- **2026-10-06** — L05 review fixes (PR #21): workflow-retro gained topology
+  proposals and a committed ledger; `/run-plan` now ends with
+  `/workflow-retro`; `/pr-self-review` reviewers write their own replies and
+  `build-report.sh` fails on a missing or corrupt one. Noted the pr-self-review
+  shadowing recurrence.
 
 - **2026-10-02** — SPEC-07 PR Context via `/run-plan --tests`: planner (2
   phases) → W1 → W2a ∥ W2c ∥ W2d → W2b → contract-gap pass (+ migration 0018)
