@@ -9,7 +9,7 @@ features back. Homework lives in forks — never commit it to `main`.
 Node ≥22 · pnpm ≥10 · TypeScript 5.7 (`strict`, `noUncheckedIndexedAccess`)
 Fastify 5 · Drizzle 0.38 · Postgres 16 + pgvector · Next.js 15 · React 19 · Zod 3 · Vitest 2
 
-## Modules — five standalone packages, NOT a pnpm workspace
+## Modules — six standalone packages, NOT a pnpm workspace
 
 | Path | Package | Port |
 |---|---|---|
@@ -18,6 +18,7 @@ Fastify 5 · Drizzle 0.38 · Postgres 16 + pgvector · Next.js 15 · React 19 ·
 | `reviewer-core/` | `@devdigest/reviewer-core` | — |
 | `e2e/` | `@devdigest/e2e` | — |
 | `mcp/` | `@devdigest/mcp` | — (stdio MCP server, HTTP client of the API) |
+| `evals/` | `@devdigest/evals` | — (evals of the Claude Code harness; no CLAUDE.md — read `evals/README.md`) |
 
 Packages are linked ONLY through tsconfig path aliases pointing at a sibling's
 *source*. Nothing is published; `reviewer-core` never emits JS (`build` = `tsc --noEmit`).
@@ -110,7 +111,7 @@ terminal is not gated.
   still carries `workspace_id` — always scope through `getContext()`.
 - Secrets live in `~/.devdigest/secrets.json` (mode 0600), not in the DB.
   `LocalSecretsProvider` is the only read chokepoint.
-- `server/` and `client/` use pnpm; `e2e/`, `reviewer-core/` and `mcp/` use npm.
+- `server/`, `client/` and `evals/` use pnpm; `e2e/`, `reviewer-core/` and `mcp/` use npm.
 - The shell is zsh on macOS. Quote globs (`grep --include='*.ts'`, or use the
   Grep tool) — unquoted they fail with `no matches found`. `sed` is BSD:
   in-place is `sed -i '' …`. Change code with Edit, not `sed`.

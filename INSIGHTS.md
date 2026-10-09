@@ -370,3 +370,7 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   (a 10-line stub) is never read for "adding an adapter" (0/2, missed in 4 of 5
   runs) — the model takes `server/README.md` instead. Settled by adding `mcp/` to
   the root table / filling the stub, then `pnpm eval:repeat workflow -n 2`.
+  **Partly settled 2026-10-09 in `efb0b1d`:** `mcp/` is in the root table and the
+  stub is filled; at n=5 the model now enters `mcp/` (e2e+mcp 3/5), but
+  `di-container.md` is still read only 1/5 — it keeps taking `server/README.md`
+  first. Still open: what makes the topic doc win over the README.

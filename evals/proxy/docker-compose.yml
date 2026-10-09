@@ -14,7 +14,9 @@ services:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: devdigest-eval-litellm
     ports:
-      - "4000:4000"
+      # Loopback only: the proxy runs in no-auth mode and spends the OpenRouter key it was started
+      # with, so it must not be reachable from the local network.
+      - "127.0.0.1:4000:4000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the environment}
     volumes:
