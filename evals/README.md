@@ -188,6 +188,15 @@ workflow cases:
 
 ### Wiring it into GitHub Actions (per-PR)
 
+**This repo's wiring:** `.github/workflows/harness-evals.yml`. A free blocking `quality` job
+(typecheck, hermetic unit tests, `eval:quality`), then a trigger table — `pnpm eval:ci-plan`
+(`src/ci/eval-plan.ts`) — that runs only the evals of what the PR touched: a changed skill → its
+skill eval, a changed agent → its agent eval, a changed `CLAUDE.md` (or a skill/agent/doc a
+workflow case names) → the workflow tier, non-blocking. Artifacts without evals are skipped with a
+logged reason; the full `pnpm eval` never runs in CI. `pnpm eval:ci-plan --base main` prints the
+same plan locally. Models switch per run (workflow_dispatch inputs) or per repo (Actions variables
+`EVAL_MODEL`, `EVAL_JUDGE_MODEL`, `EVAL_WORKFLOW_MODEL`). The generic recipe it grew from:
+
 The engine is CI-ready: bring the proxy up as a step, wait for it, run the tier, tear it down. Put
 the OpenRouter key in the repo's **Actions secrets** as `OPENROUTER_API_KEY` (Settings → Secrets and
 variables → Actions). Create `.github/workflows/<name>.yml` in your repo:
