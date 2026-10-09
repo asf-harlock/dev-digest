@@ -209,8 +209,11 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         const tools = c.tools ?? ["Read", "Grep", "Glob"];
         const treatment = await workflowTask(c.prompt, { allowedTools: tools, maxTurns: c.maxTurns });
         const emptyCwd = mkdtempSync(join(tmpdir(), "eval-control-"));
+        // `tools`, not only `allowedTools`: under bypassPermissions the latter does not remove
+        // Bash/Write, so the control would run with more tools than the treatment it is compared to.
         const control = await runClaude(c.prompt, {
           allowedTools: tools,
+          tools,
           maxTurns: c.maxTurns,
           cwd: emptyCwd,
           settingSources: [],
