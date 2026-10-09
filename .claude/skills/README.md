@@ -22,6 +22,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [pr-self-review](pr-self-review/SKILL.md) | Workflow | Pre-PR gate: routes the open diff to the skills that own those files, runs the matching gates, blocks on any CRITICAL (authored here, not vendored) |
 | [run-plan](run-plan/SKILL.md) | Workflow | `/run-plan SPEC-NN` — runs an approved Implementation Plan: implementer(s) → plan-verifier → architecture/security/bug review → bounded fix loop → final plan-verifier. Spec and plan are written by hand first (authored here, not vendored) |
 | [spec-authoring](spec-authoring/SKILL.md) | Workflow | SPEC-NN spec template, EARS with КОЛИ/ПОКИ/ЯКЩО/ДЕ, design-analysis lenses, and the `spec:lint` form check (authored here, not vendored) |
+| [dependency-checker](dependency-checker/SKILL.md) | Workflow | `/dependency-checker` — audits the dependencies of every module: installed size per package (script), Mermaid component and weight maps, ranked findings (unused, phantom, misplaced, duplicate, drifting, dual-instance), then P0/P1/P2 priorities and advice (judgement). Read-only; `--online` adds audit/outdated (authored here, not vendored) |
 | [workflow-retro](workflow-retro/SKILL.md) | Workflow | `/workflow-retro` — retrospective of a multi-agent run: tokens per agent/model, launch order, parallelism, errors, duplicated reads (script), then per-agent hard/easy/duplicated/missed verdicts and proposals for agent definitions (authored here, not vendored) |
 
 ## What Are Skills?

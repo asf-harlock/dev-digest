@@ -63,6 +63,15 @@ needed none of those and cannot drift.
 ## Codebase Patterns
 
 
+- **2026-10-06** — `pnpm arch` does not catch an adapter importing from
+  `modules/`: `.dependency-cruiser.cjs` has no `src/adapters` → `src/modules`
+  rule. SPEC-07's `simple-git.ts` importing PR-context limits from
+  `modules/_shared` passed `arch` and was caught only by the architecture
+  reviewer (fixed by injecting the limits through `platform/container.ts`,
+  see `adapters/git/simple-git.ts:43`). `adapters/astgrep/index.ts:25` still
+  imports `modules/repo-intel/constants.js`, so a new rule needs a `pathNot`
+  for it. Until then, check adapter imports by hand.
+
 - **2026-09-29** — The repo clone is a throwaway read-only mirror, not a
   working copy. `SimpleGitClient.sync()` runs `reset --hard origin/<branch>`
   on every resync, so any file written into the clone (an "edit this doc"
@@ -349,6 +358,14 @@ needed none of those and cannot drift.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-06** — Both server CI jobs are red on `main` (since at least
+  `d221e56`), so a red server check on a PR is not proof the PR broke it —
+  compare with `main`'s latest run first. "server unit":
+  `test/project-context.test.ts` "NFR-2: 500 files x up to 32 KB list +
+  tokenize well under 2 s" takes 4.3–5.4 s on the GitHub runner and passes
+  locally. "server integration": the four `skills-stats.it.test.ts` 422s from
+  the 2026-09-25 Open Question. Runs `37129525090` (main), `37520981158` (PR #21).
+
 - **2026-10-01** — The brief says "No spec documents were available — attach
   Project Context docs" even though a doc IS attached: the doc was skipped
   whole, not missing. Two size gates drop real specs silently: the brief's
@@ -375,6 +392,10 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-10-06** — L05 review fixes (PR #21): `onboarding.head_sha` column
+  (migration 0019, backfilled from `json->meta->index_sha`), staleness read
+  from it. Recorded the adapters → modules `arch` gap and the red-on-main CI.
 
 - **2026-10-03** — Onboarding tour "Last regeneration failed": the OpenRouter
   adapter ignored `timeoutMs` (fixed), and the tour timeout was raised to 180 s

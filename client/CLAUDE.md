@@ -5,6 +5,8 @@ Next.js 15 App Router + React 19 + TanStack Query on port 3000.
 ## Read when
 
 - **Finding a screen or the UI route map** → read `README.md` (has the diagram).
+  It is the map only — it does NOT replace the topic docs below; a task that
+  matches a row below still reads that doc.
 - **Creating or restructuring a component** → read `docs/component-conventions.md`.
 - **Calling the API or adding a query/mutation** → read `docs/data-fetching.md`.
 - **Starting a task in this module** → read `specs/`.

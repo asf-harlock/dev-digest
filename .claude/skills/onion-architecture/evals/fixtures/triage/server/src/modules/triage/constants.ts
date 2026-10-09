@@ -1,0 +1,2 @@
+export const TRIAGE_BATCH_LIMIT = 50;
+export const DISMISS_REASON_MAX_LENGTH = 280;

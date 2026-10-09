@@ -16,6 +16,8 @@ src/vendor/shared/      Zod contracts (canonical copy)
 ## Read when
 
 - **Overview, request flow or the API map** → read `README.md` (has the diagrams).
+  It is the overview only — it does NOT replace the topic docs below; a task that
+  matches a row below still reads that doc.
 - **Adding a table, a column or tenancy scoping** → read `docs/db-schema.md`.
 - **Touching the indexer, repo map or file ranking** → read `docs/repo-intel.md`.
 - **Adding an adapter or wiring a dependency** → read `docs/di-container.md`.

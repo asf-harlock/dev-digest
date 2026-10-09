@@ -1,0 +1,65 @@
+{
+  "_comment": "Exact set of (rule, from) pairs that `pnpm arch` must report when the skill's eval fixtures are overlaid on a copy of server/src. Anything outside this set \u2014 or anything missing from it \u2014 fails verify-fixtures.sh.",
+  "violations": [
+    {
+      "rule": "orm-only-in-repository",
+      "from": "src/modules/digest/routes.ts"
+    },
+    {
+      "rule": "no-concrete-adapter-in-modules",
+      "from": "src/modules/digest/service.ts"
+    },
+    {
+      "rule": "http-framework-only-in-routes",
+      "from": "src/modules/triage/service.ts"
+    },
+    {
+      "rule": "no-cross-module-import",
+      "from": "src/modules/triage/service.ts"
+    },
+    {
+      "rule": "pure-helpers-stay-pure",
+      "from": "src/modules/run-export/helpers.ts"
+    },
+    {
+      "rule": "orm-only-in-repository",
+      "from": "src/modules/run-export/helpers.ts"
+    },
+    {
+      "rule": "orm-only-in-repository",
+      "from": "src/modules/alerts/routes.ts"
+    },
+    {
+      "rule": "no-concrete-adapter-in-modules",
+      "from": "src/modules/alerts/service.ts"
+    },
+    {
+      "rule": "pure-helpers-stay-pure",
+      "from": "src/modules/alerts/helpers.ts"
+    },
+    {
+      "rule": "http-framework-only-in-routes",
+      "from": "src/modules/alert-rules/service.ts"
+    },
+    {
+      "rule": "no-cross-module-import",
+      "from": "src/modules/alert-rules/service.ts"
+    },
+    {
+      "rule": "no-circular",
+      "from": "src/modules/alert-rules/helpers.ts"
+    }
+  ],
+  "not_machine_checkable": [
+    "digest: process.env read in helpers.ts",
+    "triage: findings read/updated by id without workspace scope",
+    "run-export: hand-rolled CreatePresetBody.parse(req.body)",
+    "run-export: Postgres error code 23505 handled in the service",
+    "alerts-pr: process.env.ALERTS_SLACK_WEBHOOK read in alerts/service.ts",
+    "alerts-pr: previewHits() reads findings with no join to reviews (no workspace scope)",
+    "alerts-pr: POST /alert-rules parses the body by hand with RuleBody.parse(req.body)",
+    "alerts-pr: alert-rules service matches Postgres code 23505",
+    "alerts-pr: GET /alert-rules returns unmapped Drizzle rows (toAlertRuleDto exists but is unused)",
+    "alerts-pr: alert-rules service reads ~/.devdigest/secrets.json directly instead of container.secrets"
+  ]
+}

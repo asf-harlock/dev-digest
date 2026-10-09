@@ -60,6 +60,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## What Doesn't Work
 
+- **2026-10-09** — Folding many CLAUDE.md routing checks into one workflow `trace`
+  session breaks past 2 anchor docs: per-doc read rates multiply, and 4-anchor
+  folds failed 3/3 runs, each time on a DIFFERENT doc. A closing `expectText`
+  question whose answer sits in the module `CLAUDE.md` (`invalidateSecretCaches`,
+  mcp `stderr`, client `ApiError`) is worse: the model answers from it and stops
+  without opening the leaf doc (server case ended at turn 4). Keep ≤2 anchors per
+  session and probe only facts that are NOT one hop short of the anchor.
+  `evals/workflow/claude-md.cases.ts`
+
 - **2026-10-02** — A contract-first W1 whose plan names a contract without its
   fields ships shapes too narrow for the spec, and the gaps surface only once
   W2 consumers hit them. SPEC-07 needed a second contract pass for 4 gaps:
@@ -92,6 +101,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   line's position matters. `server/src/db/seed.ts` (`src/config.ts` patch)
 
 ## Codebase Patterns
+
+- **2026-10-08** — `pnpm arch` covers only `server/` and `client/`, so nothing
+  gates module boundaries in `reviewer-core/`, `mcp/`, `e2e/` or `evals/`.
+  `reviewer-core/test/run.test.ts:3` and `test/project-context.test.ts:8-9` import
+  `../../server/src/adapters/mocks.js` and `.../git/diff-parser.js` by relative
+  path, against `reviewer-core/CLAUDE.md` ("never add an import"), and every gate
+  passed. Found by `/dependency-checker` (rule `BOUNDARY_BYPASS`), which scans
+  relative imports that leave a module; run it after touching those packages.
+  `.claude/skills/dependency-checker/scripts/lib/imports.mjs`
 
 - **2026-09-29** — When a contract field gains `.default([])` in the server copy of
   `@devdigest/shared`, give the CLIENT copy `.optional()` and read `x ?? []`:
@@ -128,6 +146,32 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Tool & Library Notes
 
+- **2026-10-09** — Under `bypassPermissions`, Agent SDK `allowedTools` only
+  auto-approves — it does NOT remove tools; only `tools` does. `workflowTask`
+  passed just `allowedTools`, so the "read-only" workflow tier kept Bash/Write/Edit
+  against the live repo: the `engineering-insights` activation case `Edit`-ed a
+  fabricated pgvector "insight" into `server/INSIGHTS.md` on every run, and later
+  sessions read it back as repo knowledge. Any runner with a restricted tool set
+  must pass it as `tools`; after a workflow run, `git status` outside `evals/`
+  must be clean. `evals/src/tasks.ts` (`workflowTask`)
+
+- **2026-10-08** — Eval agents (Agent SDK, `bypassPermissions`) have taken the
+  auto-memory dir `~/.claude/projects/<encoded-repo>/` for the repo root, read
+  e.g. `.../server/.dependency-cruiser.cjs` there, then searched the home folder
+  and triggered macOS privacy prompts for Desktop/Music/Photos. Bypass mode skips
+  `canUseTool`, but SDK `hooks.PreToolUse` still run (also inside subagents), so
+  the hard boundary is the path guard `evals/src/runtime/path-guard.ts`, wired in
+  `run-claude.ts`. Denials land in `records.jsonl` as `trace.blocked`; a
+  non-empty list means the agent lost the root. Any new runner must keep the hook.
+
+- **2026-10-08** — The eval harness injects a skill as its system prompt from
+  `SKILL.md` plus `references/*.md` — **plural**. This repo's own skills use
+  `reference/` (singular), so their reference files never reach a content eval,
+  and the model there has no tools: it cannot run a skill's scripts or read a
+  linked file. A skill under eval must state its output structure in `SKILL.md`
+  itself and have a manual path for data supplied in the prompt.
+  `evals/src/artifacts/load.ts:19-26`, `evals/src/tasks.ts:20`
+
 - **2026-10-01** — `/pr-self-review` via the Skill tool can load the USER-level
   `~/.claude/skills/pr-self-review` (a PrestaShop `dt review` skill) instead of
   this repo's `.claude/skills/pr-self-review` — same name, and the global one
@@ -138,6 +182,13 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   Also: `collect-diff.sh` counts untracked files, so stash run artifacts
   (`.claude/sdd/`, `.claude/workflow-retro/`, `.playwright-mcp/` — not ignored
   on `main`) before collecting.
+  **2026-10-06:** hit again — the Skill tool still loads the user-level
+  PrestaShop skill; read `.claude/skills/pr-self-review/SKILL.md` directly.
+  The lasting fix is renaming the user-level skill (retro
+  `.claude/workflow-retro/2026-10-06-pr-self-review-l05/report.md`, proposal 4).
+  Correction: `.claude/workflow-retro/*/report.md`, `metrics.json` and
+  `history.jsonl` are now committed (only `prompts/` and `reports/` are
+  ignored), so they are not run artifacts to stash.
 
 - **2026-09-29** — Claude Code transcripts (`~/.claude/projects/<cwd with /
   and . → ->/<session>.jsonl`, subagents in `<session>/subagents/agent-<id>.jsonl`
@@ -235,6 +286,24 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Session Notes
 
+- **2026-10-09** — Re-folded the CLAUDE.md workflow evals to ≤2 anchors per
+  session; fixed workflow records (outcome was `!isError`, ignoring the trace
+  asserts — `records.jsonl` pass rates for workflow cases before this date are
+  meaningless) and the `allowedTools` write leak. Wired harness evals into CI
+  (`harness-evals.yml`); the LiteLLM `main-stable` tag started refusing to boot
+  without a master key mid-day, so the proxy now uses the OpenRouter key as
+  `LITELLM_MASTER_KEY` and is pinned by digest. First green-infra CI run:
+  workflow tier 6/12 on gemini-2.5-flash (plans instead of calling tools).
+
+- **2026-10-08** — Traced macOS Desktop/Music/Photos prompts to eval agents
+  searching home under `bypassPermissions`; added the evals path guard.
+
+- **2026-10-06** — L05 review fixes (PR #21): workflow-retro gained topology
+  proposals and a committed ledger; `/run-plan` now ends with
+  `/workflow-retro`; `/pr-self-review` reviewers write their own replies and
+  `build-report.sh` fails on a missing or corrupt one. Noted the pr-self-review
+  shadowing recurrence.
+
 - **2026-10-02** — SPEC-07 PR Context via `/run-plan --tests`: planner (2
   phases) → W1 → W2a ∥ W2c ∥ W2d → W2b → contract-gap pass (+ migration 0018)
   → test-writer → verify #1 (7 Fails fixed) → 3 reviewers (1 WARNING, fixed) →
@@ -297,3 +366,15 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   reverted implementation from git history, re-threaded `costUsd` end to end.
 
 ## Open Questions
+
+- **2026-10-09** — Two CLAUDE.md routes never fire in the workflow evals. (1) An
+  MCP-tool task never enters `mcp/` (0/2): the root `CLAUDE.md` modules table and
+  "read that module's CLAUDE.md" row list only server/client/reviewer-core/e2e,
+  so the model looks in `server/src/modules/agents`. (2) `server/docs/di-container.md`
+  (a 10-line stub) is never read for "adding an adapter" (0/2, missed in 4 of 5
+  runs) — the model takes `server/README.md` instead. Settled by adding `mcp/` to
+  the root table / filling the stub, then `pnpm eval:repeat workflow -n 2`.
+  **Partly settled 2026-10-09 in `efb0b1d`:** `mcp/` is in the root table and the
+  stub is filled; at n=5 the model now enters `mcp/` (e2e+mcp 3/5), but
+  `di-container.md` is still read only 1/5 — it keeps taking `server/README.md`
+  first. Still open: what makes the topic doc win over the README.
