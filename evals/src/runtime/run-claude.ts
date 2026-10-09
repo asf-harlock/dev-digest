@@ -3,10 +3,11 @@
  * extracts what the session ACTUALLY did (tools, subagents, skills, reads) — not its prose.
  */
 
-import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
+import { query, type HookCallback, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { EVAL_MODEL, MAX_TURNS, SPAWN_TOOLS } from "../config.js";
 import { REPO_ROOT } from "../artifacts/paths.js";
 import { subscriptionEnv } from "./env.js";
+import { defaultRoots, denyReason, outsidePaths } from "./path-guard.js";
 
 export interface Metrics {
   durationMs: number;
@@ -23,6 +24,8 @@ export interface Result {
   /** Skills activated via the Skill tool (workflow mode); name may be "plugin:skill". */
   skillsInvoked: string[];
   filesRead: string[];
+  /** Tool calls the path guard denied, as "Tool: path" — non-empty means the agent lost the repo root. */
+  blockedPaths: string[];
   numTurns: number;
   isError: boolean;
   metrics: Metrics;
@@ -55,6 +58,7 @@ export interface RunOptions {
 /** Run one headless Claude turn-loop and extract what it ACTUALLY did (not its prose). */
 export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<Result> {
   const allowedTools = opts.allowedTools ?? [];
+  const cwd = opts.cwd ?? REPO_ROOT;
   // With no tools, a subagent/skill prompt that says "read files" will loop on denied tool
   // calls until max-turns. For these content-only evals the input is already in the prompt,
   // so tell the model to answer directly.
@@ -64,12 +68,38 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
       "\n\nYou have NO tools available in this session. Do not attempt any tool calls. " +
       "Answer directly and completely from the information given in the prompt.";
     systemPrompt = (systemPrompt ?? "") + directive;
+  } else {
+    // Agents have mistaken the auto-memory dir (~/.claude/projects/...) for the repo, then searched
+    // the home folder for it. State the root outright; the PreToolUse guard below enforces it.
+    systemPrompt =
+      (systemPrompt ?? "") +
+      `\n\nThe repository root is ${cwd} (your working directory). Every file you need is inside it; ` +
+      "never read or search outside it.";
   }
+
+  // bypassPermissions skips every permission check, so a lost agent could Glob/Grep the whole home
+  // folder (tripping macOS privacy prompts for Desktop/Music/Photos). Hooks still run under bypass,
+  // and fire for subagent tool calls too, so this is the one hard boundary for every eval.
+  const blocked: string[] = [];
+  const roots = defaultRoots(cwd);
+  const pathGuard: HookCallback = async (input) => {
+    if (input.hook_event_name !== "PreToolUse") return {};
+    const outside = outsidePaths(input.tool_name, input.tool_input, roots);
+    if (outside.length === 0) return {};
+    for (const p of outside) blocked.push(`${input.tool_name}: ${p}`);
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: denyReason(input.tool_name, outside, cwd),
+      },
+    };
+  };
 
   // allowedTools only auto-approves; with bypassPermissions it does not hide Bash/Write/Edit. So a
   // content-only run (no allowedTools) must also have its tool set emptied, matching the
-  // "you have NO tools" directive above. Runs that pass allowedTools but no `tools` (the workflow
-  // tier) keep the SDK default set — their traces assert on Agent/Skill, so don't narrow them blind.
+  // "you have NO tools" directive above. A run that passes allowedTools but no `tools` keeps the
+  // SDK default set (incl. Bash/Write/Edit) — workflowTask therefore passes `tools` explicitly.
   const toolSet = opts.tools ?? (allowedTools.length === 0 ? [] : undefined);
 
   const options: Options = {
@@ -79,7 +109,8 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     systemPrompt,
     allowedTools,
     ...(toolSet ? { tools: toolSet } : {}),
-    cwd: opts.cwd ?? REPO_ROOT,
+    cwd,
+    hooks: { PreToolUse: [{ hooks: [pathGuard] }] },
     // Default: do NOT load on-disk config — isolates the injected artifact. workflowTask overrides.
     settingSources: opts.settingSources ?? [],
     env: subscriptionEnv(),
@@ -172,6 +203,7 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     subagents: [...new Set(subagents)],
     skillsInvoked: [...new Set(skills)],
     filesRead: reads,
+    blockedPaths: blocked,
     numTurns,
     isError,
     metrics: { durationMs, inputTokens, outputTokens, toolCallCount },

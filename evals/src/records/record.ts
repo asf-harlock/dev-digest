@@ -33,6 +33,12 @@ export interface RecordData {
   threshold?: number;
   /** The case has practices to judge. No verdict then means the judge never completed — a FAIL, not a pass. */
   verdictRequired?: boolean;
+  /**
+   * Trace-asserted outcome (workflow tier). When set it IS the outcome: a workflow case passes on
+   * its trace expectations, not on "the run didn't error" — the fallback once counted a session
+   * that never read its anchor doc as a pass, and a max-turns stop on a passing negative as a fail.
+   */
+  passed?: boolean;
   extra?: Record<string, unknown>;
 }
 
@@ -42,7 +48,7 @@ export interface RecordData {
  * from being silently empty.
  */
 export function record(label: string, data: RecordData): void {
-  const { result, verdict, grounded, threshold, verdictRequired, extra } = data;
+  const { result, verdict, grounded, threshold, verdictRequired, passed, extra } = data;
   const state = expect.getState();
   const nodeid = `${state.testPath ?? "?"} > ${state.currentTestName ?? label}`;
 
@@ -51,7 +57,9 @@ export function record(label: string, data: RecordData): void {
   // A judged case whose judge crashed has no verdict: that must not fall through to "run succeeded"
   // (it once did, and counted an unjudged run as a pass in the repeat summary).
   const outcome =
-    grounded !== undefined && grounded < 1
+    passed !== undefined
+      ? passed
+      : grounded !== undefined && grounded < 1
       ? false
       : verdict && threshold !== undefined
         ? verdict.score >= threshold
@@ -84,6 +92,7 @@ export function record(label: string, data: RecordData): void {
       subagents: result.subagents,
       skills: result.skillsInvoked,
       reads: result.filesRead,
+      blocked: result.blockedPaths,
     },
     output_file: outputFile,
     ...extra,

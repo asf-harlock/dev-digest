@@ -65,6 +65,12 @@ export type WorkflowCase =
       expectSubagents?: string[];
       expectSkills?: string[];
       expectFilesRead?: string[];
+      /**
+       * Substrings (case-insensitive) that must ALL appear in the final answer — a knowledge probe
+       * for facts that live only in a nested CLAUDE.md, whose auto-load never shows up as a Read.
+       * Setting it disables early stop: the answer exists only once the session finishes.
+       */
+      expectText?: string[];
       maxTurns?: number;
     };
 
@@ -115,6 +121,10 @@ function runQualityCases(artifact: string, cases: QualityCase[], task: Task): vo
 export const runSkillCases = (skill: string, cases: SkillCase[]) => runQualityCases(skill, cases, skillTask);
 export const runAgentCases = (agent: string, cases: AgentCase[]) => runQualityCases(agent, cases, agentTask);
 
+/**
+ * Each branch flips `passed` only after its last assertion, so the record written in `finally`
+ * carries the trace verdict — `record()`'s "run didn't error" fallback is wrong for this tier.
+ */
 export function runWorkflowCases(cases: WorkflowCase[]): void {
   for (const c of cases) {
     test(c.name, async () => {
@@ -126,21 +136,25 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
           stopWhen: (p) => p.subagents.includes(expect1),
         });
         logTrace(c.name, result);
+        let passed = false;
         try {
           expect(result.subagents, `subagents: ${result.subagents.join(", ")}`).toContain(c.expectSubagent);
+          passed = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, passed });
         }
       } else if (c.kind === "activation") {
         const result = await workflowTask(c.prompt, { maxTurns: c.maxTurns });
         logTrace(c.name, result);
+        let passed = false;
         try {
           expect(
             activated(result, c.skill),
             `skills: ${result.skillsInvoked.join(", ")} | reads: ${result.filesRead.join(", ")}`,
           ).toBe(c.shouldActivate);
+          passed = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, passed });
         }
       } else if (c.kind === "trace") {
         // One session, many asserts — every provided expectation is checked against the same trace.
@@ -149,17 +163,20 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         const subs = c.expectSubagents ?? [];
         const skls = c.expectSkills ?? [];
         const files = c.expectFilesRead ?? [];
+        const texts = c.expectText ?? [];
         const skillEngaged = (p: { skillsInvoked: string[]; filesRead: string[] }, skill: string) =>
           p.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`)) ||
           p.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`));
         const result = await workflowTask(c.prompt, {
           maxTurns: c.maxTurns,
           stopWhen: (p) =>
+            texts.length === 0 &&
             subs.every((s) => p.subagents.includes(s)) &&
             skls.every((s) => skillEngaged(p, s)) &&
             files.every((f) => p.filesRead.some((r) => r.includes(f))),
         });
         logTrace(c.name, result);
+        let passed = false;
         try {
           for (const sub of c.expectSubagents ?? []) {
             expect(result.subagents, `subagents: ${result.subagents.join(", ")}`).toContain(sub);
@@ -176,9 +193,16 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
               `${file} not read | reads: ${result.filesRead.join(", ")}`,
             ).toBe(true);
           }
+          for (const t of texts) {
+            expect(
+              result.text.toLowerCase().includes(t.toLowerCase()),
+              `"${t}" missing from answer:\n${result.text}`,
+            ).toBe(true);
+          }
           expect(result.isError).toBe(false);
+          passed = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, passed });
         }
       } else {
         // contrast: treatment (real harness) vs control (empty tmpdir, no on-disk config).
@@ -193,14 +217,17 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         });
         logTrace(`${c.name} [treatment]`, treatment);
         logTrace(`${c.name} [control]`, control);
+        let passed = false;
         try {
           const treatmentRead = treatment.filesRead.some((f) => f.includes(c.expectFileRead));
           const controlRead = control.filesRead.some((f) => f.includes(c.expectFileRead));
           expect(treatmentRead, `treatment reads: ${treatment.filesRead.join(", ")}`).toBe(true);
           expect(controlRead, `control reads: ${control.filesRead.join(", ")}`).toBe(false);
+          passed = true;
         } finally {
-          record(`${c.name} [treatment]`, { result: treatment });
-          record(`${c.name} [control]`, { result: control });
+          // The contrast verdict needs both runs, so both records carry the one shared outcome.
+          record(`${c.name} [treatment]`, { result: treatment, passed });
+          record(`${c.name} [control]`, { result: control, passed });
         }
       }
     });

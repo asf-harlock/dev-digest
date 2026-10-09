@@ -51,7 +51,8 @@ export interface EvalRecord {
   grounded?: number;
   num_turns: number;
   metrics: { durationMs: number; inputTokens: number; outputTokens: number; toolCallCount: number };
-  trace: { tools: string[]; subagents: string[]; skills: string[]; reads: string[] };
+  // `blocked` (path-guard denials) is absent from rows recorded before the guard existed.
+  trace: { tools: string[]; subagents: string[]; skills: string[]; reads: string[]; blocked?: string[] };
   output_file: string;
 }
 
