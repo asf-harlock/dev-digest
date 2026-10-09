@@ -14,11 +14,14 @@ services:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: devdigest-eval-litellm
     ports:
-      # Loopback only: the proxy runs in no-auth mode and spends the OpenRouter key it was started
-      # with, so it must not be reachable from the local network.
+      # Loopback only: the proxy spends the OpenRouter key it was started with.
       - "127.0.0.1:4000:4000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the environment}
+      # LiteLLM refuses to start without a master key. Reusing the OpenRouter key means the clients
+      # authenticate with no change: the Agent SDK already sends it as its bearer token
+      # (ANTHROPIC_AUTH_TOKEN) and the content tier's OpenAI client as its api key.
+      LITELLM_MASTER_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the environment}
     volumes:
       - ./litellm.config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
