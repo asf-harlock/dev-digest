@@ -289,7 +289,11 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 - **2026-10-09** — Re-folded the CLAUDE.md workflow evals to ≤2 anchors per
   session; fixed workflow records (outcome was `!isError`, ignoring the trace
   asserts — `records.jsonl` pass rates for workflow cases before this date are
-  meaningless) and the `allowedTools` write leak.
+  meaningless) and the `allowedTools` write leak. Wired harness evals into CI
+  (`harness-evals.yml`); the LiteLLM `main-stable` tag started refusing to boot
+  without a master key mid-day, so the proxy now uses the OpenRouter key as
+  `LITELLM_MASTER_KEY` and is pinned by digest. First green-infra CI run:
+  workflow tier 6/12 on gemini-2.5-flash (plans instead of calling tools).
 
 - **2026-10-08** — Traced macOS Desktop/Music/Photos prompts to eval agents
   searching home under `bypassPermissions`; added the evals path guard.

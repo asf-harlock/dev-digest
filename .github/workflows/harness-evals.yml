@@ -241,7 +241,8 @@ jobs:
     needs: [quality, changes]
     if: needs.changes.outputs.workflow == 'true' && needs.changes.outputs.has_key == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Sequential sessions on a cheap model take ~1–4 min each; 13 of them need more than 30.
+    timeout-minutes: 45
     # Non-blocking: the job reports red but does not fail the run.
     continue-on-error: true
     defaults:
@@ -270,7 +271,9 @@ jobs:
       - run: pnpm proxy:wait
 
       # The workflow tier gets its own model switch (it must really dispatch subagents).
-      - run: pnpm eval:workflow
+      # Sequential in CI: with both workflow files in parallel, OpenRouter rate-limited the model
+      # mid-session ("temporarily rate-limited upstream").
+      - run: pnpm exec vitest run workflow --no-file-parallelism
         env:
           EVAL_MODEL: ${{ env.EVAL_WORKFLOW_MODEL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

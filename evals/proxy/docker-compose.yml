@@ -11,7 +11,10 @@
 
 services:
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    # Pinned by digest: the floating `main-stable` tag changed under us (2026-10-09 it began refusing
+    # to start without a master key) and broke CI. This digest is the one verified locally and in CI;
+    # bump it deliberately, then re-run an agent eval through the proxy.
+    image: ghcr.io/berriai/litellm@sha256:3d88bd757134a00e8c00237b85a021ab1f6d54abb9c1df750f411dbe7256a500
     container_name: devdigest-eval-litellm
     ports:
       # Loopback only: the proxy spends the OpenRouter key it was started with.
