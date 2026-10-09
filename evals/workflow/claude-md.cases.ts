@@ -96,16 +96,16 @@ export const cases: WorkflowCase[] = [
   },
 
   // --- client: component that calls the API ----------------------------------------------------
-  // Probe: `ApiError` (error normalization) — the prompt asks only "how to tell 404 from 500".
+  // No knowledge probe: the former `ApiError` probe is answered by client/CLAUDE.md itself, so the
+  // model answered from it and skipped both leaf docs (0/2) — the one-hop-short trap above.
   {
     kind: "trace",
     name: "client: component calling the API routes to component-conventions.md + data-fetching.md",
     prompt:
       "Планую новий React-компонент у клієнті, який викликає API і по-різному показує помилку 404 та 500. " +
       "Перш ніж торкатися коду — звірся з настановами цього репо щодо структури компонентів і роботи з API " +
-      "і прочитай відповідну документацію. Наприкінці коротко скажи, як компонент має відрізнити 404 від 500.",
+      "і прочитай відповідну документацію.",
     expectFilesRead: ["client/docs/component-conventions.md", "client/docs/data-fetching.md"],
-    expectText: ["ApiError", "status"],
     maxTurns: 12,
   },
 

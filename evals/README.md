@@ -421,7 +421,7 @@ pnpm vitest run src/records/stats.test.ts       # the only non-model unit test (
 ### `eval:repeat` — stability of one thing
 
 ```bash
-pnpm eval:repeat <vitest pattern> [-n times=5] [-t testNamePattern] [--label name]
+pnpm eval:repeat <vitest pattern> [-n times=2, max 5] [-t testNamePattern] [--label name]
 pnpm eval:repeat skills/onion-architecture -n 5 --label baseline
 ```
 Runs the pattern N times, then prints per-test pass rate, a per-**practice** table
