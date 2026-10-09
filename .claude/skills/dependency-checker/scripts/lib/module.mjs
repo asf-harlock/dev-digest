@@ -69,13 +69,15 @@ export function computeUsage(moduleDir, pkgJson, declared, scan) {
       config: (rec?.config ?? 0) > 0 || mentions.quoted(name),
       script: binNames(moduleDir, name).some((b) => mentions.word(b)),
       typesOf: false,
-      files: rec?.files ?? [],
+      ref: !!scan.strRefs?.has(name), // named as a string somewhere (plugin, transport, loader)
+      linked: false, // needed by a sibling module's source this module compiles
+      files: rec?.files ?? { src: [], test: [], config: [] },
     };
     if (name.startsWith('@types/')) {
       const target = typesTarget(name);
       u.typesOf = scan.byPackage.has(target) || mentions.quoted(target);
     }
-    u.used = u.src || u.test || u.config || u.script || u.typesOf;
+    u.used = u.src || u.test || u.config || u.script || u.typesOf || u.ref;
     usage[name] = u;
   }
   return usage;
@@ -105,7 +107,7 @@ export function collectModule(root, dirName) {
     heaviest: [],
     multiVersion: [],
     versionsByName: {},
-    imports: { files: 0, phantom: [] },
+    imports: { files: 0, phantom: [], crossings: [] },
     aliasEdges: [],
     notes: [],
   };
@@ -137,8 +139,10 @@ export function collectModule(root, dirName) {
   // --- imports, usage, phantom dependencies ---
   const { paths } = readTsPaths(moduleDir);
   const aliasMatchers = aliasMatchersFromPaths(paths);
-  const scan = scanTree(moduleDir, { aliasMatchers });
+  const scan = scanTree(moduleDir, { aliasMatchers, names: Object.keys(declared), repoRoot: root });
   out.imports.files = scan.files;
+  // A relative import into a sibling module bypasses the tsconfig alias and the module's public entry.
+  out.imports.crossings = scan.crossings.filter((c) => c.to !== dirName && existsSync(join(root, c.to, 'package.json')));
   const usage = computeUsage(moduleDir, pkgJson, declared, scan);
   for (const d of out.directs) d.usage = usage[d.name] ?? null;
   // declared in package.json but absent from the lock graph (e.g. peers)
@@ -150,6 +154,10 @@ export function collectModule(root, dirName) {
     if (declared[name] || name === pkgJson.name) continue;
     out.imports.phantom.push({ name, src: rec.src, test: rec.test, config: rec.config, files: rec.files });
   }
+  out.bundled = 'next' in (pkgJson.dependencies ?? {}); // a built app: build-time libs may sit in devDependencies
+  // Nothing in it is ever started, built or imported by name: a test/eval harness, not a shipped package.
+  const sc = pkgJson.scripts ?? {};
+  out.tooling = !(pkgJson.main || pkgJson.bin || pkgJson.exports || sc.start || sc.dev || sc.build);
   out.imports.phantom.sort((a, b) => b.src - a.src || a.name.localeCompare(b.name));
 
   // --- source-level links to sibling modules (tsconfig path aliases) ---
@@ -173,8 +181,9 @@ export function collectModule(root, dirName) {
     for (const dir of edge.targetDirs) {
       const sub = scanTree(dir, { aliasMatchers, classifyBase: join(root, edge.to) });
       for (const [name, rec] of sub.byPackage) {
+        if (rec.src === 0) continue; // tests/config of the sibling are never compiled into this module
         const e = externals.get(name) ?? { name, files: [] };
-        e.files.push(...rec.files.slice(0, 2));
+        e.files.push(...rec.files.src.slice(0, 2));
         externals.set(name, e);
       }
     }
@@ -191,6 +200,17 @@ export function collectModule(root, dirName) {
           .map(([k]) => k.replace(/\/\*$/, '')),
       )],
     });
+  }
+  // A package imported only by the sibling source this module compiles is still
+  // required here (e.g. zod for the shared contracts), so it counts as used at runtime.
+  for (const edge of out.aliasEdges) {
+    for (const ext of edge.externals) {
+      const u = usage[ext.name];
+      if (!u) continue;
+      u.linked = true;
+      u.src = true;
+      u.used = true;
+    }
   }
   return out;
 }

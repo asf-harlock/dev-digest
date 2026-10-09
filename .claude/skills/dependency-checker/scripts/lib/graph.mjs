@@ -3,7 +3,10 @@
 //
 // Vocabulary (used verbatim in the report):
 //   own        bytes of the package's own files
-//   reach      the package plus everything it pulls in transitively
+//   reach      the package plus everything it pulls in transitively — except
+//              packages that are themselves declared in package.json: a declared
+//              dependency is a boundary and is counted for itself (a peer such
+//              as `next` under `next-intl` is not credited to next-intl)
 //   exclusive  bytes of reach that NO other direct dependency of this module
 //              also pulls in — i.e. what `remove <pkg>` would really free
 //   shared     reach minus exclusive
@@ -28,7 +31,13 @@ export function analyzeGraph(graph, declared, sizeOf) {
   }
   const b = (k) => bytes.get(k) ?? 0;
 
-  function reachKeys(startId) {
+  const directIds = new Set();
+  for (const section of Object.keys(KIND_BY_SECTION)) {
+    for (const id of Object.values(graph.direct[section] ?? {})) directIds.add(id);
+  }
+  const dependedOnBy = new Map(); // direct id -> names of other directs that depend on it
+
+  function reachKeys(startId, startName) {
     const seenIds = new Set();
     const keys = new Set();
     const stack = [startId];
@@ -39,7 +48,14 @@ export function analyzeGraph(graph, declared, sizeOf) {
       const node = graph.nodes.get(id);
       if (!node) continue;
       keys.add(keyOf(node));
-      for (const d of node.deps) stack.push(d);
+      for (const d of node.deps) {
+        if (directIds.has(d) && d !== startId) {
+          if (!dependedOnBy.has(d)) dependedOnBy.set(d, new Set());
+          dependedOnBy.get(d).add(startName);
+          continue; // boundary: counted for itself
+        }
+        stack.push(d);
+      }
     }
     return keys;
   }
@@ -57,7 +73,7 @@ export function analyzeGraph(graph, declared, sizeOf) {
         key: keyOf(node),
         version: node.version,
         specifier: declared[name]?.specifier ?? null,
-        reach: reachKeys(id),
+        reach: reachKeys(id, name),
       });
     }
   }
@@ -112,6 +128,7 @@ export function analyzeGraph(graph, declared, sizeOf) {
       exclusiveBytes: exclusive,
       sharedBytes: weight - exclusive,
       transitiveCount: d.reach.size - 1,
+      pulledByOthers: [...(dependedOnBy.get(d.id) ?? [])].filter((n) => n !== d.name).slice(0, 3),
       topChildren: children,
     };
   });
@@ -127,14 +144,14 @@ export function analyzeGraph(graph, declared, sizeOf) {
   for (const k of allKeys) {
     const { name, version } = meta.get(k);
     if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push({ version, bytes: b(k), pulledBy: (pulledBy.get(k) ?? []).slice(0, 3) });
+    byName.get(name).push({ version, bytes: b(k), runtime: prodKeys.has(k), pulledBy: (pulledBy.get(k) ?? []).slice(0, 3) });
   }
   const multiVersion = [];
   for (const [name, versions] of byName) {
     if (versions.length < 2) continue;
     const total = versions.reduce((s, v) => s + v.bytes, 0);
     const max = Math.max(...versions.map((v) => v.bytes));
-    multiVersion.push({ name, versions, extraBytes: total - max });
+    multiVersion.push({ name, versions, extraBytes: total - max, onRuntimePath: versions.some((v) => v.runtime) });
   }
   multiVersion.sort((x, y) => y.extraBytes - x.extraBytes || x.name.localeCompare(y.name));
 

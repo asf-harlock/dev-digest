@@ -41,3 +41,6 @@ test-results/
 
 # LLM eval run output (see .claude/evals/*/README.md)
 .claude/evals/*/workspace/
+
+# /dependency-checker run output (metrics.json + report.md per run date) — local only
+.claude/dependency-checker/

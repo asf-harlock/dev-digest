@@ -4,7 +4,7 @@
 // rules built on it carry confidence `verify` unless the fact is unambiguous.
 
 import { readdirSync, readFileSync, existsSync, lstatSync } from 'node:fs';
-import { join, relative, sep, basename } from 'node:path';
+import { join, relative, sep, basename, resolve, dirname } from 'node:path';
 import { builtinModules } from 'node:module';
 
 const SKIP_DIRS = new Set([
@@ -15,22 +15,43 @@ const CODE_EXT = /\.(?:[cm]?[jt]sx?)$/;
 const CSS_EXT = /\.css$/;
 const MAX_FILE_BYTES = 1024 * 1024;
 
+// Anchored to the start of a statement so that SQL, prose and code-in-strings
+// that merely contain the word "from" are not read as imports.
 const SPEC_RES = [
-  /\bfrom\s*['"]([^'"\n]+)['"]/g, // import x from 'a' / export * from 'a'
-  /\bimport\s*['"]([^'"\n]+)['"]/g, // import 'a'
-  /\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g, // import('a')
+  // import x from 'a' · import type { y } from 'a' · export * from 'a' (may span lines)
+  /(?:^|[;\n])[ \t]*(?:import|export)\b[^;'"`]*?\bfrom\s*['"]([^'"\n]+)['"]/g,
+  /(?:^|[;\n])[ \t]*import\s*['"]([^'"\n]+)['"]/g, // import 'a'
+  /\bimport\s*\(\s*(?:\/\*[^*]*\*\/\s*)?['"]([^'"\n]+)['"]/g, // import('a') · import(/* @vite-ignore */ 'a' as string)
   /\brequire\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g, // require('a')
   /\b(?:vi|jest)\.(?:mock|doMock|importActual|importMock)\s*\(\s*['"]([^'"\n]+)['"]/g,
 ];
 const CSS_RES = [/@(?:import|plugin|config)\s+['"]([^'"\n]+)['"]/g];
+const NPM_NAME = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/;
 
 const BUILTINS = new Set(builtinModules.flatMap((m) => [m, m.replace(/^node:/, '')]));
 
 export function extractSpecifiers(text, isCss = false) {
   const out = new Set();
+  // Positions of backticks: a match after an odd number of them sits inside a
+  // template literal (code-as-string in a test fixture), not in real code.
+  const ticks = [];
+  if (!isCss) for (let i = text.indexOf('`'); i >= 0; i = text.indexOf('`', i + 1)) if (text[i - 1] !== '\\') ticks.push(i);
+  const insideTemplate = (idx) => {
+    let lo = 0;
+    let hi = ticks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ticks[mid] < idx) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo % 2 === 1;
+  };
   for (const re of isCss ? CSS_RES : SPEC_RES) {
     re.lastIndex = 0;
-    for (let m; (m = re.exec(text)); ) out.add(m[1]);
+    for (let m; (m = re.exec(text)); ) {
+      if (!isCss && insideTemplate(m.index)) continue;
+      out.add(m[1]);
+    }
   }
   return [...out];
 }
@@ -43,12 +64,13 @@ export function toPackageName(spec) {
   const parts = spec.split('/');
   const name = spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
   if (!name || (spec.startsWith('@') && parts.length < 2)) return null;
-  if (BUILTINS.has(name)) return null;
+  if (!NPM_NAME.test(name) || BUILTINS.has(name)) return null;
   return name;
 }
 
 export function classifyFile(relPath) {
   const p = relPath.split(sep).join('/');
+  if (CSS_EXT.test(p)) return 'config'; // @import/@plugin are resolved at build time
   if (/(^|\/)(test|tests|__tests__|__mocks__)(\/|$)|\.(test|spec)\.[cm]?[jt]sx?$/.test(p)) return 'test';
   if (!p.includes('/') && /\.config\.|(^|\/)(setup|vitest\.setup)\./.test(p)) return 'config';
   return 'src';
@@ -75,8 +97,10 @@ function* walk(dir, root) {
 
 // Scan a directory tree. `aliasMatchers` are predicates for tsconfig path
 // aliases (`@/…`, `@devdigest/shared`) so they are not mistaken for packages.
-export function scanTree(dir, { aliasMatchers = [], classifyBase = dir } = {}) {
-  const byPackage = new Map(); // name -> {src, test, config, files: [relPath]}
+export function scanTree(dir, { aliasMatchers = [], classifyBase = dir, names = [], repoRoot = null } = {}) {
+  const crossings = []; // relative imports that leave `dir` for a sibling top-level directory of repoRoot
+  const strRefs = new Map(); // declared name -> {src, test, config}: quoted anywhere, e.g. `target: 'pino-pretty'`
+  const byPackage = new Map(); // name -> {src, test, config, files: {src[], test[], config[]}}
   let files = 0;
   for (const file of walk(dir, dir)) {
     let text;
@@ -89,23 +113,40 @@ export function scanTree(dir, { aliasMatchers = [], classifyBase = dir } = {}) {
     files++;
     const rel = relative(classifyBase, file);
     const kind = classifyFile(rel);
+    for (const name of names) {
+      if (!text.includes(name)) continue;
+      if (text.includes(`'${name}'`) || text.includes(`"${name}"`)) {
+        if (!strRefs.has(name)) strRefs.set(name, { src: 0, test: 0, config: 0 });
+        strRefs.get(name)[kind]++;
+      }
+    }
     for (const spec of extractSpecifiers(text, CSS_EXT.test(file))) {
+      if (repoRoot && spec.startsWith('.')) {
+        const abs = resolve(dirname(file), spec);
+        if (abs !== dir && !abs.startsWith(dir + sep)) {
+          const fromRepo = relative(repoRoot, abs);
+          if (!fromRepo.startsWith('..')) crossings.push({ file: rel.split(sep).join('/'), spec, to: fromRepo.split(sep)[0], kind });
+        }
+        continue;
+      }
       if (aliasMatchers.some((m) => m(spec))) continue;
       const name = toPackageName(spec);
       if (!name) continue;
-      if (!byPackage.has(name)) byPackage.set(name, { src: 0, test: 0, config: 0, files: [] });
+      if (!byPackage.has(name)) byPackage.set(name, { src: 0, test: 0, config: 0, files: { src: [], test: [], config: [] } });
       const rec = byPackage.get(name);
       rec[kind]++;
-      if (rec.files.length < 3) rec.files.push(rel.split(sep).join('/'));
+      if (rec.files[kind].length < 3) rec.files[kind].push(rel.split(sep).join('/'));
     }
   }
-  return { files, byPackage };
+  return { files, byPackage, strRefs, crossings };
 }
 
 // Turn tsconfig `paths` keys into predicates. `@/*` -> startsWith('@/');
 // `@devdigest/shared` -> exact; `@devdigest/shared/*` -> prefix.
 export function aliasMatchersFromPaths(paths = {}) {
-  return Object.keys(paths).map((k) =>
+  // `zod -> ./node_modules/zod` pins a REAL package to one copy; it is not an internal alias.
+  const internal = Object.keys(paths).filter((k) => !String([].concat(paths[k])[0]).includes('node_modules'));
+  return internal.map((k) =>
     k.endsWith('/*') ? (s) => s.startsWith(k.slice(0, -1)) : (s) => s === k,
   );
 }
