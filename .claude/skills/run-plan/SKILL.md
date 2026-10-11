@@ -33,8 +33,9 @@ suggest `/model sonnet` once before starting.
 | free text | implementation notes → passed to implementer as constraints. If a note adds or changes **what** the feature does, stop: that is a spec change (`spec-creator`), then a re-plan |
 | design paths / Figma URLs | visual reference for frontend steps, passed to implementer as data |
 
-No plan found → stop and say: run `implementation-planner`, then save its
-final message to `.claude/sdd/SPEC-NN/plan.md`. Never write a plan here.
+No plan found → stop and say: run `implementation-planner` (it saves its final
+plan to `.claude/sdd/SPEC-NN/plan.md` itself; if an older plan came back only as
+a message, ask the user to save it there). Never write a plan here.
 
 ## State — `.claude/sdd/SPEC-NN/` (git-ignored)
 
@@ -128,7 +129,10 @@ Each round N:
 3. **Gates.** `./scripts/check.sh` for every touched package's Test plan gates.
    FAIL → back to the implementer within the same round.
 4. **Re-review — only the reviewers that raised `fix` items**, each with the
-   re-review prompt from `reference/findings.md`: verify its own ids and look
+   re-review prompt from `reference/findings.md`, sent by **resuming that same
+   reviewer** (`SendMessage` to its agent id — it already holds the files it read;
+   a fresh `Agent` call re-reads them: SPEC-09 retro, ~67% overlap, ~90k fresh
+   tokens). Launch a fresh agent only if the reviewer cannot be resumed. Verify its own ids and look
    for new problems **only in lines the fix changed**. New findings on
    unchanged code are discarded — that rule is what makes the loop converge.
    Output → `review-round-(N+1).json`.

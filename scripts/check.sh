@@ -14,6 +14,15 @@
 #   related    only the tests that import [files] (vitest related) — the
 #              inner-loop check after each plan step; [files] required
 #
+# all mode — the whole outer loop in ONE call (use this instead of looping over
+# gates yourself: an unquoted loop variable does not word-split under zsh):
+#   ./scripts/check.sh all             every gate of every package
+#   ./scripts/check.sh <pkg> all       every gate of one package
+#   ./scripts/check.sh all <gate>      one gate across all packages
+# Runs typecheck, lint, arch, test (reviewer-core: typecheck and test only),
+# prints one PASS line or one failure excerpt per gate, exits 0 only if all
+# passed. `related` is not part of `all`.
+#
 # [files] may be repo-relative (client/src/x.ts) or package-relative (src/x.ts).
 # Docker-backed *.it.test.ts suites are never run here — call vitest directly
 # when a plan step really needs them (see TESTING.md).
@@ -23,7 +32,23 @@
 # CHECK_MAX_LINES (default 60) caps the printed failure excerpt.
 set -uo pipefail
 
-usage() { sed -n '4,22p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '4,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+if [ "${1:-}" = all ] || [ "${2:-}" = all ]; then
+  if [ "${1:-}" = all ]; then PKGS=(server client core); ONLY="${2:-}"; else PKGS=("$1"); ONLY=""; fi
+  case "$ONLY" in ""|typecheck|lint|arch|test) ;; *) echo "check.sh: 'all' takes no gate or one of typecheck|lint|arch|test" >&2; usage ;; esac
+  rc=0
+  for p in "${PKGS[@]}"; do
+    case "$p" in server|client|core) ;; *) echo "check.sh: unknown package '$p' (server|client|core)" >&2; exit 2 ;; esac
+    for g in typecheck lint arch test; do
+      [ -n "$ONLY" ] && [ "$g" != "$ONLY" ] && continue
+      if [ "$p" = core ] && { [ "$g" = lint ] || [ "$g" = arch ]; }; then continue; fi
+      "$0" "$p" "$g" || rc=1
+    done
+  done
+  exit $rc
+fi
+
 [ $# -ge 2 ] || usage
 
 PKG="$1"; GATE="$2"; shift 2
