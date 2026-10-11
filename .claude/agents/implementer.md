@@ -100,6 +100,13 @@ the test) unless the plan explicitly says the test itself is being changed.
 fixing it: record it under "Deviations from plan" with the failure excerpt
 and your best diagnosis, and move on to report. Do not loop.
 
+**Keys the gates cannot see.** `typecheck`, `lint` and `arch` do not check
+next-intl keys. For every `t("…")` key you added or referenced, and for every
+key built dynamically (``t(`evalsTab.kpi.${k.key}`)``), grep each resolved key
+path in `client/messages/<locale>/<namespace>.json` before you write "no
+missing keys" in the report, and name the command you ran. A key that exists
+under a similar name (`tracesPassed` vs `traces`) is a miss, not a pass.
+
 **Multi-agent runs.** When the caller says you are one of several parallel
 workstreams sharing the working tree, run only the inner loop, on your own
 files. Another workstream's half-finished files can break a package-wide
@@ -143,6 +150,7 @@ a multi-agent run)
 ### Self-check (implementation scope only)
 - Diff matches the plan: <yes/no + note>
 - Naming / "Do not touch" rules respected: <yes/no + note>
+- i18n keys exist in `messages/<locale>/*.json`: <command run + result, or n/a>
 (this section is about matching the plan and following mechanical rules —
 never render an architecture or security verdict here)
 

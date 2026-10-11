@@ -66,8 +66,10 @@ Merge rules:
 ```
 Re-review, round <N+1>. Your previous findings are in
 .claude/sdd/<SPEC>/review-round-<N>.json (ids <list>, reviewer "<r>").
-The fix diff is `git diff <round-start-sha>` (plus untracked files the fix
-added: <list>).
+The fix diff is `git diff <round-start-sha>` (tracked files), plus these
+untracked files the fix added or changed: <list> — read them whole; they have
+no baseline to diff, so limit yourself to the lines the fix touched (the
+implementer's evidence, <file:line list>).
 
 1. For each of your ids: is it resolved? status fixed | still-open, with
    file:line evidence.
@@ -82,6 +84,19 @@ Append the findings-json block: still-open ids keep their title with
 "Round-start sha": if nothing is committed between rounds, the orchestrator
 saves `git stash create` (a commit object that does not touch the working
 tree) at the start of each fix and diffs against it; an empty result means a
-clean tree — use `HEAD`. `stash create` does not capture untracked files, so
-also save `git ls-files --others --exclude-standard` at round start and pass
-the files that are new since then as "untracked files the fix added".
+clean tree — use `HEAD`. This covers tracked files only.
+
+Untracked files: `stash create` does not capture them, and a *list* of untracked
+paths cannot show that an already-untracked file was edited — on a new-feature
+run most of the code is untracked, so the fix diff would look empty. Save a hash
+manifest at round start instead:
+
+```sh
+git ls-files -z --others --exclude-standard | xargs -0 shasum > .claude/sdd/<SPEC>/untracked-round-<N>.sha
+```
+
+At re-review run the same command into a second file and `diff` the two: every
+path that is new or whose hash differs is an "untracked file the fix added or
+changed" — pass that list, with the implementer's `file:line` evidence, to the
+reviewer. (`.claude/sdd/` is git-ignored, so the manifests never list
+themselves.)

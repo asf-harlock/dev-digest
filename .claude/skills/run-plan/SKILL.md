@@ -41,7 +41,7 @@ final message to `.claude/sdd/SPEC-NN/plan.md`. Never write a plan here.
 | File | Holds |
 |---|---|
 | `plan.md` | the Implementation Plan (input) |
-| `state.json` | `{ spec, plan, branch, base_sha, phase, verify_rounds, review_round, tests }` |
+| `state.json` | `{ spec, plan, branch, base_sha, phase, verify_rounds, review_round, tests, baseline_failures }` |
 | `review-round-N.json` | the merged findings of round N — schema in `reference/findings.md` |
 | `verify-1.md`, `verify-2.md` | plan-verifier's matrices |
 
@@ -55,7 +55,13 @@ which phase it is in and resume from there (the user can say "restart").
    `approved`, ask whether to continue.
 2. Branch. On `main` → ask for a branch name (default `sdd/SPEC-NN-<name>`)
    and create it; homework never lands on `main`. Record `base_sha = HEAD`.
-3. Write `state.json` with `phase: "implement"`.
+3. Baseline. For every package the plan's Test plan names, run
+   `./scripts/check.sh <pkg> test` on the clean tree now, plus any Docker-backed
+   suite the plan lists (`cd server && pnpm exec vitest run .it.test`, only with
+   Docker up). Record the failing test names as `baseline_failures` in
+   `state.json` (`[]` = green). Later "pre-existing failure" claims must match
+   this list; a failure that is not in it belongs to this run.
+4. Write `state.json` with `phase: "implement"`.
 
 ## Phase 1 — implement
 
@@ -132,9 +138,15 @@ Each round N:
 
 ## Phase 5 — verify #2 (definition of done)
 
-`plan-verifier` again, full matrix, gates re-run → `verify-2.md`. Show the
-verdict line and any non-Pass rows. It recommends `Status: implemented` —
-that edit is the user's.
+`plan-verifier` again, gates re-run → `verify-2.md`. Give it the path of
+`verify-1.md` and ask for a **delta matrix**: a full row only for (a) every row
+that was non-Pass in verify #1, (b) every row whose evidence files changed since
+(fix rounds, test-writer follow-ups) and (c) any new non-Pass; every other row
+collapses to one `Pass (unchanged since verify-1)` count per group. A row may be
+called "carried" only when verify #1 had it non-Pass — it must quote verify #1's
+status. Save the reply as returned, not a summary. Show the verdict line and
+any non-Pass rows. It recommends `Status: implemented` — that edit is the
+user's.
 
 ## Phase 6 — wrap-up
 

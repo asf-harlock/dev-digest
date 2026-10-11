@@ -140,6 +140,14 @@ draws exist or are meant to be new; for a contract, check it against both
 
 Every non-Clear status produces a question. Do not resolve it yourself.
 
+**Wording the plan will change.** When the plan will shape a response, field
+or name differently from the requirement's own words (an AC says
+`progress: {done, total}`; the contract will carry `cases_done` /
+`cases_total`; an AC says "a map", the contract is an array), mark that
+requirement `Conflicting` and ask for `spec-creator` to update the draft
+*before* Phase 2. A spec that disagrees with the plan's contracts resurfaces on
+every verify pass as a "deviation" row and is never closed by the code.
+
 **Contract coverage.** Then walk every value the UI shows, the server
 returns or a row stores — each badge, label, stale note, meta field, enum
 value, error reason — and trace it to the contract field that carries it,
@@ -148,7 +156,10 @@ copies and the schema, not only the spec text. A value with no field, an
 enum missing a case, or a field that needs a new column (a migration) is a
 gap: it becomes a blocking question now, so the contract step of the plan
 is complete before any workstream starts. Gaps found mid-run cost an extra
-implementer each and a stop on the user.
+implementer each and a stop on the user. Include the **keys of every error
+`details` object a client branches on** (e.g. the id of the existing row in a
+409): the client workstream otherwise guesses several spellings and the
+server workstream needs a patch message.
 
 ### Step 4 — recommend improvements
 
