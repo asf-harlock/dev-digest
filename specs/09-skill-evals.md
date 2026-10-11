@@ -56,7 +56,7 @@ today.
 - A **Case Editor** form creates a case from a pasted diff (full unified diff or
   bare hunks) with a live diff preview, an expectation type, a file and a
   new-side line range. The form and its server-side validation are
-  owner-agnostic, so the agent Evals tab can adopt them later (Q-2).
+  owner-agnostic.
 - Editing a case's review input (diff, file, range, type, PR title, description)
   saves a new case and deletes the old one; name, notes, severity and category
   edit in place. Past runs never change.
@@ -74,13 +74,13 @@ today.
   - amends SPEC-08 AC-14 (case modal read-only) for manual cases: they open in
     the Case Editor;
   - amends SPEC-08 EC-22 (empty-state copy) only for the skill tab; the agent
-    tab copy is unchanged unless Q-2 is accepted;
+    tab copy is unchanged;
   - makes `EvalCaseMeta.pr_number` and `repo_full_name` nullish (SPEC-08 AC-4
     still writes both for finding-derived cases).
 
 **Non-goals**
-- Not adding the Case Editor or the trend chart to the agent Evals tab in this
-  spec — open as Q-2 and Q-3.
+- Not adding the Case Editor or the trend chart to the agent Evals tab, nor
+  `cost_usd` to `EvalTrendPoint` — this spec covers skills only (user decision).
 - Not doing **Turn into eval case** for skills (a finding becoming a skill-owned
   case). Skill cases are manual only, so `eval_cases_source_finding_uq`
   (`server/src/db/schema/eval.ts:50`) keeps its current definition (Q-11).
@@ -269,9 +269,9 @@ today.
 
 ## Open questions
 
-- **Q-1** This spec is large: skill-owned cases, the Case Editor, a two-arm skill runner and a trend chart. Split it into SPEC-09 (skill cases + Case Editor + runner + list) and SPEC-10 (trend chart and tooltip)? — default: keep one spec and have the plan deliver it in three phases (A: cases + Case Editor; B: skill runner + list results + lift; C: trend), each phase green on its own — owner: user.
-- **Q-2** Should the agent Evals tab also get **+ New eval case** and per-row edit through the same Case Editor (route `POST /agents/:id/eval-cases`, same edit rule)? — default: yes, as a follow-up spec once this one ships; the editor and `PATCH` rule are already owner-agnostic — owner: user.
-- **Q-3** Should the agent Evals tab get the same trend chart and tooltip, with `cost_usd` added to `EvalTrendPoint`, and the dashboard detail page's `MetricTrend` gain the tooltip? — default: yes, in the same follow-up as Q-2, sharing one chart component — owner: user.
+- **Q-1** Split into two specs? — default: no; RESOLVED by the user: one spec, delivered by the plan in three phases (A: cases + Case Editor; B: skill runner + list results + lift; C: trend), each phase green on its own — owner: user.
+- **Q-2** Case Editor on the agent Evals tab? — default: no; RESOLVED by the user: the agent Evals tab is out of scope (see Non-goals), the spec covers skills only — owner: user.
+- **Q-3** Trend chart on the agent Evals tab, with `cost_usd` on `EvalTrendPoint`? — default: no; RESOLVED by the user together with Q-2: out of scope — owner: user.
 - **Q-4** Tooltip contents (AC-37): is run date, skill version, carrier name and version, model, three with-skill metrics, three lifts and total cost the right set? — default: yes — owner: user.
 - **Q-5** `Supersedes:` stays `—`, with the amended SPEC-08 items listed in Goals? — default: yes — owner: user.
 - **Q-6** Trend window: last 100 finished runs (AC-36) — default: 100; upstream keeps no skill trend series and the client reads the full run list (researcher R1) — owner: user.
