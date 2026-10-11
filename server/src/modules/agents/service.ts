@@ -72,9 +72,15 @@ export class AgentsService {
     return row ? toAgentDto(row) : undefined;
   }
 
-  /** Delete an agent (and its versions/skill-links, via cascade). */
+  /**
+   * Delete an agent (and its versions/skill-links, via cascade). Its eval cases
+   * and runs carry no FK to `agents`, so they are removed in the same
+   * transaction (SPEC-08 EC-9).
+   */
   async delete(workspaceId: string, id: string): Promise<boolean> {
-    return this.repo.deleteById(workspaceId, id);
+    return this.repo.deleteById(workspaceId, id, (tx) =>
+      this.container.evalRepo.deleteByAgent(workspaceId, id, tx),
+    );
   }
 
   async create(workspaceId: string, input: CreateAgentInput, userId?: string): Promise<Agent> {

@@ -23,6 +23,7 @@ import {
   type ResolvedPrContext,
 } from '../_shared/pr-context.js';
 import { PROJECT_CONTEXT_TOKEN_BUDGET, sanitizePathForLog } from '../_shared/context-paths.js';
+import { renderSkillBlock } from '../_shared/skill-render.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -263,7 +264,7 @@ export class ReviewRunExecutor {
       // specs/02-skills.md §7.5). Logged only when non-empty so a skill-less
       // agent's prompt and log stay byte-identical to the pre-feature shape.
       const skills = await this.agents.enabledSkillsForPrompt(agent.id);
-      const blocks = skills.map((s) => `### ${s.name}\n${s.body}`);
+      const blocks = skills.map((s) => renderSkillBlock(s));
       if (skills.length > 0) {
         const tokens = blocks.reduce((n, b) => n + this.container.tokenizer.count(b), 0);
         runLog.info(`skills: ${skills.length} attached (+~${tokens} tokens)`);
