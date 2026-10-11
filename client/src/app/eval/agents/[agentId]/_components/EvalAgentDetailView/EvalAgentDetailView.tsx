@@ -1,5 +1,5 @@
 /* EvalAgentDetailView — /eval/agents/:agentId (AC-40..AC-50). Header, KPI cards,
-   trend chart and the runs table; the run-detail and Compare modals open from here.
+   trend chart (shared, with the AC-56 tooltip, AC-57) and the runs table; the run-detail and Compare modals open from here.
    Loading, error, not-found and "no runs yet" (EC-23) each have their own state. */
 "use client";
 
@@ -7,13 +7,13 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
+import { AgentMetricTrend } from "@/components/metric-trend";
 import { ApiError } from "@/lib/api";
 import { useAgentEvalOverview } from "@/lib/hooks/eval";
 import { AgentRunsTable } from "../AgentRunsTable";
 import { CompareModal } from "../CompareModal";
 import { DetailHeader } from "../DetailHeader";
 import { KpiCards } from "../KpiCards";
-import { MetricTrend } from "../MetricTrend";
 import { RunDetailModal } from "../RunDetailModal";
 import { s } from "./styles";
 
@@ -59,7 +59,7 @@ export function EvalAgentDetailView({ agentId }: { agentId: string }) {
       <div style={s.page}>
         <DetailHeader overview={overview} />
         <KpiCards overview={overview} />
-        <MetricTrend trend={overview.trend} />
+        <AgentMetricTrend trend={overview.trend} style={{ marginTop: 18 }} />
         {overview.runs.length === 0 ? (
           <div style={{ ...s.mutedText, marginTop: 28, fontSize: 14 }}>{t("agentDetail.noRunsYet")}</div>
         ) : (

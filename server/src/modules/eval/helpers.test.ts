@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import type { EvalCaseOutcome, EvalMetrics } from '@devdigest/shared';
 import { EVAL_ERROR, EVAL_TASK_LINE, ERROR_REASON_MAX } from './constants.js';
 import {
+  buildManualMeta,
+  classifyEdit,
+  effectiveExpectation,
   evalError,
   evalTaskLine,
   expectationTypeFor,
   finalStatus,
   firstErrorReason,
+  hasUpdateFields,
   isUniqueViolation,
   slugify,
   toErrorReason,
@@ -154,7 +158,7 @@ describe('toLatestResult (AC-12)', () => {
   });
 
   it('maps passed / failed / errored with counts, duration, cost and reason', () => {
-    const f = { file: 'a.ts', start_line: 1, end_line: 1, title: 't', severity: 'INFO', category: 'bug' };
+    const f = { file: 'a.ts', start_line: 1, end_line: 1, title: 't', severity: 'SUGGESTION', category: 'bug' };
     const passed = toLatestResult('r', scoreCase({ ...base, findings: [f] }));
     expect(passed).toMatchObject({ run_id: 'r', state: 'passed', expected_count: 1, got_count: 1, duration_ms: 12 });
     const failed = toLatestResult('r', scoreCase({ ...base, findings: [] }));
@@ -188,6 +192,7 @@ describe('toTrendPoint (EC-36)', () => {
       recall: null,
       precision: null,
       citation_accuracy: null,
+      cost_usd: null,
     });
     // zero-denominator metrics are null too
     const p = toTrendPoint(run(scoreRun([])));
@@ -199,5 +204,148 @@ describe('toTrendPoint (EC-36)', () => {
     const p = toTrendPoint(run(m));
     expect(p.recall).toBe(0);
     expect(p.precision).toBe(0.5);
+  });
+
+  it('EC-27: carries the stored cost; a missing price stays null, never 0', () => {
+    expect(toTrendPoint({ ...run(null), costUsd: 0.0123 }).cost_usd).toBe(0.0123);
+    expect(toTrendPoint({ ...run(null), costUsd: null }).cost_usd).toBeNull();
+    expect(toTrendPoint({ ...run(null), costUsd: 0 }).cost_usd).toBe(0);
+  });
+});
+
+// ---- SPEC-09 Case Editor ---------------------------------------------------------
+
+describe('classifyEdit (AC-14, AC-15, EC-6, EC-41)', () => {
+  const DIFF = [
+    'diff --git a/src/config.ts b/src/config.ts',
+    '--- a/src/config.ts',
+    '+++ b/src/config.ts',
+    '@@ -10,3 +10,4 @@',
+    '   port: 3000,',
+    '+  stripeKey: "sk_live_xxx",',
+    '   redisUrl: x,',
+  ].join('\n');
+  const exp = {
+    type: 'must_find' as const,
+    file: 'src/config.ts',
+    start_line: 11,
+    end_line: 11,
+    severity: 'CRITICAL' as const,
+    category: 'security' as const,
+  };
+  const manual = {
+    inputDiff: DIFF,
+    inputMeta: { pr_number: null, repo_full_name: null, title: 'Add key', body: 'why' },
+    expectedOutput: { ...exp, title: null },
+    sourceFindingId: null,
+  };
+  const fromFinding = { ...manual, sourceFindingId: 'finding-1' };
+  const meta = { title: 'Add key', body: 'why' };
+
+  it('AC-14: name / notes alone are in place, for both manual and finding cases', () => {
+    expect(classifyEdit(manual, { name: 'renamed' })).toBe('in_place');
+    expect(classifyEdit(manual, { notes: 'n' })).toBe('in_place');
+    expect(classifyEdit(fromFinding, { name: 'renamed', notes: 'n' })).toBe('in_place');
+  });
+
+  it('AC-14: severity / category changes on a manual case stay in place', () => {
+    expect(classifyEdit(manual, { expectation: { ...exp, severity: 'SUGGESTION' } })).toBe('in_place');
+    expect(classifyEdit(manual, { expectation: { ...exp, category: 'bug' } })).toBe('in_place');
+  });
+
+  it('AC-14: unchanged fields echoed back by the client do not count as an edit', () => {
+    const echoed = {
+      name: 'x',
+      input_diff: DIFF,
+      input_meta: meta,
+      expectation: exp,
+    };
+    expect(classifyEdit(manual, echoed)).toBe('in_place');
+    // a null body and an empty-string body are the same thing
+    expect(classifyEdit({ ...manual, inputMeta: { ...manual.inputMeta, body: null } }, { input_meta: { title: 'Add key', body: '' } })).toBe('in_place');
+    // CRLF paste of the stored diff is not a change (AC-46)
+    expect(classifyEdit(manual, { input_diff: DIFF.replace(/\n/g, '\r\n') })).toBe('in_place');
+  });
+
+  it('AC-15: a changed diff, file, lines, type, title or description replaces a manual case', () => {
+    expect(classifyEdit(manual, { input_diff: DIFF.replace('sk_live_xxx', 'sk_live_yyy') })).toBe('replace');
+    expect(classifyEdit(manual, { expectation: { ...exp, file: 'src/other.ts' } })).toBe('replace');
+    expect(classifyEdit(manual, { expectation: { ...exp, start_line: 10 } })).toBe('replace');
+    expect(classifyEdit(manual, { expectation: { ...exp, end_line: 12 } })).toBe('replace');
+    expect(classifyEdit(manual, { expectation: { ...exp, type: 'must_not_flag', severity: null, category: null } })).toBe('replace');
+    expect(classifyEdit(manual, { input_meta: { ...meta, title: 'New title' } })).toBe('replace');
+    expect(classifyEdit(manual, { input_meta: { ...meta, body: 'other' } })).toBe('replace');
+  });
+
+  it('AC-15: a replacing field mixed with name / notes is still a replace', () => {
+    expect(classifyEdit(manual, { name: 'n', expectation: { ...exp, end_line: 13 } })).toBe('replace');
+  });
+
+  it('EC-6: any input or qualifier change on a finding-derived case is locked', () => {
+    expect(classifyEdit(fromFinding, { input_diff: DIFF.replace('sk_live_xxx', 'sk_live_yyy') })).toBe('locked');
+    expect(classifyEdit(fromFinding, { expectation: { ...exp, file: 'src/other.ts' } })).toBe('locked');
+    expect(classifyEdit(fromFinding, { expectation: { ...exp, start_line: 10 } })).toBe('locked');
+    expect(classifyEdit(fromFinding, { input_meta: { ...meta, title: 'New title' } })).toBe('locked');
+    expect(classifyEdit(fromFinding, { expectation: { ...exp, severity: 'SUGGESTION' } })).toBe('locked');
+    expect(classifyEdit(fromFinding, { expectation: { ...exp, category: 'bug' } })).toBe('locked');
+  });
+
+  it('EC-6: echoing a finding-derived case unchanged (plus a rename) is allowed', () => {
+    expect(
+      classifyEdit(fromFinding, { name: 'new', notes: 'n', input_diff: DIFF, input_meta: meta, expectation: exp }),
+    ).toBe('in_place');
+  });
+
+  it('EC-41: a must_not_flag case stores null severity/category; undefined and null echoes are equal', () => {
+    const notFlag = {
+      ...fromFinding,
+      expectedOutput: { type: 'must_not_flag' as const, file: 'src/config.ts', start_line: 11, end_line: 11, severity: null, category: null, title: null },
+    };
+    const echo = { type: 'must_not_flag' as const, file: 'src/config.ts', start_line: 11, end_line: 11 };
+    expect(classifyEdit(notFlag, { expectation: echo })).toBe('in_place');
+    expect(classifyEdit(notFlag, { expectation: { ...echo, severity: null, category: null } })).toBe('in_place');
+    expect(classifyEdit(notFlag, { expectation: { ...echo, severity: 'SUGGESTION' } })).toBe('locked');
+  });
+});
+
+describe('effectiveExpectation (EC-41)', () => {
+  const base = { file: 'a.ts', start_line: 1, end_line: 2 };
+
+  it('EC-41: must_find keeps severity and category', () => {
+    expect(effectiveExpectation({ ...base, type: 'must_find', severity: 'WARNING', category: 'bug' })).toMatchObject({
+      type: 'must_find',
+      severity: 'WARNING',
+      category: 'bug',
+      title: null,
+    });
+  });
+
+  it('EC-41: must_find without them stores nulls', () => {
+    expect(effectiveExpectation({ ...base, type: 'must_find' })).toMatchObject({ severity: null, category: null });
+  });
+
+  it('EC-41: must_not_flag drops severity and category to null even when supplied', () => {
+    expect(effectiveExpectation({ ...base, type: 'must_not_flag', severity: 'CRITICAL', category: 'security' })).toMatchObject({
+      type: 'must_not_flag',
+      severity: null,
+      category: null,
+    });
+  });
+});
+
+describe('buildManualMeta (AC-11)', () => {
+  it('AC-11: a manual case has no PR; an empty description is stored as null', () => {
+    expect(buildManualMeta({ title: 'T', body: '' })).toEqual({ pr_number: null, repo_full_name: null, title: 'T', body: null });
+    expect(buildManualMeta({ title: 'T', body: 'why' }).body).toBe('why');
+    expect(buildManualMeta({ title: 'T' }).body).toBeNull();
+  });
+});
+
+describe('hasUpdateFields (AC-14)', () => {
+  it('AC-14: an empty body has nothing to update; any defined key counts (even a null notes)', () => {
+    expect(hasUpdateFields({})).toBe(false);
+    expect(hasUpdateFields({ name: undefined })).toBe(false);
+    expect(hasUpdateFields({ name: 'x' })).toBe(true);
+    expect(hasUpdateFields({ notes: null })).toBe(true);
   });
 });

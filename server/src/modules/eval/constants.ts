@@ -13,6 +13,11 @@ export const EVAL_ERROR = {
   runInProgress: 'eval_run_in_progress',
   runsNotComparable: 'runs_not_comparable',
   runNotFinished: 'run_not_finished',
+  // SPEC-09
+  frozenDiffTooLarge: 'frozen_diff_too_large',
+  caseInputLocked: 'case_input_locked',
+  skillNotInRun: 'skill_not_in_run',
+  noAgentLinked: 'no_agent_linked',
 } as const;
 
 export type EvalErrorCode = (typeof EVAL_ERROR)[keyof typeof EVAL_ERROR];
@@ -24,15 +29,21 @@ export const EVAL_ERROR_MESSAGE: Record<EvalErrorCode, string> = {
   eval_case_exists: 'An eval case already exists for this finding.',
   no_patch: 'This file has no diff to freeze.',
   range_outside_diff: 'The finding lines do not fall inside the file diff.',
-  no_eval_cases: 'This agent has no eval cases.',
-  eval_run_in_progress: 'An eval run is already in progress for this agent.',
+  no_eval_cases: 'There are no eval cases to run.',
+  eval_run_in_progress: 'An eval run is already in progress.',
   runs_not_comparable: 'These runs belong to different agents.',
   run_not_finished: 'Only finished runs can be compared.',
+  frozen_diff_too_large: 'The diff is larger than 200 KB.',
+  case_input_locked:
+    'This case was made from a finding; only its name and notes can be edited.',
+  skill_not_in_run: 'That skill was not part of the run that produced this finding.',
+  no_agent_linked: 'The chosen agent is not linked to this skill.',
 };
 
 export const NOT_FOUND = {
   finding: 'Finding not found',
   agent: 'Agent not found',
+  skill: 'Skill not found',
   case: 'Eval case not found',
   run: 'Eval run not found',
   pull: 'Pull request not found',
@@ -40,15 +51,25 @@ export const NOT_FOUND = {
 
 /** Row / payload limits. */
 export const CASE_NAME_MAX = 80;
+/** EC-1: 200 KB = 204,800 UTF-8 bytes, checked in the service (after the owner 404, before parsing). */
+export const MAX_DIFF_BYTES = 204_800;
+export const CASE_TITLE_MAX = 200;
+export const CASE_DESCRIPTION_MAX = 5000;
+export const CASE_NOTES_MAX = 2000;
+export const CASE_PATH_MAX = 500;
 export const CASE_SLUG_MAX = 60;
 export const CASE_SLUG_FALLBACK = 'eval-case';
-export const TREND_LIMIT = 30;
+/** SPEC-09 AC-41 / AC-58 (Q-6): an agent's or a skill's trend holds up to 100 finished runs. */
+export const TREND_LIMIT = 100;
 export const RUNS_LIMIT = 50;
 export const DASHBOARD_RECENT_RUNS_LIMIT = 20;
 export const SPARKLINE_LIMIT = 10;
 
 /** Stored `eval_runs.error_reason` for a run reaped on boot (EC-14). */
 export const INTERRUPTED_REASON = 'interrupted';
+
+/** Reason stored on a case whose paired arm failed and left no reason of its own (EC-16). */
+export const PAIRED_ARM_FAILED_REASON = 'paired arm failed';
 
 /** Per-case failure reasons stored on an errored outcome (EC-12). */
 export const CASE_ERROR_FROZEN_DIFF_EMPTY = 'frozen diff has no files';
@@ -79,6 +100,14 @@ export const DIFF_HUNK_MARKER = '@@';
 /** Prompt diff: beyond this many lines per side the diff degrades to remove-all / add-all. */
 export const PROMPT_DIFF_MAX_LINES = 2000;
 
+/** `+++ ` / `--- ` file header markers of a unified diff. */
+export const DIFF_NEW_FILE_PREFIX = '+++ ';
+export const DIFF_OLD_FILE_PREFIX = '--- ';
+export const DIFF_DEV_NULL = '/dev/null';
+
+/** Message for a PATCH with no editable field (422 validation_error). */
+export const EMPTY_UPDATE_MESSAGE = 'Provide at least one field to update';
+
 /** Run lifecycle log messages (never carry diff / body / prompt / finding text — NFR-12). */
 export const LOG = {
   runStarted: 'eval: run started',
@@ -86,4 +115,8 @@ export const LOG = {
   runAborted: 'eval: run stopped (agent or run no longer exists)',
   runFailed: 'eval: run crashed',
   reaped: 'eval: reaped stale running runs',
+  skillRunStarted: 'eval: skill run started',
+  skillRunFinished: 'eval: skill run finished',
+  skillRunAborted: 'eval: skill run stopped (skill or run no longer exists)',
+  skillRunFailed: 'eval: skill run crashed',
 } as const;

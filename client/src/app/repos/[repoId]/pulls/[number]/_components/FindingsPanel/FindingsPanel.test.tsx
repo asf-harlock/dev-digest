@@ -19,6 +19,12 @@ vi.mock("../../../../../../../lib/hooks/eval", () => ({
   usePullEvalCaseLinks: () => evalMock.links,
   useCreateEvalCaseFromFinding: () => ({ mutate: evalMock.mutate, isPending: false, variables: undefined }),
 }));
+// SPEC-09: every expanded decided card also loads its skills for "Turn into skill eval
+// case". Mocked the same way — setup only; no assertion of this file depends on it.
+vi.mock("../../../../../../../lib/hooks/skill-eval", () => ({
+  useFindingSkills: () => ({ data: undefined, isLoading: false, isError: false, isSuccess: false }),
+  useCreateSkillCaseFromFinding: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+}));
 vi.mock("../../../../../../../lib/hooks/agents", () => ({
   useAgents: () => evalMock.agents,
 }));

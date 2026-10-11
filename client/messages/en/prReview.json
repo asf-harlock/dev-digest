@@ -156,5 +156,21 @@
       "agentMissing": "The agent that produced this finding was deleted",
       "generic": "Couldn’t create the eval case."
     }
+  },
+  "skillEval": {
+    "turnInto": "Turn into skill eval case",
+    "creating": "Creating…",
+    "enabledHint": "Freeze this finding as an eval case for a skill that shaped this review",
+    "undecidedTooltip": "Accept or dismiss this finding first",
+    "noSkillTooltip": "No skill shaped this review",
+    "loadingSkills": "Loading skills…",
+    "loadError": "Couldn’t load the skills of this review.",
+    "listLabel": "Skills that shaped this review",
+    "pick": "Create a case for {name}",
+    "inEvalSet": "In eval set",
+    "inEvalSetLink": "{name} — In eval set, open the skill’s Evals tab",
+    "errors": {
+      "skillNotInRun": "This skill was not used in this review"
+    }
   }
 }

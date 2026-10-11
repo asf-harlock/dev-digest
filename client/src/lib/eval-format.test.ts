@@ -8,9 +8,11 @@ import {
   formatCostUsd,
   formatDeltaPoints,
   formatDuration,
+  formatLiftPoints,
   formatLineRange,
   formatPassRatio,
   formatPercent,
+  formatRanAt,
 } from "./eval-format";
 
 describe("eval-format (SPEC-08)", () => {
@@ -68,5 +70,27 @@ describe("eval-format (SPEC-08)", () => {
     expect(formatLineRange("src/a.ts", 4, 9)).toBe("src/a.ts:4-9");
     expect(evalCaseState(null)).toBe("never_run");
     expect(evalCaseState({ state: "failed" })).toBe("failed");
+  });
+});
+
+describe("eval-format (SPEC-09 trend tooltip)", () => {
+  it("NFR-9: a lift is round(with·100) − round(without·100), rebuilt from the raw lift", () => {
+    // with 0.54, without 0.50 (raw lift 0.04) → 54 − 50 = 4.
+    expect(formatLiftPoints(0.54, 0.04)).toBe("▲ 4 pt");
+    // raw difference 0.8 pt would round to 1; the rule gives 75 − 75 = 0.
+    expect(formatLiftPoints(0.754, 0.754 - 0.746)).toBe("0 pt");
+    expect(formatLiftPoints(0.5, -0.02)).toBe("▼ 2 pt");
+    // a without value of exactly .125 rounds half up (13) despite float noise.
+    expect(formatLiftPoints(0.5, 0.5 - 0.125)).toBe("▲ 37 pt");
+  });
+
+  it("EC-26: a lift with a missing side is an em dash", () => {
+    expect(formatLiftPoints(null, 0.1)).toBe("—");
+    expect(formatLiftPoints(0.5, null)).toBe("—");
+  });
+
+  it("formatRanAt: local 'YYYY-MM-DD HH:mm', the raw string when not a date", () => {
+    expect(formatRanAt("2026-05-29T09:14:00")).toBe("2026-05-29 09:14");
+    expect(formatRanAt("not a date")).toBe("not a date");
   });
 });

@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { EvalCaseOutcome, EvalRunDetail } from "@devdigest/shared";
+import type { EvalCaseOutcome, EvalAgentRunDetail } from "@devdigest/shared";
 import evalMessages from "../../../../../../../messages/en/eval.json";
 import { runDetail } from "../../../../../../test/eval-fixtures";
 import { RunDetailModal } from "./RunDetailModal";
@@ -34,7 +34,7 @@ function outcome(over: Partial<EvalCaseOutcome>): EvalCaseOutcome {
   };
 }
 
-const RUN: EvalRunDetail = runDetail({
+const RUN: EvalAgentRunDetail = runDetail({
   case_results: [
     outcome({
       findings: [

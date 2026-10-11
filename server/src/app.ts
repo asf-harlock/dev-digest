@@ -166,8 +166,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       });
       return;
     }
-    app.log.error(err);
     const e = err as { statusCode?: number; message?: string };
+    // Body over `bodyLimit` (SPEC-09 EC-42): Fastify already sets 413; give it a stable code
+    // so a client can tell it from a real 500. Not an error worth a server-side stack trace.
+    if (e.statusCode === 413) {
+      reply.status(413).send({
+        error: { code: 'payload_too_large', message: e.message ?? 'Payload too large' },
+      });
+      return;
+    }
+    app.log.error(err);
     reply.status(e.statusCode ?? 500).send({
       error: { code: 'internal_error', message: e.message ?? 'Internal error' },
     });

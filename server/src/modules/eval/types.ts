@@ -1,4 +1,4 @@
-import type { EvalExpectation, EvalMetrics } from '@devdigest/shared';
+import type { EvalExpectation, EvalLift, EvalMetrics } from '@devdigest/shared';
 
 /** Pino-compatible subset: Fastify's `req.log` / `app.log` satisfy it. */
 export interface EvalLogger {
@@ -25,6 +25,68 @@ export interface EvalRunSummary {
   durationMs: number | null;
   costUsd: number | null;
   errorReason: string | null;
+}
+
+/**
+ * A skill run as read by overview queries (SPEC-09 NFR-13): scalar columns, the
+ * small aggregate jsonb (`metric_parts`, `without_metrics`, `lift`) and the two
+ * jsonb lengths computed in SQL. Never `snapshot`, `skill_snapshot`, `case_set`
+ * or the per-case results.
+ */
+export interface EvalSkillRunSummary {
+  id: string;
+  skillId: string;
+  skillVersion: number;
+  carrierAgentId: string;
+  carrierName: string;
+  carrierVersion: number;
+  carrierModel: string;
+  status: 'running' | 'completed' | 'partial' | 'errored';
+  ranAt: Date;
+  finishedAt: Date | null;
+  casesTotal: number;
+  casesDone: number;
+  withMetrics: EvalMetrics | null;
+  withoutMetrics: EvalMetrics | null;
+  lift: EvalLift | null;
+  durationMs: number | null;
+  costUsd: number | null;
+  errorReason: string | null;
+}
+
+/** One finished skill run as the trend reads it: scalar columns only (NFR-13). */
+export interface EvalSkillTrendRow {
+  id: string;
+  ranAt: Date;
+  skillVersion: number;
+  carrierAgentId: string;
+  carrierName: string;
+  carrierVersion: number;
+  carrierModel: string;
+  recall: number | null;
+  precision: number | null;
+  citationAccuracy: number | null;
+  lift: EvalLift | null;
+  costUsd: number | null;
+}
+
+/** A carrier candidate: an agent of the workspace linked to the skill. */
+export interface CarrierRow {
+  agentId: string;
+  name: string;
+  version: number;
+  model: string;
+  enabled: boolean;
+  linkEnabled: boolean;
+}
+
+/** The skill under test, read at run start. */
+export interface SkillForRun {
+  id: string;
+  name: string;
+  body: string;
+  version: number;
+  enabled: boolean;
 }
 
 /** Everything `createFromFinding` needs, read in one go (finding → review → pull → repo → agent). */

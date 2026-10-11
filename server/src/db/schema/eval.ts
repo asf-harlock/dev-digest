@@ -17,6 +17,8 @@ import type {
   EvalCaseRef,
   EvalCaseOutcome,
   EvalMetrics,
+  EvalLift,
+  EvalSkillRunSnapshot,
 } from '@devdigest/shared';
 import { now } from './_shared';
 import { workspaces } from './core';
@@ -46,8 +48,13 @@ export const evalCases = pgTable(
   },
   (t) => ({
     ownerIdx: index('eval_cases_owner_idx').on(t.workspaceId, t.ownerKind, t.ownerId),
-    // One case per finding; NULLs (cases not made from a finding) stay allowed.
-    sourceFindingUq: uniqueIndex('eval_cases_source_finding_uq').on(t.sourceFindingId),
+    // One case per finding PER OWNER (an agent and a skill may each hold a case from the
+    // same finding); NULLs (cases not made from a finding) stay allowed.
+    sourceFindingUq: uniqueIndex('eval_cases_source_finding_uq').on(
+      t.sourceFindingId,
+      t.ownerKind,
+      t.ownerId,
+    ),
   }),
 );
 
@@ -59,11 +66,12 @@ export const evalRuns = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     // No FK: the agent-delete cascade is programmatic (AgentsService.delete → evalRepo.deleteByAgent).
-    agentId: uuid('agent_id').notNull(),
+    // Null for a skill run (SPEC-09): its carrier lives in `carrier_agent_id`.
+    agentId: uuid('agent_id'),
     status: text('status', { enum: ['running', 'completed', 'partial', 'errored'] })
       .notNull()
       .default('running'),
-    agentVersion: integer('agent_version').notNull(),
+    agentVersion: integer('agent_version'),
     snapshot: jsonb('snapshot').$type<EvalRunSnapshot>().notNull(),
     caseSet: jsonb('case_set').$type<EvalCaseRef[]>().notNull(),
     caseResults: jsonb('case_results').$type<EvalCaseOutcome[]>().notNull().default([]),
@@ -80,13 +88,36 @@ export const evalRuns = pgTable(
     citationAccuracy: doublePrecision('citation_accuracy'),
     durationMs: integer('duration_ms'),
     costUsd: doublePrecision('cost_usd'),
+    // ---- SPEC-09 skill runs (Phase B). A skill run reuses the columns above for its with-skill
+    // arm (snapshot = carrier snapshot, case_results = with-arm outcomes, metric_parts + recall /
+    // precision / citation columns = with-arm values, cost_usd = total over both arms).
+    ownerKind: text('owner_kind', { enum: ['skill', 'agent'] })
+      .notNull()
+      .default('agent'),
+    // No FK on purpose (like `agent_id`): the skill-delete cascade is programmatic (EC-23).
+    skillId: uuid('skill_id'),
+    skillVersion: integer('skill_version'),
+    carrierAgentId: uuid('carrier_agent_id'),
+    // Scalar copies of the carrier snapshot so the trend never reads a jsonb (NFR-13).
+    carrierName: text('carrier_name'),
+    carrierVersion: integer('carrier_version'),
+    carrierModel: text('carrier_model'),
+    skillSnapshot: jsonb('skill_snapshot').$type<EvalSkillRunSnapshot>(),
+    withoutMetrics: jsonb('without_metrics').$type<EvalMetrics>(),
+    withoutResults: jsonb('without_results').$type<EvalCaseOutcome[]>().default([]),
+    lift: jsonb('lift').$type<EvalLift>(),
   },
   (t) => ({
     agentRanIdx: index('eval_runs_agent_ran_idx').on(t.workspaceId, t.agentId, t.ranAt.desc()),
-    // Single-flight: at most one running run per agent (EC-10, EC-37).
-    oneRunningUq: uniqueIndex('eval_runs_one_running_uq')
+    skillRanIdx: index('eval_runs_skill_ran_idx').on(t.workspaceId, t.skillId, t.ranAt.desc()),
+    // Single-flight: at most one running run per agent and one per skill (SPEC-09 NFR-5, EC-15).
+    // A skill run and its carrier's own agent run do not block each other.
+    oneRunningAgentUq: uniqueIndex('eval_runs_one_running_agent_uq')
       .on(t.agentId)
-      .where(sql`${t.status} = 'running'`),
+      .where(sql`${t.status} = 'running' AND ${t.ownerKind} = 'agent'`),
+    oneRunningSkillUq: uniqueIndex('eval_runs_one_running_skill_uq')
+      .on(t.skillId)
+      .where(sql`${t.status} = 'running' AND ${t.ownerKind} = 'skill'`),
   }),
 );
 

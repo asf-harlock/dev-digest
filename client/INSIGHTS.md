@@ -76,6 +76,24 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Codebase Patterns
 
+- **2026-10-11** — A shared component under `src/components/` may not contain a
+  `_components/` folder of its own: the `no-private-component-from-outside-app`
+  rule (`client/.dependency-cruiser.cjs:39-45`, `from: ^src/(components|lib|vendor)/`,
+  `to: _components/`) matches ANY `_components/` path, including the shared
+  component's own. A multi-part shared component is therefore a set of sibling
+  folders under `src/components/<name>/` (`eval-case-editor/CaseEditor/`,
+  `EditorModal/`, `DiffPreview/`, …), the shape `components/diff-viewer/` already
+  has. Hit when promoting `CaseModal` to `src/components/`; `pnpm arch` caught it.
+
+- **2026-10-11** — `FindingsPanel.test.tsx` mocks `lib/hooks/eval` wholesale and
+  renders without a `QueryClientProvider`, so any component that ends up in the
+  panel and uses a NEW hook module throws "No QueryClient set" in a test that
+  never touches that feature. Adding `SkillEvalMenu` (hooks from
+  `lib/hooks/skill-eval`) needed its own `vi.mock` there
+  (`app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/FindingsPanel.test.tsx:24`)
+  — or an opt-in prop (`FindingCard`'s `skillEval`) so cards in other tests never
+  mount it.
+
 - **2026-09-29** — A new editor tab needs its key added in TWO places, or `?tab=<key>`
   silently falls back to the first tab: the editor's `constants.ts` **and** the
   `VALID_TABS` list in the route's `page.tsx` (`app/agents/[id]/page.tsx`,
@@ -196,6 +214,10 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   fireEvents. `LinkToAgentPanel.test.tsx` (agent picker → `useAgentSkills`).
 
 ## Session Notes
+
+- **2026-10-11** — SPEC-09 (Case Editor, skill eval runs, metric trend). Recorded
+  the `src/components/**` no-`_components/` rule and the `FindingsPanel` hook-mock
+  trap (Codebase Patterns).
 
 - **2026-09-29** — Built `scripts/check.sh` to cut implementer gate output;
   the `getByRole` role-list entry (Tool & Library Notes) came from measuring

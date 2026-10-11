@@ -8,18 +8,24 @@ import { ConfigTab } from "./_components/ConfigTab";
 import { ContextTab } from "./_components/ContextTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { EvalsTab } from "./_components/EvalsTab";
+import { RunDialog } from "./_components/RunDialog";
 import { StatsTab } from "./_components/StatsTab";
 import { VersionsTab } from "./_components/VersionsTab";
 import { TABS } from "./constants";
 import { s } from "./styles";
+import { runHintKey, useSkillEvalFlow } from "./use-skill-eval-flow";
 
 /**
- * Skill editor — header (name, type/source badges, the disabled "Run on
- * evals" button — D4) + the five-tab shell. The button lives here, not inside
- * `EvalsTab`, per the mockup.
+ * Skill editor — header (name, type/source badges, the "Run on evals" button) + the
+ * five-tab shell. The button lives here, not inside `EvalsTab`, per the mockup; it opens
+ * the same run dialog as the tab's "Run all evals" and shares its disabled reasons
+ * (EC-11, EC-13, AC-33), so the run state is owned here (use-skill-eval-flow.ts).
  */
 export function SkillEditor({ skill, tab, onTab }: { skill: Skill; tab: string; onTab: (t: string) => void }) {
   const t = useTranslations("skills");
+  const flow = useSkillEvalFlow(skill.id);
+  const hintKey = runHintKey(flow.block);
+  const runHint = hintKey ? t(`evals.runHint.${hintKey}`) : undefined;
   const tabs = TABS.map((tb) => ({ key: tb.key, label: t(tb.labelKey), icon: tb.icon }));
 
   return (
@@ -54,9 +60,17 @@ export function SkillEditor({ skill, tab, onTab }: { skill: Skill; tab: string; 
         )}
         {!skill.enabled && <Badge color="var(--text-muted)">{t("editor.disabled")}</Badge>}
         <div style={{ marginLeft: "auto" }}>
-          <Button kind="secondary" size="sm" icon="FlaskConical" disabled title={t("evals.runOnEvalsTooltip")}>
-            {t("evals.runOnEvals")}
-          </Button>
+          <span title={runHint}>
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="FlaskConical"
+              disabled={flow.block !== null}
+              onClick={flow.openDialog}
+            >
+              {t("evals.runOnEvals")}
+            </Button>
+          </span>
         </div>
       </div>
       <div style={s.tabsBar}>
@@ -66,10 +80,18 @@ export function SkillEditor({ skill, tab, onTab }: { skill: Skill; tab: string; 
         {tab === "config" && <ConfigTab skill={skill} />}
         {tab === "context" && <ContextTab skill={skill} />}
         {tab === "preview" && <PreviewTab skill={skill} />}
-        {tab === "evals" && <EvalsTab />}
+        {tab === "evals" && <EvalsTab skill={skill} flow={flow} />}
         {tab === "stats" && <StatsTab skill={skill} />}
         {tab === "versions" && <VersionsTab skill={skill} />}
       </div>
+      {flow.dialogOpen && flow.overview.data && (
+        <RunDialog
+          skill={skill}
+          overview={flow.overview.data}
+          onClose={flow.closeDialog}
+          onStarted={flow.onStarted}
+        />
+      )}
     </div>
   );
 }

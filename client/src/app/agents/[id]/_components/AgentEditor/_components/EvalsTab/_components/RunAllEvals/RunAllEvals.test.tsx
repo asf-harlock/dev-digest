@@ -4,18 +4,18 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { EvalRunDetail } from "@devdigest/shared";
+import type { EvalAgentRunDetail } from "@devdigest/shared";
 import evalMessages from "../../../../../../../../../../messages/en/eval.json";
 import { runDetail } from "../../../../../../../../../test/eval-fixtures";
 
 interface RunState {
-  run: EvalRunDetail | undefined;
+  run: EvalAgentRunDetail | undefined;
   isRunning: boolean;
   progress: { done: number; total: number };
   timedOut: boolean;
   pollFailed: boolean;
   retry: ReturnType<typeof vi.fn>;
-  callbacks: { onFinished?: (r: EvalRunDetail) => void };
+  callbacks: { onFinished?: (r: EvalAgentRunDetail) => void };
   seenRunId: string | null | undefined;
 }
 

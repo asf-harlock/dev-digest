@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
-import type { EvalRunDetail } from "@devdigest/shared";
+import type { EvalAgentRunDetail } from "@devdigest/shared";
 import { useEvalRun, useStartEvalRun } from "@/lib/hooks/eval";
 import { currentCaseNumber, finishedMessageKey } from "./helpers";
 import { s } from "./styles";
@@ -26,7 +26,7 @@ export function RunAllEvals({
   const start = useStartEvalRun(agentId);
   const [startedRunId, setStartedRunId] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState<string | null>(null);
-  const [finishedRun, setFinishedRun] = React.useState<EvalRunDetail | null>(null);
+  const [finishedRun, setFinishedRun] = React.useState<EvalAgentRunDetail | null>(null);
 
   const runId = runningRunId ?? startedRunId;
   const run = useEvalRun(runId, {

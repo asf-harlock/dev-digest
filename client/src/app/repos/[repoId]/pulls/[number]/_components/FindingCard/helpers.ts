@@ -33,3 +33,17 @@ export function evalButtonState(
   if (ctrl.creating) return "creating";
   return "ready";
 }
+
+export type SkillMenuState = "undecided" | "no_skill" | "ready";
+
+/** Menu state in the server's own check order: undecided first (EC-35), then a review
+ *  with no recorded skill (EC-36). While the skill list is still loading the menu is
+ *  `ready` — its panel says "loading" — so a slow request never reads as "no skill". */
+export function skillMenuState(
+  f: Pick<FindingRecord, "accepted_at" | "dismissed_at">,
+  skills: { loaded: boolean; count: number },
+): SkillMenuState {
+  if (!f.accepted_at && !f.dismissed_at) return "undecided";
+  if (skills.loaded && skills.count === 0) return "no_skill";
+  return "ready";
+}

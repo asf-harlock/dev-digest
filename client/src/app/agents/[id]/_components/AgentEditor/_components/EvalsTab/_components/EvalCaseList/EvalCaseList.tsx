@@ -2,16 +2,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { IconBtn } from "@devdigest/ui";
 import type { EvalCaseListItem } from "@devdigest/shared";
 import { evalCaseState } from "@/lib/eval-format";
-import { CaseStateLabel } from "../CaseStateLabel";
-import { expectationLocation, expectedGot, severityCategoryParts } from "./helpers";
+import { EvalCaseRow } from "@/components/eval-case-row";
+import { expectedGot } from "./helpers";
 import { s } from "./styles";
 
-/** One row per eval case, newest first: name, type, location, tag, latest result.
- *  Long names, paths and reasons truncate with an ellipsis and keep the full text
- *  in `title` (EC-29). Model-derived text is rendered as escaped React text (UI-5). */
+/** One row per eval case, newest first (SPEC-08 AC-11..AC-13, SPEC-09 AC-44). The
+ *  row itself is the shared `EvalCaseRow`; this list maps an agent case onto it. */
 export function EvalCaseList({
   cases,
   onOpen,
@@ -24,60 +22,19 @@ export function EvalCaseList({
   const t = useTranslations("eval");
   return (
     <ul aria-label={t("evalsTab.case.listLabel")} style={s.list}>
-      {cases.map((c) => {
-        const latest = c.latest_result;
-        const result = expectedGot(latest);
-        const location = expectationLocation(c.expectation);
-        const mustFind = c.expectation.type === "must_find";
-        const { severity, category } = severityCategoryParts(c.expectation);
-        const tag = mustFind
-          ? [severity, category].filter(Boolean).join(" · ")
-          : t("evalsTab.case.mustNotFlagTag");
-        return (
-          <li key={c.id} style={s.row}>
-            <button
-              type="button"
-              style={s.open}
-              aria-label={t("evalsTab.case.open", { name: c.name })}
-              onClick={() => onOpen(c.id)}
-            >
-              <span style={s.line}>
-                <span style={s.name} title={c.name}>
-                  {c.name}
-                </span>
-                <CaseStateLabel state={evalCaseState(latest)} />
-              </span>
-              <span style={s.meta}>
-                <span style={s.type}>
-                  {mustFind ? t("evalsTab.case.typeMustFind") : t("evalsTab.case.typeMustNotFlag")}
-                </span>
-                <span className="mono" style={s.location} title={location}>
-                  {location}
-                </span>
-                {tag && <span style={s.tag}>{tag}</span>}
-                {result && (
-                  <span style={s.result}>
-                    {t("evalsTab.case.expectedGot", { expected: result.expected, got: result.got })}
-                  </span>
-                )}
-                {latest?.state === "errored" && latest.error_reason && (
-                  <span style={s.reason} title={latest.error_reason}>
-                    {t("evalsTab.case.erroredReason", { reason: latest.error_reason })}
-                  </span>
-                )}
-              </span>
-            </button>
-            <span style={s.del}>
-              <IconBtn
-                icon="Trash"
-                label={t("evalsTab.case.delete", { name: c.name })}
-                danger
-                onClick={() => onDelete(c.id, c.name)}
-              />
-            </span>
-          </li>
-        );
-      })}
+      {cases.map((c) => (
+        <EvalCaseRow
+          key={c.id}
+          id={c.id}
+          name={c.name}
+          expectation={c.expectation}
+          state={evalCaseState(c.latest_result)}
+          result={expectedGot(c.latest_result)}
+          errorReason={c.latest_result?.error_reason ?? null}
+          onOpen={onOpen}
+          onDelete={onDelete}
+        />
+      ))}
     </ul>
   );
 }

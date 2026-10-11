@@ -135,6 +135,7 @@ export function FindingsPanel({
               repoFullName={repoFullName}
               headSha={headSha}
               evalCase={evalCaseFor(f.id)}
+              skillEval
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

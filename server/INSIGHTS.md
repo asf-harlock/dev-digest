@@ -63,6 +63,16 @@ needed none of those and cannot drift.
 ## Codebase Patterns
 
 
+- **2026-10-11** — `eval_runs` rows are agent-owned OR skill-owned (SPEC-09:
+  `owner_kind`, nullable `agent_id`/`agent_version`, `skill_id`, `carrier_agent_id`),
+  and nothing but discipline keeps skill runs out of agent reads: every query that
+  lists, counts, or deletes agent runs must filter `owner_kind = 'agent'`
+  (`modules/eval/repository.ts`: `agentRuns()`, `runningRunId`,
+  `recentRunSummaries`, `deleteByAgent`; `summarySelection` casts `agentId` to
+  string relying on it). No `pnpm arch` rule or type catches a new unfiltered
+  query — the dashboard, overview and compare would silently show skill runs
+  (`test/skill-eval-runs.it.test.ts` NFR-5 tests cover only today's reads).
+
 - **2026-10-06** — `pnpm arch` does not catch an adapter importing from
   `modules/`: `.dependency-cruiser.cjs` has no `src/adapters` → `src/modules`
   rule. SPEC-07's `simple-git.ts` importing PR-context limits from
@@ -403,6 +413,11 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-10-11** — SPEC-09 server side (migrations 0022–0024, skill eval runner,
+  manual cases). Recorded the `eval_runs` owner-filter invariant (Codebase
+  Patterns). The `skills-stats`/`skills.it` baseline failures and the
+  `onboarding-tour`/`context-run` flakiness reproduced and are already recorded.
 
 - **2026-10-06** — L05 review fixes (PR #21): `onboarding.head_sha` column
   (migration 0019, backfilled from `json->meta->index_sha`), staleness read

@@ -1,22 +1,29 @@
 import type {
   EvalCase,
   EvalCaseDetail,
+  EvalCaseInput,
   EvalCaseLinks,
   EvalCaseListItem,
+  EvalCaseUpdate,
   EvalCaseOutcome,
   EvalCompare,
   EvalDashboard,
+  EvalFindingSkills,
   EvalOverview,
   EvalRunDetail,
   EvalRunSnapshot,
   EvalRunStart,
+  EvalSkillCaseListItem,
+  EvalSkillOverview,
+  EvalSkillRunSnapshot,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { NotFoundError } from '../../platform/errors.js';
-import type { EvalRepository } from './repository.js';
+import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
+import type { CaseOwner, EvalCaseRow, EvalRepository } from './repository.js';
 import {
   CASE_ERROR_FALLBACK,
   DASHBOARD_RECENT_RUNS_LIMIT,
+  EMPTY_UPDATE_MESSAGE,
   EVAL_ERROR,
   LOG,
   NOT_FOUND,
@@ -25,11 +32,19 @@ import {
   TREND_LIMIT,
 } from './constants.js';
 import {
+  armSnapshot,
   buildCaseMeta,
+  buildSkillRunSnapshot,
+  buildManualMeta,
+  classifyEdit,
+  effectiveExpectation,
   evalError,
   expectationTypeFor,
   finalStatus,
   firstErrorReason,
+  hasUpdateFields,
+  isAgentRunRow,
+  isSkillRunRow,
   recallOf,
   slugify,
   summaryFromRow,
@@ -40,13 +55,22 @@ import {
   toLatestResult,
   toRunDetail,
   toRunRecord,
+  toSkillCarrier,
+  toSkillCaseListItem,
+  toSkillDetailLatest,
+  toSkillListLatest,
+  toSkillRunDetail,
+  toSkillRunRecord,
+  toSkillTrendPoint,
   toTrendPoint,
   uniqueCaseName,
 } from './helpers.js';
 import { freezeFileDiff, rawDiffFromPrFiles } from './frozen-input.js';
+import { exceedsDiffLimit, freezePastedDiff } from './pasted-diff.js';
 import { reviewFrozenCase } from './executor.js';
 import { diffLines } from './prompt-diff.js';
 import { diffSkills } from './skills-diff.js';
+import { buildArms, computeLift, pairArms, skillRunCost } from './arms.js';
 import { errorCaseOutcome, runCost, scoreCase, scoreCommon, scoreRun } from './scoring.js';
 import type { EvalLogger, FindingCaseContext, FrozenCase } from './types.js';
 
@@ -83,9 +107,61 @@ export class EvalService {
     if (!type) throw evalError(EVAL_ERROR.findingUndecided, 422);
     if (!ctx.agentId || !ctx.agentExists) throw evalError(EVAL_ERROR.agentMissing, 422);
 
-    const existing = await this.repo.getCaseBySourceFinding(workspaceId, findingId);
+    const owner: CaseOwner = { kind: 'agent', id: ctx.agentId };
+    const existing = await this.repo.getCaseBySourceFinding(workspaceId, findingId, owner);
     if (existing) throw evalError(EVAL_ERROR.caseExists, 409, { case_id: existing.id });
 
+    return toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner));
+  }
+
+  /**
+   * SPEC-09 AC-48..AC-53, EC-35..EC-37, EC-39, EC-43, EC-44. Check order:
+   * 404 (finding, skill) → finding_undecided → skill_not_in_run → an existing
+   * case of that skill answers 200 → no_patch / range_outside_diff → insert 201.
+   * Makes no LLM call (NFR-1).
+   */
+  async createFromFindingForSkill(
+    workspaceId: string,
+    findingId: string,
+    skillId: string,
+  ): Promise<{ case: EvalCase; created: boolean }> {
+    const ctx = await this.repo.findingContext(workspaceId, findingId);
+    if (!ctx) throw new NotFoundError(NOT_FOUND.finding);
+    if (!(await this.repo.skillForEval(workspaceId, skillId))) {
+      throw new NotFoundError(NOT_FOUND.skill);
+    }
+
+    const type = expectationTypeFor(ctx.finding.acceptedAt, ctx.finding.dismissedAt);
+    if (!type) throw evalError(EVAL_ERROR.findingUndecided, 422);
+
+    const recorded = await this.repo.findingSkills(workspaceId, findingId);
+    if (!recorded?.skills.some((s) => s.skillId === skillId)) {
+      throw evalError(EVAL_ERROR.skillNotInRun, 422);
+    }
+
+    const owner: CaseOwner = { kind: 'skill', id: skillId };
+    const existing = await this.repo.getCaseBySourceFinding(workspaceId, findingId, owner);
+    if (existing) return { case: toEvalCaseDto(existing), created: false };
+
+    try {
+      return { case: toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner)), created: true };
+    } catch (err) {
+      // Lost a race against a second request for the same skill + finding (EC-39).
+      if (err instanceof AppError && err.code === EVAL_ERROR.caseExists) {
+        const winner = await this.repo.getCaseBySourceFinding(workspaceId, findingId, owner);
+        if (winner) return { case: toEvalCaseDto(winner), created: false };
+      }
+      throw err;
+    }
+  }
+
+  /** Freeze the finding's file diff and insert the owner's case (SPEC-08 AC-2..AC-7 rules, shared by both owners). */
+  private async insertFindingCase(
+    workspaceId: string,
+    ctx: FindingCaseContext,
+    type: NonNullable<ReturnType<typeof expectationTypeFor>>,
+    owner: CaseOwner,
+  ) {
     const frozen = freezeFileDiff(await this.loadRawDiff(ctx), {
       file: ctx.finding.file,
       start_line: ctx.finding.startLine,
@@ -96,11 +172,11 @@ export class EvalService {
 
     const name = uniqueCaseName(
       slugify(ctx.finding.title),
-      await this.repo.caseNames(workspaceId, ctx.agentId),
+      await this.repo.caseNames(workspaceId, owner),
     );
-    const row = await this.repo.insertCase({
+    return this.repo.insertCase({
       workspaceId,
-      agentId: ctx.agentId,
+      owner,
       name,
       inputDiff: frozen.diff,
       inputFiles: [ctx.finding.file],
@@ -114,9 +190,75 @@ export class EvalService {
         category: ctx.finding.category,
         title: ctx.finding.title,
       },
-      sourceFindingId: findingId,
+      sourceFindingId: ctx.finding.id,
+    });
+  }
+
+  /**
+   * SPEC-09 AC-9, AC-10, AC-11, AC-45, AC-46, EC-1..EC-3, EC-41. Order (EC-1):
+   * 404 owner → 204,800-byte cap → pasted-diff parsing + grounding → insert.
+   */
+  async createManualCase(
+    workspaceId: string,
+    owner: CaseOwner,
+    input: EvalCaseInput,
+  ): Promise<EvalCase> {
+    await this.requireOwner(workspaceId, owner);
+    if (exceedsDiffLimit(input.input_diff)) throw evalError(EVAL_ERROR.frozenDiffTooLarge, 422);
+
+    const exp = input.expectation;
+    const frozen = freezePastedDiff(input.input_diff, {
+      file: exp.file,
+      start_line: exp.start_line,
+      end_line: exp.end_line,
+    });
+    if (!frozen.ok) throw evalError(frozen.reason, 422);
+
+    const row = await this.repo.insertCase({
+      workspaceId,
+      owner,
+      name: input.name,
+      inputDiff: frozen.diff,
+      inputFiles: [exp.file],
+      inputMeta: buildManualMeta(input.input_meta),
+      expectation: effectiveExpectation(exp),
+      sourceFindingId: null,
+      notes: input.notes ?? null,
     });
     return toEvalCaseDto(row);
+  }
+
+  /** AC-54, AC-40 — the skill's cases, newest first, each with its result in the skill's latest finished run. */
+  async listSkillCases(workspaceId: string, skillId: string): Promise<EvalSkillCaseListItem[]> {
+    await this.requireOwner(workspaceId, { kind: 'skill', id: skillId });
+    const [rows, latestRun] = await Promise.all([
+      this.repo.listCases(workspaceId, { kind: 'skill', id: skillId }),
+      this.repo.latestFinishedSkillResults(workspaceId, skillId),
+    ]);
+    const withById = new Map((latestRun?.withResults ?? []).map((o) => [o.case_id, o]));
+    const withoutById = new Map((latestRun?.withoutResults ?? []).map((o) => [o.case_id, o]));
+    return rows.map((row) =>
+      toSkillCaseListItem(
+        row,
+        latestRun
+          ? toSkillListLatest(latestRun.runId, withById.get(row.id), withoutById.get(row.id))
+          : null,
+      ),
+    );
+  }
+
+  /** AC-53 — skills recorded for the run that produced the finding's review, in run order. */
+  async listFindingSkills(workspaceId: string, findingId: string): Promise<EvalFindingSkills> {
+    const recorded = await this.repo.findingSkills(workspaceId, findingId);
+    if (!recorded) throw new NotFoundError(NOT_FOUND.finding);
+    return {
+      skills: recorded.skills.map((s) => ({
+        skill_id: s.skillId,
+        name: s.name,
+        has_case: s.caseId !== null,
+        case_id: s.caseId,
+      })),
+    };
   }
 
   /** The PR's raw diff at creation time: real `git diff` first, persisted `pr_files` patches as fallback. */
@@ -138,7 +280,7 @@ export class EvalService {
   async listCases(workspaceId: string, agentId: string): Promise<EvalCaseListItem[]> {
     await this.requireAgent(workspaceId, agentId);
     const [rows, latestRun] = await Promise.all([
-      this.repo.listCases(workspaceId, agentId),
+      this.repo.listCases(workspaceId, { kind: 'agent', id: agentId }),
       this.repo.latestFinishedRunRow(workspaceId, agentId),
     ]);
     const outcomes = new Map<string, EvalCaseOutcome>(
@@ -153,25 +295,95 @@ export class EvalService {
   async getCase(workspaceId: string, id: string): Promise<EvalCaseDetail> {
     const row = await this.repo.getCase(workspaceId, id);
     if (!row) throw new NotFoundError(NOT_FOUND.case);
-    const [source, latestRun] = await Promise.all([
+    const [source, latest] = await Promise.all([
       row.sourceFindingId
         ? this.repo.caseSource(workspaceId, row.sourceFindingId)
         : Promise.resolve(undefined),
-      this.repo.latestFinishedRunRow(workspaceId, row.ownerId),
+      this.latestResultOf(workspaceId, row),
     ]);
-    const outcome = latestRun?.caseResults.find((o) => o.case_id === row.id);
     return {
       ...toEvalCaseDto(row),
-      source: source ? { repo_id: source.repoId, pr_number: row.inputMeta.pr_number } : null,
-      latest_result: latestRun ? toLatestResult(latestRun.id, outcome) : null,
+      // A manual case has no source finding, hence no source PR (and a null `pr_number`).
+      source: source ? { repo_id: source.repoId, pr_number: row.inputMeta.pr_number ?? null } : null,
+      latest_result: latest,
     };
   }
 
-  /** AC-15, EC-32 — rename; a name another case already has is allowed. */
-  async renameCase(workspaceId: string, id: string, name: string): Promise<EvalCase> {
-    const row = await this.repo.renameCase(workspaceId, id, name);
+  /**
+   * The case's result in its owner's latest finished run. Agent: that run's outcome.
+   * Skill (AC-59): the with-skill arm's state and counts, duration and cost over both arms.
+   */
+  private async latestResultOf(workspaceId: string, row: EvalCaseRow) {
+    if (row.ownerKind === 'skill') {
+      const run = await this.repo.latestFinishedSkillResults(workspaceId, row.ownerId);
+      if (!run) return null;
+      return toSkillDetailLatest(
+        run.runId,
+        run.withResults.find((o) => o.case_id === row.id),
+        run.withoutResults.find((o) => o.case_id === row.id),
+      );
+    }
+    const run = await this.repo.latestFinishedRunRow(workspaceId, row.ownerId);
+    return run
+      ? toLatestResult(run.id, run.caseResults.find((o) => o.case_id === row.id))
+      : null;
+  }
+
+  /**
+   * SPEC-09 AC-14, AC-15, AC-47, EC-1, EC-6, EC-41 (edit rule B). Order: 404 →
+   * empty body (422 validation_error) → byte cap → classify (`locked` →
+   * 422 case_input_locked) → in place, or replace in one transaction.
+   * A rename `{ name }` is the in-place case. A name another case has is allowed.
+   */
+  async updateCase(workspaceId: string, id: string, update: EvalCaseUpdate): Promise<EvalCase> {
+    const row = await this.repo.getCase(workspaceId, id);
     if (!row) throw new NotFoundError(NOT_FOUND.case);
-    return toEvalCaseDto(row);
+    if (!hasUpdateFields(update)) throw new ValidationError(EMPTY_UPDATE_MESSAGE);
+    if (update.input_diff !== undefined && exceedsDiffLimit(update.input_diff)) {
+      throw evalError(EVAL_ERROR.frozenDiffTooLarge, 422);
+    }
+
+    const kind = classifyEdit(row, update);
+    if (kind === 'locked') throw evalError(EVAL_ERROR.caseInputLocked, 422, { case_id: id });
+
+    const stored = row.expectedOutput;
+    if (kind === 'in_place') {
+      // A finding-derived case keeps its stored expectation: only name / notes can differ here.
+      const expectation =
+        update.expectation && !row.sourceFindingId
+          ? effectiveExpectation(update.expectation, stored.title)
+          : undefined;
+      const updated = await this.repo.updateCaseInPlace(workspaceId, id, {
+        name: update.name,
+        notes: update.notes,
+        expectation,
+      });
+      if (!updated) throw new NotFoundError(NOT_FOUND.case);
+      return toEvalCaseDto(updated, null);
+    }
+
+    // Replace: every field not in the body keeps its stored value.
+    const exp = effectiveExpectation(update.expectation ?? stored, stored.title);
+    const frozen = freezePastedDiff(update.input_diff ?? row.inputDiff, {
+      file: exp.file,
+      start_line: exp.start_line,
+      end_line: exp.end_line,
+    });
+    if (!frozen.ok) throw evalError(frozen.reason, 422);
+
+    const replacement = await this.repo.replaceCase(workspaceId, id, {
+      workspaceId,
+      owner: { kind: row.ownerKind, id: row.ownerId },
+      name: update.name ?? row.name,
+      inputDiff: frozen.diff,
+      inputFiles: [exp.file],
+      inputMeta: update.input_meta ? buildManualMeta(update.input_meta) : row.inputMeta,
+      expectation: exp,
+      sourceFindingId: null,
+      notes: update.notes !== undefined ? update.notes : row.notes,
+      createdAt: row.createdAt,
+    });
+    return toEvalCaseDto(replacement, id);
   }
 
   /** AC-17/18 — past runs keep their own `case_set` / `case_results`, so they are untouched. */
@@ -211,7 +423,7 @@ export class EvalService {
     logger?: EvalLogger,
   ): Promise<EvalRunStart> {
     const agent = await this.requireAgent(workspaceId, agentId);
-    const cases = await this.repo.casesForRun(workspaceId, agentId);
+    const cases = await this.repo.casesForRun(workspaceId, { kind: 'agent', id: agentId });
     if (cases.length === 0) throw evalError(EVAL_ERROR.noEvalCases, 422);
 
     const skills = await this.container.agentsRepo.enabledSkillsForPrompt(agent.id);
@@ -328,6 +540,185 @@ export class EvalService {
     }
   }
 
+  // ===========================================================================
+  // Running a skill's set (SPEC-09): carrier agent, two arms per case
+  // ===========================================================================
+
+  /**
+   * AC-20..AC-26, EC-11..EC-14. Order: 404 skill → 404 carrier → 422
+   * `no_agent_linked` (no agent linked, or the carrier is not linked) → 422
+   * `no_eval_cases` → insert (409 `eval_run_in_progress` + `details.run_id`).
+   * Snapshots the skill and the carrier, builds both arms' skill lists and reads
+   * every case ONCE; the 202 returns before any review (the run is detached).
+   */
+  async startSkillRun(
+    workspaceId: string,
+    skillId: string,
+    carrierAgentId: string,
+    logger?: EvalLogger,
+  ): Promise<EvalRunStart> {
+    const skill = await this.repo.skillForRun(workspaceId, skillId);
+    if (!skill) throw new NotFoundError(NOT_FOUND.skill);
+    const carrier = await this.requireAgent(workspaceId, carrierAgentId);
+
+    const carriers = await this.repo.carriersForSkill(workspaceId, skillId);
+    if (!carriers.some((c) => c.agentId === carrier.id)) {
+      throw evalError(EVAL_ERROR.noAgentLinked, 422);
+    }
+    const cases = await this.repo.casesForRun(workspaceId, { kind: 'skill', id: skillId });
+    if (cases.length === 0) throw evalError(EVAL_ERROR.noEvalCases, 422);
+
+    const links = await this.repo.carrierLinks(workspaceId, carrier.id);
+    const linkOrder = links.find((l) => l.skillId === skillId)?.order ?? null;
+    const { withArm, withoutArm } = buildArms(links, skill, linkOrder);
+    const skillSnapshot = buildSkillRunSnapshot({
+      carrier,
+      skill,
+      withSkills: withArm,
+      withoutSkills: withoutArm,
+    });
+
+    const runId = await this.repo.insertSkillRun({
+      workspaceId,
+      skillId,
+      skillVersion: skill.version,
+      carrier: {
+        agentId: carrier.id,
+        name: carrier.name,
+        version: carrier.version,
+        model: carrier.model,
+      },
+      snapshot: armSnapshot(skillSnapshot, 'with'),
+      skillSnapshot,
+      caseSet: cases.map(toCaseRef),
+    });
+
+    const startedAt = Date.now();
+    const logIds = {
+      runId,
+      skillId,
+      skillVersion: skill.version,
+      carrierAgentId: carrier.id,
+      cases: cases.length,
+    };
+    logger?.info(logIds, LOG.skillRunStarted);
+    void this.executeSkillRun(workspaceId, logIds, skillSnapshot, cases, startedAt, logger).catch(
+      async (err: unknown) => {
+        // Unexpected crash (e.g. DB error mid-run): never leave the run `running`.
+        const reason = toErrorReason(err, CASE_ERROR_FALLBACK);
+        logger?.error({ ...logIds, err: reason }, LOG.skillRunFailed);
+        await this.repo
+          .finalizeSkillRun(workspaceId, runId, {
+            status: 'errored',
+            withMetrics: null,
+            withoutMetrics: null,
+            lift: null,
+            casesErrored: 0,
+            durationMs: Date.now() - startedAt,
+            costUsd: null,
+            errorReason: reason,
+          })
+          .catch(() => undefined);
+      },
+    );
+    return { id: runId, status: 'running' };
+  }
+
+  /**
+   * One review at a time, with-skill arm then without-skill arm of each case, both
+   * through `reviewCase` → `reviewFrozenCase` (so the prompts differ only by the
+   * skill block, AC-27). `isRunning` is checked before EACH review: a deleted
+   * skill takes its run with it, and the executor stops with no further LLM call,
+   * no write and no error log (EC-24). Progress is saved per case.
+   */
+  private async executeSkillRun(
+    workspaceId: string,
+    ids: { runId: string; skillId: string; skillVersion: number; carrierAgentId: string; cases: number },
+    snapshot: EvalSkillRunSnapshot,
+    cases: FrozenCase[],
+    startedAt: number,
+    logger?: EvalLogger,
+  ): Promise<void> {
+    const { runId } = ids;
+    const withSnapshot = armSnapshot(snapshot, 'with');
+    const withoutSnapshot = armSnapshot(snapshot, 'without');
+    const withOutcomes: EvalCaseOutcome[] = [];
+    const withoutOutcomes: EvalCaseOutcome[] = [];
+
+    for (const c of cases) {
+      if (!(await this.repo.isRunning(workspaceId, runId))) {
+        logger?.info(ids, LOG.skillRunAborted);
+        return;
+      }
+      const withOutcome = await this.reviewCase(withSnapshot, c);
+      if (!(await this.repo.isRunning(workspaceId, runId))) {
+        logger?.info(ids, LOG.skillRunAborted);
+        return;
+      }
+      const withoutOutcome = await this.reviewCase(withoutSnapshot, c);
+      withOutcomes.push(withOutcome);
+      withoutOutcomes.push(withoutOutcome);
+      if (!(await this.repo.saveSkillProgress(workspaceId, runId, withOutcomes, withoutOutcomes))) {
+        logger?.info(ids, LOG.skillRunAborted);
+        return;
+      }
+    }
+
+    // EC-16: a case errored in either arm is errored in both and leaves every metric and lift.
+    const paired = pairArms(withOutcomes, withoutOutcomes);
+    const withMetrics = scoreRun(paired.with);
+    const withoutMetrics = scoreRun(paired.without);
+    const status = finalStatus(withMetrics);
+    const allErrored = status === 'errored';
+    const durationMs = Date.now() - startedAt;
+    const finalized = await this.repo.finalizeSkillRun(
+      workspaceId,
+      runId,
+      {
+        status,
+        // EC-17: all cases errored → no metrics and no lifts at all.
+        withMetrics: allErrored ? null : withMetrics,
+        withoutMetrics: allErrored ? null : withoutMetrics,
+        lift: allErrored ? null : computeLift(withMetrics, withoutMetrics),
+        casesErrored: withMetrics.cases_errored,
+        durationMs,
+        // EC-27: null when either arm of any scored case has no cost.
+        costUsd: allErrored ? null : skillRunCost(paired.with, paired.without),
+        errorReason: allErrored ? firstErrorReason(paired.with) : null,
+      },
+      paired,
+    );
+    if (!finalized) {
+      logger?.info(ids, LOG.skillRunAborted);
+      return;
+    }
+    logger?.info({ ...ids, status, durationMs }, LOG.skillRunFinished);
+  }
+
+  /** AC-41 — carriers, case count, the running run, the two newest finished runs, and the trend (<= 100). */
+  async skillOverview(workspaceId: string, skillId: string): Promise<EvalSkillOverview> {
+    const skill = await this.repo.skillForRun(workspaceId, skillId);
+    if (!skill) throw new NotFoundError(NOT_FOUND.skill);
+    const [casesTotal, runningRunId, carriers, finished, trendRows] = await Promise.all([
+      this.repo.countCases(workspaceId, { kind: 'skill', id: skillId }),
+      this.repo.runningSkillRunId(workspaceId, skillId),
+      this.repo.carriersForSkill(workspaceId, skillId),
+      this.repo.listSkillRunSummaries(workspaceId, skillId, 2),
+      this.repo.listSkillTrendRows(workspaceId, skillId, TREND_LIMIT),
+    ]);
+    const [latest, previous] = finished;
+    return {
+      skill: { id: skill.id, name: skill.name, version: skill.version, enabled: skill.enabled },
+      cases_total: casesTotal,
+      running_run_id: runningRunId,
+      carriers: carriers.map(toSkillCarrier),
+      latest: latest ? toSkillRunRecord(latest, skill.name) : null,
+      previous: previous ? toSkillRunRecord(previous, skill.name) : null,
+      // `trendRows` is newest-first; the chart reads chronologically.
+      trend: [...trendRows].reverse().map(toSkillTrendPoint),
+    };
+  }
+
   /** EC-14 — boot reap. Returns how many runs were marked `interrupted`. */
   async reapStaleRuns(): Promise<number> {
     return this.repo.reapRunning();
@@ -341,6 +732,8 @@ export class EvalService {
   async getRun(workspaceId: string, id: string): Promise<EvalRunDetail> {
     const row = await this.repo.getRunRow(workspaceId, id);
     if (!row) throw new NotFoundError(NOT_FOUND.run);
+    if (isSkillRunRow(row)) return toSkillRunDetail(row);
+    if (!isAgentRunRow(row)) throw new NotFoundError(NOT_FOUND.run);
     const agent = await this.container.agentsRepo.getById(workspaceId, row.agentId);
     return toRunDetail(row, agent?.name ?? null);
   }
@@ -349,7 +742,7 @@ export class EvalService {
   async overview(workspaceId: string, agentId: string): Promise<EvalOverview> {
     const agent = await this.requireAgent(workspaceId, agentId);
     const [casesTotal, finishedRuns, runningRunId, finished, runs] = await Promise.all([
-      this.repo.countCases(workspaceId, agentId),
+      this.repo.countCases(workspaceId, { kind: 'agent', id: agentId }),
       this.repo.countFinishedRuns(workspaceId, agentId),
       this.repo.runningRunId(workspaceId, agentId),
       this.repo.listRunSummaries(workspaceId, agentId, { finishedOnly: true, limit: TREND_LIMIT }),
@@ -415,7 +808,10 @@ export class EvalService {
       this.repo.getRunRow(workspaceId, a),
       this.repo.getRunRow(workspaceId, b),
     ]);
-    if (!rowA || !rowB) throw new NotFoundError(NOT_FOUND.run);
+    // EC-38: a skill run is not comparable — it does not exist as far as compare is concerned.
+    if (!rowA || !rowB || !isAgentRunRow(rowA) || !isAgentRunRow(rowB)) {
+      throw new NotFoundError(NOT_FOUND.run);
+    }
     if (rowA.agentId !== rowB.agentId) throw evalError(EVAL_ERROR.runsNotComparable, 422);
     for (const row of [rowA, rowB]) {
       if (!FINISHED_STATUSES.includes(row.status)) {
@@ -459,6 +855,17 @@ export class EvalService {
   }
 
   // ===========================================================================
+
+  /** 404 when the case owner (agent or skill) is not in this workspace. */
+  private async requireOwner(workspaceId: string, owner: CaseOwner): Promise<void> {
+    if (owner.kind === 'agent') {
+      await this.requireAgent(workspaceId, owner.id);
+      return;
+    }
+    if (!(await this.repo.skillForEval(workspaceId, owner.id))) {
+      throw new NotFoundError(NOT_FOUND.skill);
+    }
+  }
 
   private async requireAgent(workspaceId: string, agentId: string) {
     const agent = await this.container.agentsRepo.getById(workspaceId, agentId);

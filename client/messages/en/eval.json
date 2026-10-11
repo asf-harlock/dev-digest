@@ -55,30 +55,59 @@
   },
   "caseEditor": {
     "newCase": "New eval case",
-    "caseTitle": "Eval case · {name}",
-    "runCase": "Run case",
-    "running": "Running…",
-    "save": "Save",
-    "saving": "Saving…",
-    "nameLabel": "Name",
-    "namePlaceholder": "stripe-key-leak",
-    "inputLabel": "Input",
-    "tabs": {
+    "createTitle": "New eval case",
+    "cancel": "Cancel",
+    "fields": {
+      "name": "Name",
+      "title": "PR title",
+      "titlePlaceholder": "Add Stripe integration",
+      "description": "Description",
+      "descriptionPlaceholder": "Wire up payments via Stripe SDK.",
       "diff": "Diff",
-      "prMeta": "PR meta"
+      "diffHint": "Paste a unified diff, or only the hunks of one file.",
+      "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_xxx\"",
+      "file": "File",
+      "filePlaceholder": "src/config.ts",
+      "type": "Expectation type",
+      "startLine": "Start line",
+      "endLine": "End line",
+      "linesHint": "New-side line numbers, as shown in the preview",
+      "severity": "Severity",
+      "category": "Category",
+      "notSet": "Not set",
+      "notes": "Notes",
+      "notesPlaceholder": "Why this case exists, what to look for"
     },
-    "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_...\"",
-    "titleLabel": "Title",
-    "titlePlaceholder": "Add Stripe integration",
-    "bodyLabel": "Body",
-    "bodyPlaceholder": "Wire up payments via Stripe SDK.",
-    "preview": "Preview",
-    "expectedOutput": "Expected output",
-    "validJson": "valid JSON",
-    "invalidJson": "invalid JSON",
-    "lastRunPassed": "Last run passed",
-    "lastRunFailed": "Last run failed",
-    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s"
+    "preview": {
+      "heading": "Preview",
+      "label": "Preview of {file}",
+      "empty": "The preview appears once the diff has changed lines for the chosen file"
+    },
+    "findingNote": "Created from a finding — only the name and notes can be edited",
+    "createdManually": "Created manually",
+    "problems": {
+      "titleRequired": "Enter a PR title",
+      "titleTooLong": "Use 200 characters or fewer",
+      "descriptionTooLong": "Use 5,000 characters or fewer",
+      "notesTooLong": "Use 2,000 characters or fewer",
+      "fileRequired": "Enter a file path",
+      "fileTooLong": "Use 500 characters or fewer",
+      "lineInvalid": "Enter a whole number of 1 or more",
+      "endBeforeStart": "The end line must not be before the start line"
+    },
+    "rejections": {
+      "diffTooLarge": "The diff is larger than 200 KB — paste only the file you need",
+      "noPatch": "This diff has no changed lines for the chosen file",
+      "rangeOutsideDiff": "The line range is outside the diff's changed lines — use new-side line numbers",
+      "invalid": "Some values were rejected — check the fields and try again",
+      "inputLocked": "This case was created from a finding — only its name and notes can be edited"
+    },
+    "discard": {
+      "title": "Discard changes to this case?",
+      "body": "Your edits have not been saved and will be lost.",
+      "keep": "Keep editing",
+      "confirm": "Discard changes"
+    }
   },
   "evalsTab": {
     "metricsTitle": "Eval metrics",
@@ -117,7 +146,7 @@
     },
     "empty": {
       "title": "No eval cases yet",
-      "body": "No eval cases yet — accept or dismiss findings on a PR, then click Turn into eval case",
+      "body": "No eval cases yet — create one from a diff, or accept or dismiss findings on a PR and click Turn into eval case",
       "link": "Go to Pull Requests"
     },
     "case": {
@@ -135,7 +164,8 @@
         "errored": "errored",
         "never_run": "never run"
       },
-      "erroredReason": "errored: {reason}"
+      "erroredReason": "errored: {reason}",
+      "edit": "Edit case {name}"
     }
   },
   "page": {
@@ -199,7 +229,8 @@
       "confirm": "Delete case",
       "deleting": "Deleting…",
       "cancel": "Cancel",
-      "error": "Couldn’t delete the case."
+      "error": "Couldn’t delete the case.",
+      "bodySkill": "“{name}” will be removed from this skill’s eval set. Past runs keep their results."
     }
   },
   "runStatus": {
@@ -236,14 +267,6 @@
       "precision": "Precision",
       "citation": "Citation accuracy",
       "sparklineLabel": "{metric} over the last {count, plural, one {# run} other {# runs}}"
-    },
-    "trend": {
-      "title": "Metric trend",
-      "chartLabel": "Recall, precision and citation accuracy over the last {count, plural, one {# run} other {# runs}}",
-      "recall": "Recall",
-      "precision": "Precision",
-      "citation": "Citation",
-      "versionLabel": "v{version}"
     },
     "runs": {
       "title": "Recent runs",
@@ -378,5 +401,18 @@
     "deltaDown": "down {points} points",
     "deltaFlat": "no change",
     "deltaNone": "no comparison available"
+  },
+  "trend": {
+    "title": "Metric trend",
+    "chartLabel": "Recall, precision and citation accuracy over the last {count, plural, one {# run} other {# runs}}",
+    "recall": "Recall",
+    "precision": "Precision",
+    "citation": "Citation",
+    "versionLabel": "v{version}",
+    "noRunsYet": "No runs yet",
+    "tooltip": {
+      "agent": "{version} · {date} · Recall {recall} · Precision {precision} · Citation accuracy {citation} · Cost {cost}",
+      "skill": "{version} · {date} · {carrier} {carrierVersion} · {model} · With skill: recall {recall}, precision {precision}, citation accuracy {citation} · Lift: recall {liftRecall}, precision {liftPrecision}, citation accuracy {liftCitation} · Cost (both arms) {cost}"
+    }
   }
 }

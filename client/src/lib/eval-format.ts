@@ -59,6 +59,29 @@ export function formatDeltaPoints(
   return `0 ${unit}`;
 }
 
+/** Lift of a skill run's with-skill arm as NFR-9 signed points, from the trend point's
+ *  raw `lift` (with − without, unrounded): the without-skill value is rebuilt as
+ *  `with − lift` (rounded to 9 decimals so float noise cannot flip a .5 boundary) and
+ *  the usual `round(with·100) − round(without·100)` rule applies. "—" when either is null. */
+export function formatLiftPoints(
+  withValue: number | null | undefined,
+  lift: number | null | undefined,
+  unit = "pt",
+): string {
+  if (!isNum(withValue) || !isNum(lift)) return EM_DASH;
+  const without = Math.round((withValue - lift) * 1e9) / 1e9;
+  return formatDeltaPoints(withValue, without, unit);
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** "2026-05-29 09:14" in local time; the raw string when it is not a date. */
+export function formatRanAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 /** Dollars with two decimals: `0.1234` → "$0.12"; null → "—". */
 export function formatCostUsd(value: number | null | undefined): string {
   if (!isNum(value)) return EM_DASH;
