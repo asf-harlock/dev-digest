@@ -9,7 +9,20 @@ import {
   SmartDiff,
   Conformance,
   Onboarding,
-  EvalRun,
+  EvalCase,
+  EvalCaseDetail,
+  EvalCaseListItem,
+  EvalCaseRename,
+  EvalCaseLinks,
+  EvalCaseOutcome,
+  EvalRunRecord,
+  EvalRunDetail,
+  EvalRunStatus,
+  EvalRunStart,
+  EvalOverview,
+  EvalDashboard,
+  EvalCompare,
+  EvalCompareQuery,
   MemoryItem,
   RunTrace,
   Settings,
@@ -129,7 +142,7 @@ describe('AI contracts parse fixtures', () => {
     expect(d.groups[0]!.role).toBe('core');
   });
 
-  it('Conformance / Onboarding / EvalRun / MemoryItem', () => {
+  it('Conformance / Onboarding / MemoryItem', () => {
     expect(() =>
       Conformance.parse({
         spec_id: 's1',
@@ -141,18 +154,6 @@ describe('AI contracts parse fixtures', () => {
     expect(() =>
       Onboarding.parse({
         sections: [{ kind: 'architecture', body: 'b', nodes: [], edges: [] }],
-      }),
-    ).not.toThrow();
-    expect(() =>
-      EvalRun.parse({
-        recall: 0.82,
-        precision: 0.91,
-        citation_accuracy: 0.95,
-        traces_passed: 17,
-        traces_total: 20,
-        duration_ms: 12000,
-        cost_usd: 0.23,
-        per_trace: [{ name: 't01', pass: true, expected: 'x', actual: 'x' }],
       }),
     ).not.toThrow();
     expect(() =>
@@ -218,5 +219,236 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+});
+
+describe('Eval contracts (SPEC-08)', () => {
+  const expectation = {
+    type: 'must_find' as const,
+    file: 'src/a.ts',
+    start_line: 10,
+    end_line: 12,
+    severity: 'high',
+    category: 'security',
+    title: 'Hardcoded secret',
+  };
+  const ratio = (value: number | null, num: number, den: number) => ({ value, num, den });
+  const metrics = {
+    recall: ratio(0.5, 1, 2),
+    precision: ratio(null, 0, 0),
+    citation_accuracy: ratio(1, 3, 3),
+    tp: 1,
+    fp: 0,
+    unlabeled: 2,
+    traces_passed: 1,
+    traces_total: 2,
+    cases_errored: 0,
+  };
+  const run = (over: Record<string, unknown> = {}) => ({
+    id: 'r1',
+    agent_id: 'a1',
+    agent_name: 'Security',
+    status: 'completed',
+    started_at: '2026-10-01T10:00:00.000Z',
+    finished_at: '2026-10-01T10:01:00.000Z',
+    agent_version: 3,
+    cases_total: 2,
+    cases_done: 2,
+    metrics,
+    duration_ms: 60000,
+    cost_usd: null,
+    error_reason: null,
+    ...over,
+  });
+  const scored = {
+    case_id: 'c1',
+    name: 'case one',
+    expectation_type: 'must_find',
+    status: 'scored',
+    pass: true,
+    error_reason: null,
+    expected_count: 1,
+    got_count: 1,
+    findings: [
+      {
+        file: 'src/a.ts',
+        start_line: 10,
+        end_line: 11,
+        title: 't',
+        severity: 'high',
+        category: 'security',
+        label: 'tp',
+      },
+    ],
+    grounding_kept: 1,
+    grounding_total: 1,
+    duration_ms: 1200,
+    cost_usd: 0.01,
+  };
+  const errored = {
+    ...scored,
+    case_id: 'c2',
+    status: 'errored',
+    pass: null,
+    error_reason: 'provider_error',
+    expected_count: null,
+    got_count: null,
+    findings: [],
+    cost_usd: null,
+  };
+  const caseRow = {
+    id: 'c1',
+    owner_kind: 'agent',
+    owner_id: 'a1',
+    name: 'case one',
+    input_diff: 'diff --git a/src/a.ts b/src/a.ts\n',
+    input_meta: { pr_number: 7, repo_full_name: 'o/r', title: 'T', body: null },
+    expectation,
+    source_finding_id: null,
+    notes: null,
+    created_at: '2026-10-01T10:00:00.000Z',
+    updated_at: '2026-10-01T10:00:00.000Z',
+  };
+  const latest = {
+    run_id: 'r1',
+    state: 'passed',
+    expected_count: 1,
+    got_count: 1,
+    duration_ms: 10,
+    cost_usd: null,
+    error_reason: null,
+  };
+
+  it('case shapes: EvalCase / list item / detail / rename / links', () => {
+    expect(() => EvalCase.parse(caseRow)).not.toThrow();
+    expect(() =>
+      EvalCaseListItem.parse({
+        id: 'c1',
+        name: 'n',
+        expectation,
+        created_at: 'x',
+        latest_result: null,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      EvalCaseDetail.parse({
+        ...caseRow,
+        source: { repo_id: 'rp', pr_number: 7 },
+        latest_result: latest,
+      }),
+    ).not.toThrow();
+    expect(() => EvalCaseDetail.parse({ ...caseRow, source: null, latest_result: null })).not.toThrow();
+    expect(() => EvalCase.parse({ ...caseRow, expectation: { ...expectation, type: 'nope' } })).toThrow();
+    expect(() => EvalCaseRename.parse({ name: 'ok' })).not.toThrow();
+    expect(() => EvalCaseRename.parse({ name: '' })).toThrow();
+    expect(() => EvalCaseRename.parse({ name: 'x'.repeat(81) })).toThrow();
+    expect(() =>
+      EvalCaseLinks.parse({ links: [{ finding_id: 'f', case_id: 'c', agent_id: 'a' }] }),
+    ).not.toThrow();
+  });
+
+  it('EvalCaseOutcome: pass is null when errored', () => {
+    expect(() => EvalCaseOutcome.parse(scored)).not.toThrow();
+    expect(() => EvalCaseOutcome.parse(errored)).not.toThrow();
+    expect(() => EvalCaseOutcome.parse({ ...scored, status: 'weird' })).toThrow();
+    expect(() => EvalCaseOutcome.parse({ ...scored, findings: [{ ...scored.findings[0], label: 'x' }] })).toThrow();
+  });
+
+  it('EvalRunRecord: all four statuses, nullable metrics and ratio value', () => {
+    for (const status of ['running', 'completed', 'partial', 'errored']) {
+      expect(EvalRunStatus.safeParse(status).success).toBe(true);
+      expect(() => EvalRunRecord.parse(run({ status }))).not.toThrow();
+    }
+    expect(EvalRunStatus.safeParse('queued').success).toBe(false);
+    expect(() => EvalRunRecord.parse(run({ status: 'running', metrics: null, finished_at: null }))).not.toThrow();
+    const parsed = EvalRunRecord.parse(run());
+    expect(parsed.metrics?.precision.value).toBeNull();
+    expect(() => EvalRunRecord.parse(run({ status: 'queued' }))).toThrow();
+    expect(() => EvalRunRecord.parse(run({ cases_total: 'two' }))).toThrow();
+  });
+
+  it('EvalRunDetail / EvalRunStart', () => {
+    expect(() =>
+      EvalRunDetail.parse({
+        ...run(),
+        snapshot: {
+          provider: 'anthropic',
+          model: 'm',
+          strategy: 'auto',
+          system_prompt: 'p',
+          skills: [{ name: 's', body: 'b' }],
+        },
+        case_set: [{ id: 'c1', name: 'one' }],
+        case_results: [scored, errored],
+      }),
+    ).not.toThrow();
+    expect(() => EvalRunStart.parse({ id: 'r1', status: 'running' })).not.toThrow();
+    expect(() => EvalRunStart.parse({ id: 'r1', status: 'completed' })).toThrow();
+  });
+
+  it('EvalOverview / EvalDashboard allow null metrics in trend and sparkline', () => {
+    expect(() =>
+      EvalOverview.parse({
+        agent: { id: 'a1', name: 'n', model: 'm', enabled: true },
+        cases_total: 2,
+        finished_runs: 1,
+        running_run_id: null,
+        latest: run(),
+        previous: null,
+        trend: [
+          {
+            run_id: 'r1',
+            ran_at: 'x',
+            agent_version: 3,
+            recall: null,
+            precision: 0.5,
+            citation_accuracy: null,
+          },
+        ],
+        runs: [run()],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      EvalDashboard.parse({
+        agents: [
+          {
+            agent_id: 'a1',
+            agent_name: 'n',
+            model: 'm',
+            enabled: false,
+            cases_total: 0,
+            latest: null,
+            sparkline: [0.5, null, 1],
+          },
+        ],
+        recent_runs: [run()],
+      }),
+    ).not.toThrow();
+  });
+
+  it('EvalCompare / EvalCompareQuery', () => {
+    const ratios = { recall: 0.5, precision: null, citation_accuracy: 1 };
+    expect(() =>
+      EvalCompare.parse({
+        old: run(),
+        new: run({ id: 'r2' }),
+        common_cases: 2,
+        only_old: 0,
+        only_new: 1,
+        common: { old: ratios, new: ratios },
+        prompt_diff: [
+          { kind: 'context', text: 'a' },
+          { kind: 'removed', text: 'b' },
+          { kind: 'added', text: 'c' },
+        ],
+        prompt_changed: true,
+        skills_diff: { added: ['x'], removed: [], changed: ['y'] },
+        model_change: { from: 'm1', to: 'm2' },
+        strategy_change: null,
+      }),
+    ).not.toThrow();
+    const id = '123e4567-e89b-42d3-a456-426614174000';
+    expect(() => EvalCompareQuery.parse({ a: id, b: id })).not.toThrow();
+    expect(() => EvalCompareQuery.parse({ a: 'nope', b: id })).toThrow();
   });
 });
