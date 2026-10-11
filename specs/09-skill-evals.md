@@ -94,7 +94,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 | Phase | Delivers | IDs |
 |---|---|---|
 | A — Case Editor for both owners | agent tab **+ New eval case** and edit; skill tab list, create, edit, delete (its run buttons stay disabled as today until B); finding → skill case; contract `EvalCaseMeta` nullish, `EvalCaseInput`, `EvalCaseUpdate`; source-finding index widened | AC-1, AC-3, AC-5–AC-19, AC-43–AC-54; EC-1–EC-10, EC-29, EC-32–EC-37, EC-39, EC-41–EC-45; NFR-1, NFR-3, NFR-7, NFR-8, NFR-10, NFR-11, NFR-14, NFR-15, NFR-16; UI-1–UI-3, UI-5, UI-8–UI-12 |
-| B — Skill runner | carrier + two arms, `eval_runs` reshape, run dialog, list results, effect, lift | AC-2, AC-4, AC-20–AC-35, AC-40–AC-42; EC-11–EC-28, EC-30, EC-31, EC-38, EC-40; NFR-2, NFR-4, NFR-5, NFR-6, NFR-9, NFR-12, NFR-13; UI-4, UI-6, UI-7 |
+| B — Skill runner | carrier + two arms, `eval_runs` reshape, run dialog, list results, effect, lift | AC-2, AC-4, AC-20–AC-35, AC-40–AC-42, AC-59; EC-11–EC-28, EC-30, EC-31, EC-38, EC-40, EC-46; NFR-2, NFR-4, NFR-5, NFR-6, NFR-9, NFR-12, NFR-13; UI-4, UI-6, UI-7 |
 | C — Metric trend | shared chart with tooltip on both tabs and the detail page, `cost_usd` per agent trend point, window 100 | AC-36–AC-39, AC-55–AC-58; EC-28 (gaps), EC-30 (chart part) |
 
 **Non-goals**
@@ -180,7 +180,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 - **AC-21** (US-3) КОЛИ the run dialog is open, the system (shall) show the line "{n} cases · {2n} reviews" for the skill's current case count.
 - **AC-22** (US-3) КОЛИ the user confirms the run dialog, the system (shall) call `POST /skills/:id/eval-runs` with `carrier_agent_id`, which responds `202` with the new run's `id` and `status: "running"` before any case is reviewed.
 - **AC-23** (US-3) КОЛИ a skill eval run starts, the system (shall) record on the run the skill's `version`, name and body, the carrier's id, name and `version`, and the carrier's `provider`, `model`, `strategy` and `system_prompt` at that moment.
-- **AC-24** (US-3) КОЛИ a skill eval run starts, the system (shall) record as the with-skill arm's skill list the carrier's linked skills that are enabled for its prompt, in link order, with the skill under test included at its link position regardless of the skill's own `enabled` flag and the link's `enabled` flag.
+- **AC-24** (US-3) КОЛИ a skill eval run starts, the system (shall) record as the with-skill arm's skill list the carrier's linked skills that are enabled for its prompt, in link order, with the skill under test included at its link position regardless of the skill's own `enabled` flag and the link's `enabled` flag, placed after every other linked skill that has the same link `order`.
 - **AC-25** (US-3) КОЛИ a skill eval run starts, the system (shall) record as the without-skill arm's skill list the with-skill arm's list minus the skill under test.
 - **AC-26** (US-3) КОЛИ a skill eval run starts, the system (shall) record the ids and names of every case of the skill at that moment as the run's case set.
 - **AC-27** (US-3) ПОКИ a skill eval run executes, the system (shall) review each case of the run's case set once per arm, one review at a time, each with the case's parsed frozen diff, a task line built from the frozen PR title, the frozen description as the PR description, the run's snapshotted carrier provider, model, strategy and system prompt, and that arm's recorded skill list, with no repo-intel, project context, PR context, intent or out-of-scope filter.
@@ -196,6 +196,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 ### Read API (skill runs)
 - **AC-40** (US-2, US-3) КОЛИ the skill has a finished run, the system (shall) return in each `GET /skills/:id/eval-cases` item a `latest_result` holding the with-skill state, the without-skill state, the effect, the with-skill expected and got counts, the case's cost over both arms and the error reason from the latest finished run, or `null` when the case was not in that run.
 - **AC-41** (US-3, US-4) КОЛИ the client requests `GET /skills/:id/eval-overview`, the system (shall) return an `EvalSkillOverview` with `skill`, `cases_total`, `running_run_id`, `carriers` (the workspace agents linked to the skill), `latest` and `previous` (the two newest finished runs, `null` when absent) and `trend` (at most 100 finished runs, chronological).
+- **AC-59** (US-2, US-3) КОЛИ the client requests `GET /eval-cases/:id` for a skill-owned case and the skill has a finished run that included the case, the system (shall) return `latest_result` with the with-skill arm's state, expected and got counts and error reason, and the duration and cost summed over both arms, from the skill's latest finished run.
 - **AC-42** (US-3) КОЛИ the client requests `GET /eval-runs/:id`, the system (shall) return an `EvalRunDetail` discriminated by `owner_kind`, where a skill run carries the skill version, the carrier snapshot, both arms' skill lists, both arms' metrics, the lifts, the per-case results of both arms with each case's effect, and `cases_done` and `cases_total`.
 
 ### Metric trend
@@ -210,7 +211,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 
 ## Edge cases
 
-- **EC-1** ЯКЩО the pasted diff is larger than 204,800 UTF-8 bytes, ТОДІ the system (shall) block **Save** on the client and the server rejects the same input with `422` `frozen_diff_too_large`, both showing "The diff is larger than 200 KB — paste only the file you need" with every input unchanged.
+- **EC-1** ЯКЩО the pasted diff is larger than 204,800 UTF-8 bytes, ТОДІ the system (shall) block **Save** on the client and the server rejects the same input with `422` `frozen_diff_too_large` — checked in the service after the owner's `404` check and before the pasted diff is parsed, not by the request schema — both showing "The diff is larger than 200 KB — paste only the file you need" with every input unchanged.
 - **EC-42** ЯКЩО a create or edit request body exceeds the server's 1 MiB body limit and the server answers `413`, ТОДІ the system (shall) show the same message as EC-1 with every input unchanged.
 - **EC-2** ЯКЩО the pasted diff holds no hunk for the chosen file, ТОДІ the system (shall) reject the save with `422` `no_patch` and show "This diff has no changed lines for the chosen file".
 - **EC-3** ЯКЩО the expectation's line range intersects no hunk's new-side lines of the chosen file (for example old-side numbers were entered), ТОДІ the system (shall) reject the save with `422` `range_outside_diff` and show "The line range is outside the diff's changed lines — use new-side line numbers".
@@ -251,6 +252,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 - **EC-29** ЯКЩО the skill has no eval cases, ТОДІ the system (shall) show the empty state "No eval cases yet — create one from a diff, or turn a finding into a skill eval case on a PR" with a **+ New eval case** action.
 - **EC-45** ЯКЩО the agent has no eval cases, ТОДІ the system (shall) show the empty state "No eval cases yet — create one from a diff, or accept or dismiss findings on a PR and click Turn into eval case" with a **+ New eval case** action and a link to the Pull Requests page.
 - **EC-30** ЯКЩО the owner has eval cases but no finished run, ТОДІ the system (shall) show `never run` on every case, "—" for the passing count and the lift line, and "No runs yet" in place of the trend chart.
+- **EC-46** ЯКЩО the skill's `enabled` flag is false or the chosen carrier's `link_enabled` (from `EvalSkillOverview.carriers`) is false, ТОДІ the system (shall) show in the run dialog the warning "This skill or its link to {carrier} is disabled — the with-skill arm includes it anyway", updated when the carrier choice changes, and still allow the run.
 - **EC-31** ЯКЩО the skill has `injection_flagged` set, ТОДІ the system (shall) show in the run dialog the warning "This skill was flagged for prompt injection — its text is sent to the model in every with-skill review" and still allow the run.
 - **EC-32** ЯКЩО a skill, agent, case, finding, run or carrier id belongs to another workspace, ТОДІ the system (shall) respond `404` as if it did not exist.
 - **EC-33** ЯКЩО a case name, file path, skill name or carrier name does not fit its cell, menu item or tooltip line, ТОДІ the system (shall) truncate it with an ellipsis and expose the full text in a `title` attribute and to screen readers.
@@ -273,7 +275,7 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 - **NFR-13** The system (shall) return `GET /skills/:id/eval-overview`, `GET /skills/:id/eval-cases` and `GET /agents/:id/eval-overview` within 500 ms on a local database holding 100 finished runs and 50 cases for the owner.
 - **NFR-14** The system (shall) use only placeholder secrets such as `sk_live_xxx` and `ghp_xxx` in every fixture, seed and test of this feature.
 - **NFR-15** The system (shall) ship hermetic tests for the lift and effect computation (every `null` case included), the pasted-diff section extraction, header wrapping and CRLF normalisation, and the edit rule (in place vs replace, `created_at` kept, `case_input_locked`), plus a DB-backed integration test that skips itself without Docker and asserts the new routes, the `409` single-flight per skill, workspace scoping, the agent-read exclusion of NFR-5 and one case per owner and source finding.
-- **NFR-16** The system (shall) keep every SPEC-08 behaviour of the agent Evals tab not amended in Goals unchanged, verified by the existing agent Evals tab, Eval Dashboard and finding-card tests passing without edits to their assertions.
+- **NFR-16** The system (shall) keep every SPEC-08 behaviour of the agent Evals tab not amended in Goals unchanged, verified by the existing agent Evals tab, Eval Dashboard and finding-card tests passing without edits to their assertions, except the assertions on the amended behaviours — the read-only case modal on row click, rename in that modal, "Source no longer available" for manual cases and the empty-state copy — which are expected to change.
 
 ## Inputs and provenance
 
@@ -305,7 +307,8 @@ One spec, three phases, each green on its own (tests, typecheck, lint, arch).
 EvalCaseMeta            { pr_number?: int|null, repo_full_name?: string|null, title: string, body: string|null }   // nullish
 EvalCaseInput           // body of POST /agents/:id/eval-cases and POST /skills/:id/eval-cases
   { name: string(1..80), notes?: string(..2000)|null,
-    input_diff: string(..204800 bytes),
+    input_diff: string,            // no size cap in the schema: the 204,800-byte cap is a service
+                                   // check after the owner 404, before parsing → 422 frozen_diff_too_large (EC-1)
     input_meta: { title: string(1..200), body?: string(..5000)|null },
     expectation: { type: 'must_find'|'must_not_flag', file: string(1..500),
                    start_line: int>=1, end_line: int>=start_line,
@@ -327,11 +330,15 @@ EvalSkillTrendPoint     { run_id, ran_at, skill_version, carrier_agent_id, carri
                           recall, precision, citation_accuracy: number|null,   // with-skill arm
                           lift: EvalLift, cost_usd: number|null }
 EvalSkillOverview       { skill: { id, name, version, enabled }, cases_total, running_run_id: string|null,
-                          carriers: [{ agent_id, name, model, enabled }],
+                          carriers: [{ agent_id, name, version, model, enabled, link_enabled: boolean }],
                           latest, previous: EvalSkillRunRecord|null, trend: EvalSkillTrendPoint[] (<=100) }
+EvalCaseDetail          // GET /eval-cases/:id — for a skill-owned case, latest_result (EvalCaseLatestResult)
+                        // is derived from the latest finished skill run: state = with-skill arm's state,
+                        // expected/got = with-skill arm, duration_ms and cost_usd summed over both arms (AC-59)
 EvalTrendPoint          += cost_usd: number|null
 EvalRunDetail           discriminatedUnion('owner_kind', [
-                          EvalAgentRunDetail  (today's EvalRunDetail + owner_kind: 'agent'),
+                          EvalAgentRunDetail  (today's EvalRunDetail + owner_kind: 'agent' — additive: every agent
+                                               run response gains owner_kind: 'agent'; NFR-16 unaffected),
                           EvalSkillRunDetail  (EvalSkillRunRecord + snapshot{ carrier, skill{name, body, version},
                                                with_skills, without_skills: [{name, body}] },
                                                case_set, case_results: [{ case_id, case_name, with, without: EvalCaseOutcome,
@@ -358,7 +365,7 @@ SkillEvalRunRequest     { carrier_agent_id: uuid }   // POST /skills/:id/eval-ru
 
 ## Open questions
 
-- **Q-1** This spec exceeds the spec-authoring size guidance (58 AC, 45 EC across three features). Split it into SPEC-09 (Phase A: Case Editor for both owners + finding → skill case), SPEC-10 (Phase B: skill runner) and SPEC-11 (Phase C: metric trends)? — default: keep one spec delivered in the three phases of Goals, as the user decided; split only if plan review finds a phase cannot be verified on its own — owner: user.
+- **Q-1** This spec exceeds the spec-authoring size guidance (59 AC, 46 EC across three features). Split it into SPEC-09 (Phase A: Case Editor for both owners + finding → skill case), SPEC-10 (Phase B: skill runner) and SPEC-11 (Phase C: metric trends)? — default: keep one spec delivered in the three phases of Goals, as the user decided; split only if plan review finds a phase cannot be verified on its own — owner: user.
 - ~~**Q-2**~~ Dropped 2026-10-11 — the Case Editor on the agent Evals tab is now in scope (AC-43 to AC-45).
 - ~~**Q-3**~~ Dropped 2026-10-11 — the agent trend chart, tooltip and `cost_usd` are now in scope (AC-55 to AC-58).
 - **Q-4** Tooltip contents (AC-37, AC-56): is this the right set? — default: yes — owner: user.
@@ -374,4 +381,4 @@ SkillEvalRunRequest     { carrier_agent_id: uuid }   // POST /skills/:id/eval-ru
 - **Q-14** Skill run history table, run-detail modal and **Compare** for skill runs? — default: not in this spec — owner: user.
 - **Q-15** Polling timeout for a skill run: 20 minutes (EC-19, twice SPEC-08's 10 because every case runs twice)? — default: 20 minutes — owner: user.
 - **Q-16** Error codes for manual input: keep this branch's `no_patch` and `range_outside_diff` (spec-original for manual input) rather than upstream's `expectation_not_grounded`, and adopt upstream's `frozen_diff_too_large`? — default: yes — owner: user.
-- **Q-17** Warn in the run dialog when the skill itself or its link to the chosen carrier is disabled (upstream AC-52 / `gates_bypassed`), not only on `injection_flagged` (EC-31)? — default: yes — owner: user.
+- ~~**Q-17**~~ Dropped 2026-10-11 — default accepted and fixed in EC-46 (warning on a disabled skill or carrier link, via `carriers[].link_enabled`). Original question: warn in the run dialog when the skill itself or its link to the chosen carrier is disabled (upstream AC-52 / `gates_bypassed`), not only on `injection_flagged` (EC-31)? — default: yes — owner: user.
