@@ -8,9 +8,29 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+// SPEC-08: the panel also reads the PR's eval-case links + the agent list and can
+// create a case. Mock those hooks (the repo's pattern) so no QueryClient is needed.
+const evalMock = vi.hoisted(() => ({
+  links: { data: undefined as { links: { finding_id: string; case_id: string; agent_id: string }[] } | undefined },
+  agents: { data: undefined as { id: string }[] | undefined },
+  mutate: vi.fn(),
+}));
+vi.mock("../../../../../../../lib/hooks/eval", () => ({
+  usePullEvalCaseLinks: () => evalMock.links,
+  useCreateEvalCaseFromFinding: () => ({ mutate: evalMock.mutate, isPending: false, variables: undefined }),
+}));
+vi.mock("../../../../../../../lib/hooks/agents", () => ({
+  useAgents: () => evalMock.agents,
+}));
+
 import { FindingsPanel } from "./FindingsPanel";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  evalMock.links.data = undefined;
+  evalMock.agents.data = undefined;
+  evalMock.mutate.mockReset();
+});
 
 const FINDINGS: FindingRecord[] = [
   {
@@ -109,5 +129,40 @@ describe("FindingsPanel severity counters", () => {
     expect(screen.getByText("Dismissed one")).toBeInTheDocument();
     const group = screen.getByRole("group", { name: "Findings by severity" });
     expect(Array.from(group.querySelectorAll("button"))[0]!.textContent).toBe("Critical2");
+  });
+});
+
+describe("FindingsPanel eval case (SPEC-08)", () => {
+  const ACCEPTED: FindingRecord = { ...FINDINGS[0]!, accepted_at: "2026-09-17T00:00:00Z" };
+
+  it("AC-1: an accepted finding of an existing agent can be turned into an eval case", () => {
+    evalMock.agents.data = [{ id: "ag1" }];
+    renderWithIntl(<FindingsPanel findings={[ACCEPTED]} prId="pr1" agentId="ag1" />);
+    const btn = screen.getByRole("button", { name: "Turn into eval case" });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(evalMock.mutate).toHaveBeenCalledWith("f1", expect.anything());
+  });
+
+  it("EC-1: an undecided finding cannot be turned into a case", () => {
+    evalMock.agents.data = [{ id: "ag1" }];
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" agentId="ag1" />);
+    expect(screen.getByRole("button", { name: /Turn into eval case/ })).toBeDisabled();
+  });
+
+  it("EC-2: a finding whose agent was deleted is disabled with the reason", () => {
+    evalMock.agents.data = [{ id: "other" }];
+    renderWithIntl(<FindingsPanel findings={[ACCEPTED]} prId="pr1" agentId="ag1" />);
+    const btn = screen.getByRole("button", { name: /Turn into eval case/ });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAccessibleDescription("The agent that produced this finding was deleted");
+  });
+
+  it("AC-9: a finding that already has a case shows an In eval set link to the Evals tab", () => {
+    evalMock.agents.data = [{ id: "ag1" }];
+    evalMock.links.data = { links: [{ finding_id: "f1", case_id: "c1", agent_id: "ag1" }] };
+    renderWithIntl(<FindingsPanel findings={[ACCEPTED]} prId="pr1" agentId="ag1" />);
+    expect(screen.getByRole("link", { name: /In eval set/ })).toHaveAttribute("href", "/agents/ag1?tab=evals");
+    expect(screen.queryByRole("button", { name: /Turn into eval case/ })).not.toBeInTheDocument();
   });
 });

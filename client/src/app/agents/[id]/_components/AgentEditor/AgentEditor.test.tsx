@@ -46,3 +46,12 @@ describe("A2 Agent Editor (smoke)", () => {
     expect(screen.getByText("Save agent")).toBeInTheDocument();
   });
 });
+
+describe("A2 Agent Editor — Evals tab (SPEC-08)", () => {
+  it("AC-10: the tab bar lists Evals after Context", () => {
+    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
+    const context = screen.getByRole("button", { name: "Context" });
+    const evals = screen.getByRole("button", { name: "Evals" });
+    expect(context.compareDocumentPosition(evals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

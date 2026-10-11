@@ -7,8 +7,11 @@ import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
 import { SeverityCounts, severityCounts } from "@/components/severity-counts";
-import { FindingCard } from "../FindingCard";
+import { FindingCard, type EvalRejectionCode, type FindingEvalCase } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
+import { useAgents } from "../../../../../../../lib/hooks/agents";
+import { useCreateEvalCaseFromFinding, usePullEvalCaseLinks } from "../../../../../../../lib/hooks/eval";
+import { notify } from "../../../../../../../lib/toast";
 import { KEY_TO_ACTION } from "./constants";
 import { visibleFindings } from "./helpers";
 import { s } from "./styles";
@@ -16,11 +19,15 @@ import { s } from "./styles";
 export function FindingsPanel({
   findings,
   prId,
+  agentId,
   repoFullName,
   headSha,
 }: {
   findings: FindingRecord[];
   prId: string;
+  /** The agent that produced these findings (`review.agent_id`); null/unknown agent
+   *  disables "Turn into eval case" (EC-2). */
+  agentId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
 }) {
@@ -29,6 +36,38 @@ export function FindingsPanel({
   const [hideLow, setHideLow] = React.useState(false);
   const [severityFilter, setSeverityFilter] = React.useState<string | null>(null);
   const [focusIdx, setFocusIdx] = React.useState(0);
+
+  // SPEC-08: which findings already have an eval case, whether the producing agent
+  // still exists, and the last 422 per finding.
+  const links = usePullEvalCaseLinks(prId);
+  const agents = useAgents();
+  const createCase = useCreateEvalCaseFromFinding(prId);
+  const [rejections, setRejections] = React.useState<Record<string, EvalRejectionCode>>({});
+  const linkByFinding = React.useMemo(
+    () => new Map((links.data?.links ?? []).map((l) => [l.finding_id, l])),
+    [links.data],
+  );
+  // Only call the agent "missing" once the agent list has loaded — never while it loads.
+  const agentMissing = !agentId || (agents.data !== undefined && !agents.data.some((a) => a.id === agentId));
+
+  const evalCaseFor = (findingId: string): FindingEvalCase => {
+    const link = linkByFinding.get(findingId);
+    return {
+      link: link ? { caseId: link.case_id, agentId: link.agent_id } : null,
+      agentMissing,
+      creating: createCase.isPending && createCase.variables === findingId,
+      rejection: rejections[findingId] ?? null,
+      onCreate: () => {
+        setRejections(({ [findingId]: _cleared, ...rest }) => rest);
+        createCase.mutate(findingId, {
+          onSuccess: (result) => {
+            if (result.kind === "rejected") setRejections((r) => ({ ...r, [findingId]: result.code }));
+            else if (result.kind === "created") notify.success(t("evalCase.created"));
+          },
+        });
+      },
+    };
+  };
 
   // Counts come off the FULL list, never the filtered one, so the numbers stay
   // put while you filter. They do drop on dismiss — severityCounts skips
@@ -95,6 +134,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              evalCase={evalCaseFor(f.id)}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

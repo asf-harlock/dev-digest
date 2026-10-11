@@ -7,9 +7,11 @@ export interface EditorTab {
   icon: IconName;
 }
 
-/** Editor tabs. Part-0 shipped Config only; L02 adds Skills, SPEC-04 adds Context. */
+/** Editor tabs. Part-0 shipped Config only; L02 adds Skills, SPEC-04 adds Context,
+ *  SPEC-08 adds Evals. `VALID_TABS` in `app/agents/[id]/page.tsx` duplicates these keys. */
 export const TABS: readonly EditorTab[] = [
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
   { key: "skills", labelKey: "editor.tabs.skills", icon: "Wrench" },
   { key: "context", labelKey: "editor.tabs.context", icon: "FileText" },
+  { key: "evals", labelKey: "editor.tabs.evals", icon: "FlaskConical" },
 ];

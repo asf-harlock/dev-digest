@@ -1,0 +1,399 @@
+/* hooks/eval.ts — React Query hooks for the Eval Pipeline (specs/08-eval-pipeline.md).
+   Cases come from triaged findings (POST /findings/:id/eval-case); a run is a
+   background job on the server, so — like hooks/intent.ts — `POST …/eval-runs`
+   only confirms the start and `useEvalRun` polls `GET /eval-runs/:id` until the
+   status leaves `running`. Contracts are imported as TYPES only: a runtime
+   import from `@devdigest/shared` breaks `next build` (client/INSIGHTS.md). */
+"use client";
+
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  EvalCase,
+  EvalCaseDetail,
+  EvalCaseLinks,
+  EvalCaseListItem,
+  EvalCompare,
+  EvalDashboard,
+  EvalOverview,
+  EvalRunDetail,
+  EvalRunStart,
+} from "@devdigest/shared";
+import { api, ApiError } from "../api";
+
+// ---------------------------------------------------------------------------
+// Query keys — one place, so the invalidations below cannot drift apart.
+// ---------------------------------------------------------------------------
+
+export const evalKeys = {
+  /** Prefix of every case-list query (all agents). */
+  casesAll: ["eval-cases"] as const,
+  cases: (agentId: string | null | undefined) => ["eval-cases", agentId] as const,
+  case: (caseId: string | null | undefined) => ["eval-case", caseId] as const,
+  overview: (agentId: string | null | undefined) => ["eval-overview", agentId] as const,
+  run: (runId: string | null | undefined) => ["eval-run", runId] as const,
+  dashboard: ["eval-dashboard"] as const,
+  compare: (a: string | null | undefined, b: string | null | undefined) =>
+    ["eval-compare", a, b] as const,
+  links: (pullId: string | null | undefined) => ["eval-case-links", pullId] as const,
+};
+
+/** A 4xx is an answer, not a blip — don't retry it (the default retries once). */
+function retryUnlessClientError(failureCount: number, err: unknown): boolean {
+  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return false;
+  return failureCount < 1;
+}
+
+/** Reads a string id out of an `ApiError.details` object, trying the given keys. */
+function detailsId(details: unknown, keys: readonly string[]): string | null {
+  if (!details || typeof details !== "object") return null;
+  const bag = details as Record<string, unknown>;
+  for (const key of keys) {
+    const v = bag[key];
+    if (typeof v === "string" && v) return v;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Case set
+// ---------------------------------------------------------------------------
+
+/** `GET /agents/:id/eval-cases` — newest first, each with its latest result. */
+export function useAgentEvalCases(agentId: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.cases(agentId),
+    queryFn: () => api.get<EvalCaseListItem[]>(`/agents/${agentId}/eval-cases`),
+    enabled: !!agentId,
+  });
+}
+
+/** `GET /eval-cases/:id` — frozen input + `source` (null once the PR is gone). */
+export function useEvalCase(caseId: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.case(caseId),
+    queryFn: () => api.get<EvalCaseDetail>(`/eval-cases/${caseId}`),
+    enabled: !!caseId,
+    retry: retryUnlessClientError,
+  });
+}
+
+/** `PATCH /eval-cases/:id` — rename only. 422 `validation_error` on an empty or >80 name. */
+export function useRenameEvalCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ caseId, name }: { caseId: string; name: string }) =>
+      api.patch<EvalCase>(`/eval-cases/${caseId}`, { name }),
+    onSuccess: (_data, { caseId }) => {
+      qc.invalidateQueries({ queryKey: evalKeys.case(caseId) });
+      qc.invalidateQueries({ queryKey: evalKeys.casesAll });
+    },
+  });
+}
+
+/** `DELETE /eval-cases/:id` → 204. Past runs keep their results (AC-18). */
+export function useDeleteEvalCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ caseId }: { caseId: string }) => api.del<void>(`/eval-cases/${caseId}`),
+    onSuccess: (_data, { caseId }) => {
+      qc.removeQueries({ queryKey: evalKeys.case(caseId) });
+      qc.invalidateQueries({ queryKey: evalKeys.casesAll });
+      qc.invalidateQueries({ queryKey: ["eval-overview"] });
+      qc.invalidateQueries({ queryKey: evalKeys.dashboard });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Turn a finding into a case
+// ---------------------------------------------------------------------------
+
+/** Codes of the 422s the PR page renders inline (EC-1, EC-2, EC-4, EC-5). */
+export type EvalCaseRejection =
+  | "finding_undecided"
+  | "agent_missing"
+  | "no_patch"
+  | "range_outside_diff";
+
+const CASE_REJECTIONS: readonly string[] = [
+  "finding_undecided",
+  "agent_missing",
+  "no_patch",
+  "range_outside_diff",
+];
+
+export type CreateEvalCaseResult =
+  /** 201 — the case was created. */
+  | { kind: "created"; caseId: string; agentId: string }
+  /** 409 `eval_case_exists` — already in the set; shown as "In eval set" (EC-3).
+   *  `caseId` comes from the error `details` and is null if the server omitted it. */
+  | { kind: "exists"; caseId: string | null }
+  /** A 422 the UI explains inline with a prReview.json string. */
+  | { kind: "rejected"; code: EvalCaseRejection };
+
+/**
+ * `POST /findings/:id/eval-case`, no body. `mutate(findingId)`.
+ *
+ * The mutation RESOLVES (does not throw) for the outcomes the UI handles itself —
+ * 201, 409 `eval_case_exists`, and the four 422 codes — so the global
+ * MutationCache does not also raise a generic toast for them. Anything else
+ * (network, 5xx, 404) still throws and is toasted once by the global handler.
+ *
+ * @param pullId the PR the finding belongs to — its case-links query is refreshed.
+ */
+export function useCreateEvalCaseFromFinding(pullId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (findingId: string): Promise<CreateEvalCaseResult> => {
+      try {
+        const created = await api.post<EvalCase>(`/findings/${findingId}/eval-case`);
+        return { kind: "created", caseId: created.id, agentId: created.owner_id };
+      } catch (err) {
+        if (err instanceof ApiError) {
+          if (err.status === 409 && err.code === "eval_case_exists") {
+            return { kind: "exists", caseId: detailsId(err.details, ["case_id", "caseId", "id"]) };
+          }
+          if (err.status === 422 && err.code && CASE_REJECTIONS.includes(err.code)) {
+            return { kind: "rejected", code: err.code as EvalCaseRejection };
+          }
+        }
+        throw err;
+      }
+    },
+    onSuccess: (result, findingId) => {
+      if (result.kind === "rejected") return;
+      if (result.kind === "created") {
+        // Flip the card to "In eval set" without waiting for the refetch.
+        qc.setQueryData<EvalCaseLinks>(evalKeys.links(pullId), (old) => ({
+          links: [
+            ...(old?.links ?? []).filter((l) => l.finding_id !== findingId),
+            { finding_id: findingId, case_id: result.caseId, agent_id: result.agentId },
+          ],
+        }));
+      }
+      qc.invalidateQueries({ queryKey: evalKeys.links(pullId) });
+      qc.invalidateQueries({ queryKey: evalKeys.casesAll });
+      qc.invalidateQueries({ queryKey: ["eval-overview"] });
+    },
+  });
+}
+
+/** `GET /pulls/:id/eval-case-links` — which findings of the PR already have a case. */
+export function usePullEvalCaseLinks(pullId: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.links(pullId),
+    queryFn: () => api.get<EvalCaseLinks>(`/pulls/${pullId}/eval-case-links`),
+    enabled: !!pullId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Overview, dashboard, compare
+// ---------------------------------------------------------------------------
+
+/** `GET /agents/:id/eval-overview` — KPIs, trend, run history, `running_run_id`. */
+export function useAgentEvalOverview(agentId: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.overview(agentId),
+    queryFn: () => api.get<EvalOverview>(`/agents/${agentId}/eval-overview`),
+    enabled: !!agentId,
+  });
+}
+
+/** `GET /eval-dashboard` — every agent's latest metrics + the last 20 runs. */
+export function useEvalDashboard() {
+  return useQuery({
+    queryKey: evalKeys.dashboard,
+    queryFn: () => api.get<EvalDashboard>("/eval-dashboard"),
+  });
+}
+
+/**
+ * `GET /eval-runs/compare?a&b`. Disabled until both ids are set. A 422
+ * `run_not_finished` / `runs_not_comparable` or a 404 surfaces as `error`
+ * (an `ApiError` — branch on `status` / `code`); 4xx is not retried.
+ */
+export function useEvalCompare(a: string | null | undefined, b: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.compare(a, b),
+    queryFn: () =>
+      api.get<EvalCompare>(
+        `/eval-runs/compare?a=${encodeURIComponent(a ?? "")}&b=${encodeURIComponent(b ?? "")}`,
+      ),
+    enabled: !!a && !!b,
+    retry: retryUnlessClientError,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /agents/:id/eval-runs` → 202 `{id, status: "running"}`. `mutate()`.
+ *
+ * A 409 `eval_run_in_progress` (double click, second tab — EC-10/EC-37) resolves
+ * with the already-running run's id from the error `details`, so the caller just
+ * follows that run. If the server omitted the id the error is rethrown. Like
+ * `useClassifyIntent`, `isPending` only covers the request: track the run with
+ * `useEvalRun` (or `overview.running_run_id`), not with `isPending`.
+ */
+export function useStartEvalRun(agentId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<EvalRunStart> => {
+      try {
+        return await api.post<EvalRunStart>(`/agents/${agentId}/eval-runs`);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409 && err.code === "eval_run_in_progress") {
+          const id = detailsId(err.details, ["run_id", "runId", "id"]);
+          if (id) return { id, status: "running" };
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: evalKeys.overview(agentId) });
+      qc.invalidateQueries({ queryKey: evalKeys.dashboard });
+    },
+  });
+}
+
+/** `GET /eval-runs/:id` once, no polling — for opening an already finished run
+ *  (run-detail modal). Use `useEvalRun` to follow a run that is executing. */
+export function useEvalRunDetail(runId: string | null | undefined) {
+  return useQuery({
+    queryKey: evalKeys.run(runId),
+    queryFn: () => api.get<EvalRunDetail>(`/eval-runs/${runId}`),
+    enabled: !!runId,
+    retry: retryUnlessClientError,
+  });
+}
+
+/** Re-read the run this often while it is `running`… */
+export const EVAL_RUN_POLL_MS = 2000;
+/** …and stop after this long (EC-15): the server only ever finishes or reaps a run
+ *  on its next boot, so a timeout is the honest end of the client's wait. */
+export const EVAL_RUN_TIMEOUT_MS = 10 * 60 * 1000;
+
+export interface EvalRunCallbacks {
+  /** The run left `running` (completed / partial / errored). Fires once per run. */
+  onFinished?: (run: EvalRunDetail) => void;
+  /** Still `running` after EVAL_RUN_TIMEOUT_MS; polling stopped (EC-15). */
+  onTimeout?: () => void;
+  /** Polling stopped because a poll request failed — the global QueryCache already
+   *  toasted it once; do not toast again (EC-16). */
+  onPollFailed?: () => void;
+}
+
+/**
+ * Follows one eval run until it finishes. Pass the id from `useStartEvalRun`
+ * or `overview.running_run_id`; `null`/`undefined` idles.
+ *
+ * - Polls `GET /eval-runs/:id` every EVAL_RUN_POLL_MS while `status === "running"`
+ *   and stops by itself the moment it is anything else (AC-26). The mutation's
+ *   `isPending` is never used as the loading state.
+ * - After EVAL_RUN_TIMEOUT_MS still running → `timedOut` (EC-15), polling stops.
+ * - A failed poll → `pollFailed`, polling stops, no extra toast; `retry()` resumes
+ *   with a fresh timeout window (EC-16).
+ * - On finish, the agent's overview, case list and the dashboard are invalidated
+ *   (AC-26) and `onFinished` fires once.
+ */
+export function useEvalRun(
+  runId: string | null | undefined,
+  callbacks: EvalRunCallbacks = {},
+) {
+  const qc = useQueryClient();
+  const cb = React.useRef(callbacks);
+  // Keep the latest callbacks without writing a ref during render.
+  React.useLayoutEffect(() => {
+    cb.current = callbacks;
+  });
+
+  const query = useQuery({
+    queryKey: evalKeys.run(runId),
+    queryFn: () => api.get<EvalRunDetail>(`/eval-runs/${runId}`),
+    enabled: !!runId,
+    // Surface a failed poll at once; the interval below decides to stop, not retry.
+    retry: false,
+  });
+
+  const [halt, setHalt] = React.useState<{ runId: string; reason: "timeout" | "failed" } | null>(
+    null,
+  );
+  const halted = halt && halt.runId === runId ? halt.reason : null;
+  const pollStart = React.useRef<{ runId: string; at: number } | null>(null);
+
+  const run = query.data;
+  const status = run?.status;
+  const isRunning = status === "running";
+  const polling = !!runId && isRunning && halted === null;
+
+  // Poll while running; stop on timeout or a failed poll.
+  React.useEffect(() => {
+    if (!polling || !runId) return;
+    if (pollStart.current?.runId !== runId) pollStart.current = { runId, at: Date.now() };
+    const startedAt = pollStart.current.at;
+    const id = setInterval(() => {
+      if (Date.now() - startedAt >= EVAL_RUN_TIMEOUT_MS) {
+        // Stop in this tick: the effect cleanup only runs after the re-render,
+        // and more ticks could fire before it (→ duplicate timeout callbacks).
+        clearInterval(id);
+        setHalt({ runId, reason: "timeout" });
+        cb.current.onTimeout?.();
+        return;
+      }
+      // Stop instead of retrying into an outage — every failed refetch would raise
+      // another global error toast. Only a failure since this window started counts.
+      const state = qc.getQueryState(evalKeys.run(runId));
+      if (state?.status === "error" && state.errorUpdatedAt >= startedAt) {
+        clearInterval(id);
+        setHalt({ runId, reason: "failed" });
+        cb.current.onPollFailed?.();
+        return;
+      }
+      qc.invalidateQueries({ queryKey: evalKeys.run(runId) });
+    }, EVAL_RUN_POLL_MS);
+    return () => clearInterval(id);
+  }, [polling, runId, qc]);
+
+  // Finished: refresh everything the run changed, once per run.
+  const finishedFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!run) return;
+    if (run.status === "running" || finishedFor.current === run.id) return;
+    finishedFor.current = run.id;
+    qc.invalidateQueries({ queryKey: evalKeys.overview(run.agent_id) });
+    qc.invalidateQueries({ queryKey: evalKeys.cases(run.agent_id) });
+    qc.invalidateQueries({ queryKey: evalKeys.dashboard });
+    cb.current.onFinished?.(run);
+  }, [run, qc]);
+
+  const retry = React.useCallback(() => {
+    pollStart.current = null; // a fresh timeout window
+    setHalt(null);
+    void query.refetch();
+  }, [query]);
+
+  // The first fetch can fail before any data exists (`status` is still undefined).
+  const firstFetchFailed = query.isError && !run;
+
+  return {
+    /** The run record; undefined until the first response. */
+    run,
+    /** First load only — not the polling refetches. */
+    isLoading: query.isLoading,
+    /** `status === "running"` (the polling state). */
+    isRunning,
+    /** `{done, total}` for "Running case {k} of {n}" (k = done + 1). */
+    progress: { done: run?.cases_done ?? 0, total: run?.cases_total ?? 0 },
+    /** Still running after EVAL_RUN_TIMEOUT_MS (EC-15). */
+    timedOut: halted === "timeout",
+    /** A poll request failed and polling stopped (EC-16). Show a Retry action. */
+    pollFailed: halted === "failed" || firstFetchFailed,
+    /** Resume polling after a failed poll (or re-check after a timeout). */
+    retry,
+    error: query.error,
+  };
+}

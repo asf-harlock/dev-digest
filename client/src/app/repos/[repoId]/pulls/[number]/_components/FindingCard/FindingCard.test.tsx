@@ -68,3 +68,25 @@ describe("FindingCard (smoke, both themes)", () => {
     expect(screen.getByText("Outside PR scope")).toBeInTheDocument();
   });
 });
+
+describe("FindingCard eval case (SPEC-08)", () => {
+  const evalCase = {
+    link: null,
+    agentMissing: false,
+    creating: false,
+    rejection: null,
+    onCreate: vi.fn(),
+  };
+
+  it("AC-1: an expanded card with an evalCase shows Turn into eval case after Accept and Dismiss", () => {
+    const decided = { ...FINDING, accepted_at: "2026-09-17T00:00:00Z" };
+    renderWithIntl(<FindingCard f={decided} defaultExpanded onAction={() => {}} evalCase={evalCase} />);
+    fireEvent.click(screen.getByRole("button", { name: "Turn into eval case" }));
+    expect(evalCase.onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no eval button where the card has no review/agent context (evalCase omitted)", () => {
+    renderWithIntl(<FindingCard f={FINDING} defaultExpanded onAction={() => {}} />);
+    expect(screen.queryByRole("button", { name: /eval case/i })).not.toBeInTheDocument();
+  });
+});
