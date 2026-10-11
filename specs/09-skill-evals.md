@@ -1,6 +1,6 @@
 # Spec: Eval Case Editor, skill eval runs and metric trends
 Spec ID: SPEC-09
-Status: draft
+Status: implemented
 Supersedes: —
 
 ## Проблема й користувач
