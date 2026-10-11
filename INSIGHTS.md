@@ -102,6 +102,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Codebase Patterns
 
+- **2026-10-11** — `pnpm verify:l06` is named in the L06 brief but no script by
+  that name exists on `main`, `origin` or `upstream/main`: it appears only on the
+  remote ref `upstream/full-functionality` (`server/package.json:14`), as a plain
+  `vitest run` over six eval test files written for that branch's own SPEC-12.
+  It checks no spec path and no schema snapshot. A fork that wants the gate has
+  to define it itself and name the files it covers — here in
+  `server/package.json` (SPEC-08 NFR-10). That ref is also the only place a prior
+  eval implementation exists (`git show upstream/full-functionality:<path>`);
+  `git log -S` on `main` finds nothing because the revert commit removed it.
+  `server/package.json`, `specs/08-eval-pipeline.md`
+
 - **2026-10-08** — `pnpm arch` covers only `server/` and `client/`, so nothing
   gates module boundaries in `reviewer-core/`, `mcp/`, `e2e/` or `evals/`.
   `reviewer-core/test/run.test.ts:3` and `test/project-context.test.ts:8-9` import

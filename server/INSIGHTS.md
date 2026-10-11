@@ -313,6 +313,17 @@ needed none of those and cannot drift.
 
 ## Tool & Library Notes
 
+- **2026-10-11** — `drizzle-kit generate` stops to ask "created or renamed?"
+  when one table gets a column added and a column dropped in the same run, and
+  a non-interactive shell cannot answer. Widening `eval_runs` was split into two
+  schema edits, each followed by `pnpm db:generate < /dev/null`: pass 1 only
+  adds columns (`0020_eager_cassandra_nova.sql`), pass 2 only drops them
+  (`0021_strong_psynapse.sql`). Neither pass prompted. If a pass still asks about
+  a rename, the two edits were merged — stop and split them again rather than
+  answering the prompt. Adding NOT NULL columns without a default also only
+  applies on an empty table; check the row counts before `pnpm db:migrate`.
+  `server/src/db/schema/eval.ts`, `server/src/db/migrations/0020_eager_cassandra_nova.sql`
+
 - **2026-10-03** — `js-tiktoken` (`TiktokenTokenizer`, cl100k) is quadratic
   on a long run of one repeated character: counting 8 KB of `'x'` takes 3.1 s,
   80 KB of prose 5 ms. A fixture like `'x'.repeat(80 * 1024)` sent through any

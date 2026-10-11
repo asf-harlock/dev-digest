@@ -21,6 +21,17 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-10-11** — The kit charts in `src/vendor/ui/charts/` cannot show an
+  absent metric or a whole-point delta, so a metric that can be `null` (recall
+  with no `must_find` cases) must not go through them. `LineChart` coerces a
+  missing value with `s.data[i] ?? 0` and fixes the y-range to 0.6–1.0, so a
+  null draws as 0% and low scores clip off the chart. `MetricCard` prints its
+  `delta` prop as `Math.abs(delta).toFixed(2)`, so "▲ 4 pt" renders as "4.00".
+  `Sparkline` takes no gaps. The Eval pages use their own SVG (`GapSparkline`,
+  `MetricTrend`) and render the delta under the card with `formatDeltaPoints`.
+  Reusing the kit here passes typecheck and shows wrong numbers.
+  `client/src/vendor/ui/charts/LineChart.tsx`, `client/src/app/eval/_components/GapSparkline`
+
 - **2026-09-24** — On a fire-and-forget endpoint (`POST /pulls/:id/intent`
   returns `{status:"running"}` at once), `useMutation().isPending` is not a
   loading state. It flips back within milliseconds while the real work runs for
