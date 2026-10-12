@@ -227,6 +227,10 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `borderColor` on `focused`; `ConventionCard` would on `status`). Fix: write every
   side as a longhand (`borderTopColor`/`Right`/`Bottom`/`Left`, same for `*Width`).
   `FindingCard/styles.ts`, `ConventionCard/styles.ts`.
+  **Same day:** the same warning came from `border` + `borderLeftWidth`
+  (`TypeBanner`, `ResultBanner`) and `border` + a hover `borderColor` in the kit
+  `Button` (`vendor/ui/primitives/Button.tsx`). Any `border` shorthand whose value or
+  sibling longhand changes between renders triggers it.
 
 - **2026-09-30** — `next build`/`next dev` fails with `Module not found: Can't
   resolve './contracts/findings.js'` when any client file imports a runtime

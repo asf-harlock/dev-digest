@@ -10,8 +10,10 @@ export const s = {
     minWidth: 0,
     padding: "8px 12px",
     borderRadius: 7,
-    border: `1px solid ${color}`,
-    borderLeftWidth: 4,
+    // No `border` shorthand next to a per-side width: React warns when `color` changes.
+    borderStyle: "solid",
+    borderColor: color,
+    borderWidth: "1px 1px 1px 4px",
     background: "var(--bg-surface)",
     fontSize: 13,
   }),
