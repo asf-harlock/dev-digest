@@ -219,6 +219,15 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-12** — Console error `Updating a style property during rerender
+  (borderColor) when a conflicting property is set (borderLeftColor)`:
+  `borderColor` and `borderWidth` are themselves shorthands (all four sides), so
+  avoiding `border` vs `borderLeft` is not enough — `borderColor` + `borderLeftColor`
+  warns as soon as either value changes on rerender (`FindingCard` toggled
+  `borderColor` on `focused`; `ConventionCard` would on `status`). Fix: write every
+  side as a longhand (`borderTopColor`/`Right`/`Bottom`/`Left`, same for `*Width`).
+  `FindingCard/styles.ts`, `ConventionCard/styles.ts`.
+
 - **2026-09-30** — `next build`/`next dev` fails with `Module not found: Can't
   resolve './contracts/findings.js'` when any client file imports a runtime
   VALUE (a function or const, not a type) from `@devdigest/shared`. That pulls
@@ -250,7 +259,8 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 - **2026-10-12** — SPEC-10 (Case Editor from a finding, per-case Run, Evals tab
   redesign). Recorded three kit/stacking traps found only in the browser or by the
   bug reviewer (What Doesn't Work, Tool & Library Notes) and corrected the
-  `SkillEvalMenu` entry.
+  `SkillEvalMenu` entry. Later: fixed the React border shorthand warning in the
+  FindingCard and ConventionCard styles (Recurring Errors & Fixes).
 
 - **2026-10-11** — SPEC-09 (Case Editor, skill eval runs, metric trend). Recorded
   the `src/components/**` no-`_components/` rule and the `FindingsPanel` hook-mock
