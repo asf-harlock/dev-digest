@@ -114,6 +114,38 @@ files. Another workstream's half-finished files can break a package-wide
 owned"; name the failure in your report. The caller runs the outer loop once
 all workstreams have finished.
 
+**Shared working tree — read-only git only.** In a multi-agent run another
+workstream is editing the same tree while you work. Never run `git stash`,
+`git checkout`, `git reset`, `git restore`, `git clean` or `git rebase` there:
+even a two-second stash/pop reverts the other workstream's files under it
+(SPEC-10 retro: W3-A stashed to count a baseline while W2-A was running). To
+compare with the base use `git diff <sha> -- <path>` or `git show <sha>:<path>`.
+
+**Workstream size.** If the workstream you were given has more than 6 steps or
+would create more than 4 new component folders, say so on the first line of
+your report ("workstream too large: N steps, M new folders") so the caller can
+split it next time. Finish it anyway; do not split it yourself.
+
+## Things the gates cannot see (client UI)
+
+`typecheck`, `lint`, `arch` and jsdom tests do not catch these; apply them as
+you write, and name in the report that you checked each one (SPEC-10: all three
+reached review or the browser):
+
+- **Form buttons.** A kit `Button` renders `<button {...rest}>` with no default
+  `type`, so inside a `<form>` it submits. Put `type="button"` on every kit
+  `Button`/`IconBtn` in a form that must not submit; add a test that clicking
+  it sends no request (`vendor/ui/primitives/Button.tsx`).
+- **Modal inside a container.** A modal rendered inside a card/panel inherits
+  that ancestor's `opacity`, `transform` and `overflow` and its z-index is
+  trapped in the ancestor's stacking context (a decided `FindingCard` is
+  `opacity: 0.6`). Mount it with `createPortal(…, document.body)` and a
+  `stopPropagation` wrapper so clicks do not reach the container's `onClick`.
+- **Modal width.** The kit `Modal` does not constrain a numeric `width`
+  (`maxWidth: 100%` is ignored in its grid), so a wide dialog overflows narrow
+  windows. Pass a fitted width — `useFittedModalWidth(max)` from
+  `src/lib/modal-width.ts` — and never edit `vendor/ui`.
+
 ## Fix mode — when the prompt starts with "Fix mode"
 
 The caller (`/run-plan`) hands you a findings file

@@ -77,6 +77,20 @@ in the matrix, not as a general quality opinion.
 
 ## Step 4 — report
 
+You have no `Write`: **the caller saves your reply**, verbatim, to the matrix
+file it names (`.claude/sdd/<SPEC>/verify-N.md`). Never write a matrix file
+yourself (not through `Bash` either) and never say "I could not save …" —
+just return the matrix as your final message; a re-run of a prior pass is
+delivered the same way. When you are resumed for a later pass, keep the plan,
+spec and diff you already read: re-read only the files that changed since and
+answer as a delta (full rows for what was non-Pass or whose evidence changed,
+one `Pass (unchanged since <previous pass>)` count per group for the rest).
+
+A row that needs a browser (layout, overlap, scrollbars, visual state) is
+`Unverified` from you — you have no browser. If the caller says it measured
+that in the running app, mark it `Pass on caller's evidence` and quote the
+numbers it gave; never upgrade it to a plain `Pass`.
+
 Return your final message in this structure:
 
 ```markdown

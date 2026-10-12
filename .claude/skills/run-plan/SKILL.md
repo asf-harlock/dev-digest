@@ -29,7 +29,7 @@ suggest `/model sonnet` once before starting.
 |---|---|
 | `SPEC-NN` | plan at `.claude/sdd/SPEC-NN/plan.md` |
 | a path | that plan file; if it lives elsewhere, copy it to `.claude/sdd/SPEC-NN/plan.md` first |
-| `--tests` | also run `test-writer` (off by default, to save tokens) |
+| `--tests` | run `test-writer` without asking (otherwise Phase 0 asks once when the plan has a W4 row) |
 | free text | implementation notes → passed to implementer as constraints. If a note adds or changes **what** the feature does, stop: that is a spec change (`spec-creator`), then a re-plan |
 | design paths / Figma URLs | visual reference for frontend steps, passed to implementer as data |
 
@@ -62,7 +62,14 @@ which phase it is in and resume from there (the user can say "restart").
    Docker up). Record the failing test names as `baseline_failures` in
    `state.json` (`[]` = green). Later "pre-existing failure" claims must match
    this list; a failure that is not in it belongs to this run.
-4. Write `state.json` with `phase: "implement"`.
+4. Tests. If the plan's Execution table has a `test-writer` row and `--tests`
+   was not given, ask the user once — "Run the test-writer? Recommended: it
+   proves the plan's ACs and, for a multi-phase plan, writing tests per phase
+   avoids a back-fill and a pile of Unverified rows (SPEC-10 retro: skipping W4
+   in Phase A left 8 Unverified)." Do not wait for the answer to start
+   Phase 1 (see "A pending question…"). Record the answer as `tests` in
+   `state.json`; `--tests` means `tests: true` without asking.
+5. Write `state.json` with `phase: "implement"`.
 
 ## Phase 1 — implement
 
@@ -72,14 +79,25 @@ which phase it is in and resume from there (the user can say "restart").
   Execution table, in dependency order; workstreams with no dependency between
   them go **in one message** so they run in parallel. Each prompt adds:
   "You are workstream W<n> of a multi-agent run. Files owned: `<list>`. Run
-  only the inner loop." Workstreams whose agent is `test-writer` are skipped
-  unless `--tests`; any reviewer rows are ignored (Phase 3 owns review).
+  only the inner loop." Workstreams whose agent is `test-writer` run only when
+  `tests` is true (`--tests` or the Phase 0 answer); any reviewer rows are
+  ignored (Phase 3 owns review). Split the test brief by layer: the server
+  tests depend only on the server workstream(s), so launch that test-writer as
+  soon as they finish, in the same message as — or while — the client
+  workstream still runs; the client test-writer starts after the client
+  workstream (SPEC-10 retro: one test-writer launched only after the slower
+  client workstream waited ~10 min on work that did not depend on it).
+- **Shared tree.** Parallel workstreams edit one working tree. Every
+  implementer prompt carries: "Never run `git stash`, `git checkout`, `git
+  reset` or `git clean` — another workstream is editing this tree." (SPEC-10
+  retro: W3-A stashed and popped under a running W2-A.)
 - **Outer loop (you).** After the last workstream: every gate in the plan's
   Test plan via `./scripts/check.sh <pkg> <gate>`. On FAIL, resume the owning
   implementer (SendMessage) with the FAIL excerpt; at most 2 rounds, then
   report to the user and stop.
-- `--tests` → now run `test-writer` with the plan path and the spec's AC/EC
-  list; ask it to put the ID in each test name (`it('AC-3: …')`).
+- `tests` true → run the `test-writer`(s) as described above, with the plan
+  path and the spec's AC/EC list; ask it to put the ID in each test name
+  (`it('AC-3: …')`).
 - **Migrations.** If the diff adds a file under `server/src/db/migrations/`,
   ask the user once, right after the gates pass, whether to apply it, then run
   `cd server && pnpm db:migrate` — before any browser check, Playwright step
@@ -96,11 +114,34 @@ which phase it is in and resume from there (the user can say "restart").
 
 `plan-verifier`: "Plan `<plan>`, spec `<spec>`, diff `<base_sha>`..working
 tree. Pass 1 of 2: report every Fail. Items that only a test could prove are
-Unverified, and that is expected<, test-writer is disabled>." Save to
-`verify-1.md`.
+Unverified, and that is expected<, test-writer is disabled>." `plan-verifier`
+has no `Write` tool: **you** save its reply, as returned, to `verify-1.md`
+(never ask it to save a file).
 
-Fail rows → resume `implementer` with just those rows. Re-run plan-verifier
-on them only. At most 2 rounds; what is still Fail goes to the user.
+Fail rows → resume `implementer` with just those rows. Re-check them by
+**resuming the same `plan-verifier`** (`SendMessage`), not by launching a new
+one — it already holds the plan, spec and diff (SPEC-10 retro: three fresh
+re-verifies cost 127k fresh tokens, 50–67% of their reads shared with the
+first). Launch a fresh one only if it cannot be resumed, or for another phase
+(a different diff base). At most 2 rounds; what is still Fail goes to the
+user.
+
+## Phase 2b — manual browser check (orchestrator)
+
+Plan steps marked "manual browser check" (layout, overlap, scrollbars,
+responsive widths, visual states) belong to **you**, not to `plan-verifier`
+or an implementer: neither has a browser, so their rows end `Unverified` or
+"Pass on your word". Do them with the Playwright MCP tools, at each viewport
+the spec names, and measure rather than eyeball (`getBoundingClientRect` of
+the dialog and its footer, ancestors' `opacity`/`transform`/`overflow`,
+scrollers). Rules: use data that already exists in the local DB; never create
+or decide data without asking, and put back any temporary change exactly as it
+was; never press Save/Create in a flow that writes. A defect becomes a finding
+`M<n>` (CRITICAL when it blocks a spec AC) fixed by the owning implementer in
+Fix mode, then re-measured. Record the viewports and numbers in the run's
+wrap-up — the spec's PR-description requirement needs them. (SPEC-10 retro:
+this found a translucent modal and a dialog wider than the window that no
+reviewer or verifier could see.)
 
 ## Phase 3 — review (parallel, one message)
 
@@ -142,8 +183,9 @@ Each round N:
 
 ## Phase 5 — verify #2 (definition of done)
 
-`plan-verifier` again, gates re-run → `verify-2.md`. Give it the path of
-`verify-1.md` and ask for a **delta matrix**: a full row only for (a) every row
+`plan-verifier` again — **resume the pass-1 verifier of this phase**
+(`SendMessage`), gates re-run — you save its reply to `verify-2.md`. Give it
+the path of `verify-1.md` and ask for a **delta matrix**: a full row only for (a) every row
 that was non-Pass in verify #1, (b) every row whose evidence files changed since
 (fix rounds, test-writer follow-ups) and (c) any new non-Pass; every other row
 collapses to one `Pass (unchanged since verify-1)` count per group. A row may be

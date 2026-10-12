@@ -313,6 +313,21 @@ steps, make the contract edit the first step of W2 (W2 owns both vendored
 copies, W3 depends on W2); keep a separate W1 when the contract is several types
 or when W2 is large enough that W3 would wait.
 
+Client workstream sizing (SPEC-10 retro: one client implementer took 1.72M
+fresh tokens, 30% of the run, and held the critical path ~18 min while the
+server workstream finished in 5): when the client workstream would have more
+than 6 steps or create more than 4 new component folders, split it by zone
+into two workstreams with disjoint files (e.g. the editor/modal vs the tabs/
+cards/removals), both depending on W1 and parallel with W2 and each other.
+
+Manual browser checks: any step that needs a rendered page (layout, overlap,
+scrollbars, responsive widths, visual states) is **owned by the orchestrator**
+(`/run-plan`, Phase 2b — it has the Playwright tools), never by `plan-verifier`
+or an implementer (neither has a browser). Write it as its own step: the
+viewports, the URL or the data it needs, what to measure, and — because the
+local DB differs from the design's data — which seeded records to use. Do not
+write "the verifier must open…".
+
 ### Test plan
 - `cd <module> && pnpm <test|typecheck|lint|arch>` — <what it should catch>
 (one bullet per gate relevant to the touched buckets, per routing.json's
