@@ -126,4 +126,13 @@ describe("FileCard", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(document.querySelector("[data-highlighted]")).toBeNull();
   });
+
+  it("SPEC-09 AC-8: highlightRange outlines every new-side line of the range and scrolls nothing", () => {
+    renderWithIntl(<FileCard file={FILE} highlightRange={{ start: 10, end: 11 }} />);
+    const rows = document.querySelectorAll('[data-highlighted="true"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("secret: 'x',");
+    expect(rows[1]).toHaveTextContent("};");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

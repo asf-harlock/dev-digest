@@ -1,12 +1,41 @@
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
-import type { EvalCaseOutcome, EvalExpectation, EvalCaseMeta, EvalMetrics, EvalRunSnapshot, EvalCaseRef } from '@devdigest/shared';
+import type {
+  EvalCaseOutcome,
+  EvalExpectation,
+  EvalCaseMeta,
+  EvalLift,
+  EvalMetrics,
+  EvalOwnerKind,
+  EvalRunScope,
+  EvalRunSnapshot,
+  EvalSkillRunSnapshot,
+  EvalCaseRef,
+} from '@devdigest/shared';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { EvalCaseRow, EvalRunRow } from '../../db/rows.js';
-import { AppError } from '../../platform/errors.js';
-import { EVAL_ERROR, EVAL_ERROR_MESSAGE, INTERRUPTED_REASON } from './constants.js';
-import { isUniqueViolation } from './helpers.js';
-import type { EvalRunSummary, FindingCaseContext, FrozenCase } from './types.js';
+import { AppError, NotFoundError } from '../../platform/errors.js';
+import {
+  CASE_RUN_RESULT_STATUSES,
+  EVAL_ERROR,
+  EVAL_ERROR_MESSAGE,
+  INTERRUPTED_REASON,
+  NOT_FOUND,
+  RUN_SCOPE,
+} from './constants.js';
+import { isUniqueViolation, pickLatestSource, toFrozenCase } from './helpers.js';
+import type { CarrierLink } from './arms.js';
+import type {
+  CarrierRow,
+  CaseResultSource,
+  EvalRunSummary,
+  EvalSkillRunSummary,
+  EvalSkillTrendRow,
+  FindingCaseContext,
+  FrozenCase,
+  RunningCaseRun,
+  SkillForRun,
+} from './types.js';
 
 /**
  * SPEC-08 eval data-access. Owns `eval_cases` and `eval_runs`, and reads the
@@ -26,14 +55,20 @@ export type DbTx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 const FINISHED = ['completed', 'partial'] as const;
 
-/** Scalar run columns + jsonb lengths computed in SQL; mirrors `EvalRunSummary`. */
+/**
+ * Scalar run columns + jsonb lengths computed in SQL; mirrors `EvalRunSummary`.
+ * `agent_id` / `agent_version` are nullable since skill runs exist (SPEC-09), but
+ * every query using this selection filters `owner_kind = 'agent'` (NFR-5), so the
+ * `sql<…>` casts state that invariant to the type system.
+ */
 const summarySelection = {
   id: t.evalRuns.id,
-  agentId: t.evalRuns.agentId,
+  agentId: sql<string>`${t.evalRuns.agentId}`,
   status: t.evalRuns.status,
   ranAt: t.evalRuns.ranAt,
   finishedAt: t.evalRuns.finishedAt,
-  agentVersion: t.evalRuns.agentVersion,
+  agentVersion: sql<number>`${t.evalRuns.agentVersion}`,
+  scope: t.evalRuns.scope,
   casesTotal: sql<number>`jsonb_array_length(${t.evalRuns.caseSet})`,
   casesDone: sql<number>`jsonb_array_length(${t.evalRuns.caseResults})`,
   metrics: t.evalRuns.metricParts,
@@ -42,15 +77,86 @@ const summarySelection = {
   errorReason: t.evalRuns.errorReason,
 };
 
+/**
+ * The skill run's columns as overview queries read them. The `sql<…>` casts state
+ * the invariant that `owner_kind = 'skill'` rows carry these columns (every query
+ * using this selection filters on it).
+ */
+const skillSummarySelection = {
+  id: t.evalRuns.id,
+  skillId: sql<string>`${t.evalRuns.skillId}`,
+  skillVersion: sql<number>`${t.evalRuns.skillVersion}`,
+  carrierAgentId: sql<string>`${t.evalRuns.carrierAgentId}`,
+  carrierName: sql<string>`${t.evalRuns.carrierName}`,
+  carrierVersion: sql<number>`${t.evalRuns.carrierVersion}`,
+  carrierModel: sql<string>`${t.evalRuns.carrierModel}`,
+  status: t.evalRuns.status,
+  scope: t.evalRuns.scope,
+  ranAt: t.evalRuns.ranAt,
+  finishedAt: t.evalRuns.finishedAt,
+  casesTotal: sql<number>`jsonb_array_length(${t.evalRuns.caseSet})`,
+  casesDone: sql<number>`jsonb_array_length(${t.evalRuns.caseResults})`,
+  withMetrics: t.evalRuns.metricParts,
+  withoutMetrics: t.evalRuns.withoutMetrics,
+  lift: t.evalRuns.lift,
+  durationMs: t.evalRuns.durationMs,
+  costUsd: t.evalRuns.costUsd,
+  errorReason: t.evalRuns.errorReason,
+};
+
+/** The trend's columns: scalars and the small `lift` jsonb only (NFR-13). */
+const skillTrendSelection = {
+  id: t.evalRuns.id,
+  ranAt: t.evalRuns.ranAt,
+  skillVersion: sql<number>`${t.evalRuns.skillVersion}`,
+  carrierAgentId: sql<string>`${t.evalRuns.carrierAgentId}`,
+  carrierName: sql<string>`${t.evalRuns.carrierName}`,
+  carrierVersion: sql<number>`${t.evalRuns.carrierVersion}`,
+  carrierModel: sql<string>`${t.evalRuns.carrierModel}`,
+  recall: t.evalRuns.recall,
+  precision: t.evalRuns.precision,
+  citationAccuracy: t.evalRuns.citationAccuracy,
+  lift: t.evalRuns.lift,
+  costUsd: t.evalRuns.costUsd,
+};
+
+export interface CaseOwner {
+  kind: EvalOwnerKind;
+  id: string;
+}
+
 export interface InsertCase {
   workspaceId: string;
-  agentId: string;
+  owner: CaseOwner;
   name: string;
   inputDiff: string;
   inputFiles: string[];
   inputMeta: EvalCaseMeta;
   expectation: EvalExpectation;
-  sourceFindingId: string;
+  /** Null for a case made in the Case Editor. */
+  sourceFindingId: string | null;
+  notes?: string | null;
+  /** A replacement takes the replaced case's place in the list (AC-15). */
+  createdAt?: Date;
+}
+
+/** The columns an in-place edit may change (AC-14). */
+export interface CaseInPlaceValues {
+  name?: string;
+  notes?: string | null;
+  expectation?: EvalExpectation;
+}
+
+export interface SkillForEval {
+  id: string;
+  name: string;
+}
+
+/** One skill recorded for a finding's review run, in run order (AC-53). */
+export interface FindingSkillRow {
+  skillId: string;
+  name: string;
+  order: number;
 }
 
 export interface InsertRun {
@@ -59,6 +165,8 @@ export interface InsertRun {
   agentVersion: number;
   snapshot: EvalRunSnapshot;
   caseSet: EvalCaseRef[];
+  /** SPEC-10: a run of the whole set (the default) or of one case. */
+  scope?: EvalRunScope;
 }
 
 export interface FinalizeRun {
@@ -70,12 +178,52 @@ export interface FinalizeRun {
   errorReason: string | null;
 }
 
+export interface InsertSkillRun {
+  workspaceId: string;
+  skillId: string;
+  skillVersion: number;
+  carrier: {
+    agentId: string;
+    name: string;
+    version: number;
+    model: string;
+  };
+  /** The carrier snapshot: stored in `snapshot` (the with-arm's prompt inputs). */
+  snapshot: EvalRunSnapshot;
+  skillSnapshot: EvalSkillRunSnapshot;
+  caseSet: EvalCaseRef[];
+  scope?: EvalRunScope;
+}
+
+export interface FinalizeSkillRun {
+  status: 'completed' | 'partial' | 'errored';
+  withMetrics: EvalMetrics | null;
+  withoutMetrics: EvalMetrics | null;
+  lift: EvalLift | null;
+  casesErrored: number;
+  durationMs: number;
+  costUsd: number | null;
+  errorReason: string | null;
+}
+
+/** A skill's newest finished run as the case list reads it: the per-case arms only. */
+export interface SkillRunResults {
+  runId: string;
+  ranAt: Date;
+  withResults: EvalCaseOutcome[];
+  withoutResults: EvalCaseOutcome[];
+}
+
 export class EvalRepository {
   constructor(private db: Db) {}
 
   // ---- case creation context ------------------------------------------------
 
-  /** finding → review → pull → repo (+ the agent, if it still exists), or undefined when not in this workspace. */
+  /**
+   * finding → review → pull → repo (+ the agent's id and name, if it still exists), or undefined
+   * when not in this workspace. SPEC-10 owners source: the agent comes from here, its skills from
+   * `findingSkills`, each owner's case from `getCaseBySourceFinding` / `findingSkills`.
+   */
   async findingContext(
     workspaceId: string,
     findingId: string,
@@ -96,6 +244,7 @@ export class EvalRepository {
         },
         agentId: t.reviews.agentId,
         agentRowId: t.agents.id,
+        agentName: t.agents.name,
         pull: {
           id: t.pullRequests.id,
           number: t.pullRequests.number,
@@ -126,6 +275,7 @@ export class EvalRepository {
       finding: row.finding,
       agentId: row.agentId,
       agentExists: row.agentRowId !== null,
+      agentName: row.agentName,
       pull: row.pull,
       repo: row.repo,
     };
@@ -149,54 +299,64 @@ export class EvalRepository {
 
   // ---- cases ------------------------------------------------------------------
 
+  /** The owner's case made from this finding — at most one per owner and finding (NFR-11). */
   async getCaseBySourceFinding(
     workspaceId: string,
     findingId: string,
+    owner: CaseOwner,
   ): Promise<EvalCaseRow | undefined> {
     const [row] = await this.db
       .select()
       .from(t.evalCases)
       .where(
-        and(eq(t.evalCases.workspaceId, workspaceId), eq(t.evalCases.sourceFindingId, findingId)),
+        and(
+          this.ownerCases(workspaceId, owner),
+          eq(t.evalCases.sourceFindingId, findingId),
+        ),
       );
     return row;
   }
 
-  /** Names of the agent's cases — input to the `-2`/`-3` suffix. */
-  async caseNames(workspaceId: string, agentId: string): Promise<string[]> {
+  /** Names of the owner's cases — input to the `-2`/`-3` suffix. */
+  async caseNames(workspaceId: string, owner: CaseOwner): Promise<string[]> {
     const rows = await this.db
       .select({ name: t.evalCases.name })
       .from(t.evalCases)
-      .where(this.agentCases(workspaceId, agentId));
+      .where(this.ownerCases(workspaceId, owner));
     return rows.map((r) => r.name);
   }
 
   /**
-   * Insert a case. The unique index on `source_finding_id` makes a racing
-   * second insert a 409 `eval_case_exists` carrying the winner's id (EC-3).
+   * Insert a case. The unique index on `(source_finding_id, owner_kind,
+   * owner_id)` makes a racing second insert a 409 `eval_case_exists` carrying
+   * the winner's id (SPEC-08 EC-3, SPEC-09 EC-39/EC-43).
    */
-  async insertCase(values: InsertCase): Promise<EvalCaseRow> {
+  async insertCase(values: InsertCase, tx?: DbTx): Promise<EvalCaseRow> {
+    const db = tx ?? this.db;
     try {
-      const [row] = await this.db
+      const [row] = await db
         .insert(t.evalCases)
         .values({
           workspaceId: values.workspaceId,
-          ownerKind: 'agent',
-          ownerId: values.agentId,
+          ownerKind: values.owner.kind,
+          ownerId: values.owner.id,
           name: values.name,
           inputDiff: values.inputDiff,
           inputFiles: values.inputFiles,
           inputMeta: values.inputMeta,
           expectedOutput: values.expectation,
+          notes: values.notes ?? null,
           sourceFindingId: values.sourceFindingId,
+          ...(values.createdAt ? { createdAt: values.createdAt } : {}),
         })
         .returning();
       return row!;
     } catch (err) {
-      if (isUniqueViolation(err)) {
+      if (values.sourceFindingId && isUniqueViolation(err)) {
         const existing = await this.getCaseBySourceFinding(
           values.workspaceId,
           values.sourceFindingId,
+          values.owner,
         );
         if (existing) {
           throw new AppError(
@@ -211,20 +371,20 @@ export class EvalRepository {
     }
   }
 
-  /** The agent's cases, newest first. */
-  async listCases(workspaceId: string, agentId: string): Promise<EvalCaseRow[]> {
+  /** The owner's cases, newest first. */
+  async listCases(workspaceId: string, owner: CaseOwner): Promise<EvalCaseRow[]> {
     return this.db
       .select()
       .from(t.evalCases)
-      .where(this.agentCases(workspaceId, agentId))
+      .where(this.ownerCases(workspaceId, owner))
       .orderBy(desc(t.evalCases.createdAt), desc(t.evalCases.id));
   }
 
-  async countCases(workspaceId: string, agentId: string): Promise<number> {
+  async countCases(workspaceId: string, owner: CaseOwner): Promise<number> {
     const [row] = await this.db
       .select({ n: count() })
       .from(t.evalCases)
-      .where(this.agentCases(workspaceId, agentId));
+      .where(this.ownerCases(workspaceId, owner));
     return row?.n ?? 0;
   }
 
@@ -263,17 +423,45 @@ export class EvalRepository {
     return row;
   }
 
-  async renameCase(
+  /** AC-14: name, notes and the display-only expectation fields change under the same id. */
+  async updateCaseInPlace(
     workspaceId: string,
     id: string,
-    name: string,
+    values: CaseInPlaceValues,
   ): Promise<EvalCaseRow | undefined> {
     const [row] = await this.db
       .update(t.evalCases)
-      .set({ name, updatedAt: new Date() })
+      .set({
+        ...(values.name !== undefined ? { name: values.name } : {}),
+        ...(values.notes !== undefined ? { notes: values.notes } : {}),
+        ...(values.expectation !== undefined ? { expectedOutput: values.expectation } : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(t.evalCases.workspaceId, workspaceId), eq(t.evalCases.id, id)))
       .returning();
     return row;
+  }
+
+  /**
+   * AC-15: one transaction — delete the old case, then insert the replacement (taking
+   * the old case's `created_at`, so it keeps its place in the list). The delete goes
+   * first and doubles as the row lock: a racing replace or DELETE that already took
+   * the row leaves it nothing to delete, so this one throws the same 404 an unknown
+   * case gets and rolls back — never a duplicate or a resurrected case.
+   */
+  async replaceCase(
+    workspaceId: string,
+    oldId: string,
+    values: InsertCase,
+  ): Promise<EvalCaseRow> {
+    return this.db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(t.evalCases)
+        .where(and(eq(t.evalCases.workspaceId, workspaceId), eq(t.evalCases.id, oldId)))
+        .returning({ id: t.evalCases.id });
+      if (deleted.length === 0) throw new NotFoundError(NOT_FOUND.case);
+      return this.insertCase(values, tx);
+    });
   }
 
   async deleteCase(workspaceId: string, id: string): Promise<boolean> {
@@ -284,20 +472,14 @@ export class EvalRepository {
     return rows.length > 0;
   }
 
-  /** Every case of the agent as a run needs it, oldest first (EC-18: read once at run start). */
-  async casesForRun(workspaceId: string, agentId: string): Promise<FrozenCase[]> {
+  /** Every case of the owner as a run needs it, oldest first (EC-18: read once at run start). */
+  async casesForRun(workspaceId: string, owner: CaseOwner): Promise<FrozenCase[]> {
     const rows = await this.db
       .select()
       .from(t.evalCases)
-      .where(this.agentCases(workspaceId, agentId))
+      .where(this.ownerCases(workspaceId, owner))
       .orderBy(asc(t.evalCases.createdAt), asc(t.evalCases.id));
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      inputDiff: r.inputDiff,
-      inputMeta: { title: r.inputMeta.title, body: r.inputMeta.body },
-      expectation: r.expectedOutput,
-    }));
+    return rows.map(toFrozenCase);
   }
 
   /** Findings of one PR that are the source of a case (AC-61). `agent_id` = the case's owner. */
@@ -324,6 +506,72 @@ export class EvalRepository {
       );
   }
 
+  // ---- skills (read-only here; Case Editor owner + finding → skill case) -------------
+
+  /** The skill, or undefined when it is not in this workspace. */
+  async skillForEval(workspaceId: string, skillId: string): Promise<SkillForEval | undefined> {
+    const [row] = await this.db
+      .select({ id: t.skills.id, name: t.skills.name })
+      .from(t.skills)
+      .where(and(eq(t.skills.id, skillId), eq(t.skills.workspaceId, workspaceId)));
+    return row;
+  }
+
+  /**
+   * Skills recorded for the run of the finding's review, in run order (AC-53,
+   * EC-36/EC-37), with the finding's existing skill-owned case ids. Undefined
+   * when the finding is not in this workspace. Scoped through `reviews`,
+   * `agent_runs` and `skills`, each `workspace_id`-checked.
+   */
+  async findingSkills(
+    workspaceId: string,
+    findingId: string,
+  ): Promise<{ skills: (FindingSkillRow & { caseId: string | null })[] } | undefined> {
+    const [finding] = await this.db
+      .select({ runId: t.reviews.runId })
+      .from(t.findings)
+      .innerJoin(t.reviews, eq(t.findings.reviewId, t.reviews.id))
+      .where(and(eq(t.findings.id, findingId), eq(t.reviews.workspaceId, workspaceId)));
+    if (!finding) return undefined;
+    if (!finding.runId) return { skills: [] };
+
+    const skills: FindingSkillRow[] = await this.db
+      .select({
+        skillId: t.skills.id,
+        name: t.skills.name,
+        order: t.agentRunSkills.order,
+      })
+      .from(t.agentRunSkills)
+      .innerJoin(t.agentRuns, eq(t.agentRunSkills.runId, t.agentRuns.id))
+      .innerJoin(t.skills, eq(t.agentRunSkills.skillId, t.skills.id))
+      .where(
+        and(
+          eq(t.agentRunSkills.runId, finding.runId),
+          eq(t.agentRuns.workspaceId, workspaceId),
+          eq(t.skills.workspaceId, workspaceId),
+        ),
+      )
+      .orderBy(asc(t.agentRunSkills.order), asc(t.skills.name));
+    if (skills.length === 0) return { skills: [] };
+
+    const cases = await this.db
+      .select({ id: t.evalCases.id, ownerId: t.evalCases.ownerId })
+      .from(t.evalCases)
+      .where(
+        and(
+          eq(t.evalCases.workspaceId, workspaceId),
+          eq(t.evalCases.ownerKind, 'skill'),
+          eq(t.evalCases.sourceFindingId, findingId),
+          inArray(
+            t.evalCases.ownerId,
+            skills.map((s) => s.skillId),
+          ),
+        ),
+      );
+    const caseBySkill = new Map(cases.map((c) => [c.ownerId, c.id]));
+    return { skills: skills.map((s) => ({ ...s, caseId: caseBySkill.get(s.skillId) ?? null })) };
+  }
+
   // ---- runs: writes --------------------------------------------------------------
 
   /**
@@ -343,12 +591,17 @@ export class EvalRepository {
           snapshot: values.snapshot,
           caseSet: values.caseSet,
           caseResults: [],
+          scope: values.scope ?? RUN_SCOPE.set,
         })
         .returning({ id: t.evalRuns.id });
       return row!.id;
     } catch (err) {
       if (isUniqueViolation(err)) {
-        const runId = await this.runningRunId(values.workspaceId, values.agentId);
+        // Any scope: a case run blocks a set run and the other way round (SPEC-10 AC-49, EC-18).
+        const runId = await this.anyRunningRunId(values.workspaceId, {
+          kind: 'agent',
+          id: values.agentId,
+        });
         if (runId) {
           throw new AppError(
             EVAL_ERROR.runInProgress,
@@ -435,24 +688,59 @@ export class EvalRepository {
     const db = tx ?? this.db;
     await db
       .delete(t.evalRuns)
-      .where(and(eq(t.evalRuns.workspaceId, workspaceId), eq(t.evalRuns.agentId, agentId)));
-    await db.delete(t.evalCases).where(this.agentCases(workspaceId, agentId));
+      .where(
+        and(
+          eq(t.evalRuns.workspaceId, workspaceId),
+          eq(t.evalRuns.ownerKind, 'agent'),
+          eq(t.evalRuns.agentId, agentId),
+        ),
+      );
+    await db.delete(t.evalCases).where(this.ownerCases(workspaceId, { kind: 'agent', id: agentId }));
+  }
+
+  /**
+   * SPEC-09 EC-23 cascade for a deleted skill: its runs and its cases. Pass the
+   * skill-delete transaction so everything commits together. A run still
+   * `running` is deleted too, which stops its executor before the next review (EC-24).
+   */
+  async deleteBySkill(workspaceId: string, skillId: string, tx?: DbTx): Promise<void> {
+    const db = tx ?? this.db;
+    await db
+      .delete(t.evalRuns)
+      .where(
+        and(
+          eq(t.evalRuns.workspaceId, workspaceId),
+          eq(t.evalRuns.ownerKind, 'skill'),
+          eq(t.evalRuns.skillId, skillId),
+        ),
+      );
+    await db.delete(t.evalCases).where(this.ownerCases(workspaceId, { kind: 'skill', id: skillId }));
   }
 
   // ---- runs: reads ------------------------------------------------------------------
 
+  /**
+   * The agent's running SET run — what `running_run_id` reports (SPEC-10 AC-48). A running case run
+   * is `runningCaseRun`; the single-flight guard behind the 409 is `anyRunningRunId`.
+   */
   async runningRunId(workspaceId: string, agentId: string): Promise<string | null> {
+    return this.runningRunOfScope(workspaceId, { kind: 'agent', id: agentId }, RUN_SCOPE.set);
+  }
+
+  /** The owner's running single-case run and its case (AC-48); the case id is read from `case_set[0]`, never the jsonb. */
+  async runningCaseRun(workspaceId: string, owner: CaseOwner): Promise<RunningCaseRun | null> {
     const [row] = await this.db
-      .select({ id: t.evalRuns.id })
+      .select({ runId: t.evalRuns.id, caseId: sql<string>`${t.evalRuns.caseSet}->0->>'id'` })
       .from(t.evalRuns)
       .where(
         and(
-          eq(t.evalRuns.workspaceId, workspaceId),
-          eq(t.evalRuns.agentId, agentId),
+          this.ownerRuns(workspaceId, owner),
           eq(t.evalRuns.status, 'running'),
+          eq(t.evalRuns.scope, RUN_SCOPE.case),
         ),
-      );
-    return row?.id ?? null;
+      )
+      .limit(1);
+    return row ? { runId: row.runId, caseId: row.caseId } : null;
   }
 
   /** The full row with its jsonb — detail and compare only. */
@@ -505,26 +793,436 @@ export class EvalRepository {
     return this.db
       .select(summarySelection)
       .from(t.evalRuns)
-      .where(eq(t.evalRuns.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(t.evalRuns.workspaceId, workspaceId),
+          eq(t.evalRuns.ownerKind, 'agent'),
+          // NFR-5: bypasses `agentRuns()`, so it carries the scope filter itself.
+          eq(t.evalRuns.scope, RUN_SCOPE.set),
+        ),
+      )
       .orderBy(desc(t.evalRuns.ranAt), desc(t.evalRuns.id))
       .limit(limit);
   }
 
+  // ---- skill runs (SPEC-09) -----------------------------------------------------------
+
+  /** The skill under test as a run reads it, or undefined when it is not in this workspace. */
+  async skillForRun(workspaceId: string, skillId: string): Promise<SkillForRun | undefined> {
+    const [row] = await this.db
+      .select({
+        id: t.skills.id,
+        name: t.skills.name,
+        body: t.skills.body,
+        version: t.skills.version,
+        enabled: t.skills.enabled,
+      })
+      .from(t.skills)
+      .where(and(eq(t.skills.id, skillId), eq(t.skills.workspaceId, workspaceId)));
+    return row;
+  }
+
+  /**
+   * Agents of the workspace linked to the skill — the carrier choices (AC-20,
+   * AC-41), with the link's own enabled flag (EC-46). Scoped on BOTH the agent
+   * and the skill.
+   */
+  async carriersForSkill(workspaceId: string, skillId: string): Promise<CarrierRow[]> {
+    return this.db
+      .select({
+        agentId: t.agents.id,
+        name: t.agents.name,
+        version: t.agents.version,
+        model: t.agents.model,
+        enabled: t.agents.enabled,
+        linkEnabled: t.agentSkills.enabled,
+      })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(
+        and(
+          eq(t.agentSkills.skillId, skillId),
+          eq(t.agents.workspaceId, workspaceId),
+          eq(t.skills.workspaceId, workspaceId),
+        ),
+      )
+      .orderBy(asc(t.agents.name), asc(t.agents.id));
+  }
+
+  /**
+   * Every skill linked to the carrier, both enable flags, in link order (ties
+   * by name so the order is deterministic) — the input of `buildArms` (AC-24).
+   */
+  async carrierLinks(workspaceId: string, carrierAgentId: string): Promise<CarrierLink[]> {
+    return this.db
+      .select({
+        skillId: t.skills.id,
+        name: t.skills.name,
+        body: t.skills.body,
+        order: t.agentSkills.order,
+        linkEnabled: t.agentSkills.enabled,
+        skillEnabled: t.skills.enabled,
+      })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(
+        and(
+          eq(t.agentSkills.agentId, carrierAgentId),
+          eq(t.agents.workspaceId, workspaceId),
+          eq(t.skills.workspaceId, workspaceId),
+        ),
+      )
+      .orderBy(asc(t.agentSkills.order), asc(t.skills.name), asc(t.skills.id));
+  }
+
+  /**
+   * Insert a `running` skill run. The partial unique index
+   * `eval_runs_one_running_skill_uq` makes a second concurrent start a 409
+   * `eval_run_in_progress` carrying the running run's id (EC-14).
+   */
+  async insertSkillRun(values: InsertSkillRun): Promise<string> {
+    try {
+      const [row] = await this.db
+        .insert(t.evalRuns)
+        .values({
+          workspaceId: values.workspaceId,
+          ownerKind: 'skill',
+          status: 'running',
+          skillId: values.skillId,
+          skillVersion: values.skillVersion,
+          carrierAgentId: values.carrier.agentId,
+          carrierName: values.carrier.name,
+          carrierVersion: values.carrier.version,
+          carrierModel: values.carrier.model,
+          snapshot: values.snapshot,
+          skillSnapshot: values.skillSnapshot,
+          caseSet: values.caseSet,
+          caseResults: [],
+          withoutResults: [],
+          scope: values.scope ?? RUN_SCOPE.set,
+        })
+        .returning({ id: t.evalRuns.id });
+      return row!.id;
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        const runId = await this.anyRunningRunId(values.workspaceId, {
+          kind: 'skill',
+          id: values.skillId,
+        });
+        if (runId) {
+          throw new AppError(
+            EVAL_ERROR.runInProgress,
+            EVAL_ERROR_MESSAGE.eval_run_in_progress,
+            409,
+            { run_id: runId },
+          );
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Persist both arms' results so far (one case = one entry in each). False when
+   * the run is no longer `running` — its skill was deleted (EC-24) or it was
+   * reaped — so the executor stops without writing anything further.
+   */
+  async saveSkillProgress(
+    workspaceId: string,
+    runId: string,
+    withResults: EvalCaseOutcome[],
+    withoutResults: EvalCaseOutcome[],
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(t.evalRuns)
+      .set({ caseResults: withResults, withoutResults })
+      .where(this.runningRun(workspaceId, runId))
+      .returning({ id: t.evalRuns.id });
+    return rows.length > 0;
+  }
+
+  /**
+   * Finish a running skill run (AC-32): the paired per-case results of both arms,
+   * both arms' metrics, the lifts. The with-arm values go in the agent-shaped columns.
+   */
+  async finalizeSkillRun(
+    workspaceId: string,
+    runId: string,
+    values: FinalizeSkillRun,
+    /** The paired per-case results; omitted when a crashed run keeps what progress saved. */
+    results?: { with: EvalCaseOutcome[]; without: EvalCaseOutcome[] },
+  ): Promise<boolean> {
+    const m = values.withMetrics;
+    const rows = await this.db
+      .update(t.evalRuns)
+      .set({
+        status: values.status,
+        ...(results ? { caseResults: results.with, withoutResults: results.without } : {}),
+        metricParts: m,
+        withoutMetrics: values.withoutMetrics,
+        lift: values.lift,
+        recall: m?.recall.value ?? null,
+        precision: m?.precision.value ?? null,
+        citationAccuracy: m?.citation_accuracy.value ?? null,
+        tracesPassed: m?.traces_passed ?? null,
+        tracesTotal: m?.traces_total ?? null,
+        casesErrored: values.casesErrored,
+        durationMs: values.durationMs,
+        costUsd: values.costUsd,
+        errorReason: values.errorReason,
+        finishedAt: new Date(),
+      })
+      .where(this.runningRun(workspaceId, runId))
+      .returning({ id: t.evalRuns.id });
+    return rows.length > 0;
+  }
+
+  /** The skill's running SET run — what `running_run_id` reports (SPEC-10 AC-48). */
+  async runningSkillRunId(workspaceId: string, skillId: string): Promise<string | null> {
+    return this.runningRunOfScope(workspaceId, { kind: 'skill', id: skillId }, RUN_SCOPE.set);
+  }
+
+  /** The skill's newest finished runs, newest first — scalar columns only (NFR-13). */
+  async listSkillRunSummaries(
+    workspaceId: string,
+    skillId: string,
+    limit: number,
+  ): Promise<EvalSkillRunSummary[]> {
+    return this.db
+      .select(skillSummarySelection)
+      .from(t.evalRuns)
+      .where(this.skillRuns(workspaceId, skillId))
+      .orderBy(desc(t.evalRuns.ranAt), desc(t.evalRuns.id))
+      .limit(limit);
+  }
+
+  /** The skill's trend window: finished runs, newest first, scalar columns only (NFR-13, AC-41). */
+  async listSkillTrendRows(
+    workspaceId: string,
+    skillId: string,
+    limit: number,
+  ): Promise<EvalSkillTrendRow[]> {
+    return this.db
+      .select(skillTrendSelection)
+      .from(t.evalRuns)
+      .where(this.skillRuns(workspaceId, skillId))
+      .orderBy(desc(t.evalRuns.ranAt), desc(t.evalRuns.id))
+      .limit(limit);
+  }
+
+  /** Per-case arms of the skill's newest finished run (AC-40, AC-59); never the snapshots. */
+  async latestFinishedSkillResults(
+    workspaceId: string,
+    skillId: string,
+  ): Promise<SkillRunResults | undefined> {
+    const [row] = await this.db
+      .select({
+        runId: t.evalRuns.id,
+        ranAt: t.evalRuns.ranAt,
+        withResults: t.evalRuns.caseResults,
+        withoutResults: t.evalRuns.withoutResults,
+      })
+      .from(t.evalRuns)
+      .where(this.skillRuns(workspaceId, skillId))
+      .orderBy(desc(t.evalRuns.ranAt), desc(t.evalRuns.id))
+      .limit(1);
+    return row ? { ...row, withoutResults: row.withoutResults ?? [] } : undefined;
+  }
+
+  // ---- per-case latest result (SPEC-10 AC-46, NFR-17) ---------------------------------
+
+  /**
+   * The only any-scope run reader: each case's newest result, the later-started of (a) the owner's
+   * newest finished SET run's outcome for the case and (b) the newest `scope = 'case'` run of that
+   * case with status `completed` | `partial` | `errored` (EC-21). Cases without any result are absent.
+   *
+   * Bounded: (a) reads one set run's `case_results`; (b) first picks one run id per case from scalar
+   * columns of the owner's case runs (`case_set[0]` is the single case of a case run), then reads
+   * `case_results` of those winners only — never every run's jsonb.
+   */
+  async latestResultsByCase(
+    workspaceId: string,
+    owner: CaseOwner,
+    caseIds: readonly string[],
+  ): Promise<Map<string, CaseResultSource>> {
+    const latest = new Map<string, CaseResultSource>();
+    if (caseIds.length === 0) return latest;
+    const [setSources, caseSources] = await Promise.all([
+      this.newestSetRunSources(workspaceId, owner, caseIds),
+      this.newestCaseRunSources(workspaceId, owner, caseIds),
+    ]);
+    for (const id of caseIds) {
+      const picked = pickLatestSource(setSources.get(id), caseSources.get(id));
+      if (picked) latest.set(id, picked);
+    }
+    return latest;
+  }
+
+  /** The newest finished SET run's outcome per case (agent: the outcome; skill: both arms). */
+  private async newestSetRunSources(
+    workspaceId: string,
+    owner: CaseOwner,
+    caseIds: readonly string[],
+  ): Promise<Map<string, CaseResultSource>> {
+    const sources = new Map<string, CaseResultSource>();
+    const run =
+      owner.kind === 'agent'
+        ? await this.latestFinishedRunRow(workspaceId, owner.id).then((r) =>
+            r ? { runId: r.id, ranAt: r.ranAt, withResults: r.caseResults, withoutResults: [] } : undefined,
+          )
+        : await this.latestFinishedSkillResults(workspaceId, owner.id);
+    if (!run) return sources;
+    const withById = new Map(run.withResults.map((o) => [o.case_id, o]));
+    const withoutById = new Map(run.withoutResults.map((o) => [o.case_id, o]));
+    for (const id of caseIds) {
+      const outcome = withById.get(id);
+      const without = withoutById.get(id);
+      // A skill case needs both arms to have a result (the list's `with_state` / `without_state`).
+      if (!outcome || (owner.kind === 'skill' && !without)) continue;
+      sources.set(id, {
+        runId: run.runId,
+        scope: RUN_SCOPE.set,
+        startedAt: run.ranAt,
+        outcome,
+        without,
+        runErrorReason: null,
+        runDurationMs: null,
+      });
+    }
+    return sources;
+  }
+
+  /** The newest finished-or-errored CASE run per case, found through each case run's one-case `case_set`. */
+  private async newestCaseRunSources(
+    workspaceId: string,
+    owner: CaseOwner,
+    caseIds: readonly string[],
+  ): Promise<Map<string, CaseResultSource>> {
+    const sources = new Map<string, CaseResultSource>();
+    const caseKey = sql<string>`${t.evalRuns.caseSet}->0->>'id'`;
+    const newest = await this.db
+      .selectDistinctOn([caseKey], { caseId: caseKey, runId: t.evalRuns.id })
+      .from(t.evalRuns)
+      .where(
+        and(
+          this.ownerRuns(workspaceId, owner),
+          eq(t.evalRuns.scope, RUN_SCOPE.case),
+          inArray(t.evalRuns.status, [...CASE_RUN_RESULT_STATUSES]),
+          inArray(caseKey, [...caseIds]),
+        ),
+      )
+      .orderBy(caseKey, desc(t.evalRuns.ranAt), desc(t.evalRuns.id));
+    if (newest.length === 0) return sources;
+
+    const runs = await this.db
+      .select({
+        id: t.evalRuns.id,
+        ranAt: t.evalRuns.ranAt,
+        caseResults: t.evalRuns.caseResults,
+        withoutResults: t.evalRuns.withoutResults,
+        errorReason: t.evalRuns.errorReason,
+        durationMs: t.evalRuns.durationMs,
+      })
+      .from(t.evalRuns)
+      .where(
+        and(
+          eq(t.evalRuns.workspaceId, workspaceId),
+          inArray(
+            t.evalRuns.id,
+            newest.map((n) => n.runId),
+          ),
+        ),
+      );
+    const runById = new Map(runs.map((r) => [r.id, r]));
+    for (const n of newest) {
+      const run = runById.get(n.runId);
+      if (!run) continue;
+      sources.set(n.caseId, {
+        runId: run.id,
+        scope: RUN_SCOPE.case,
+        startedAt: run.ranAt,
+        outcome: run.caseResults.find((o) => o.case_id === n.caseId),
+        without: (run.withoutResults ?? []).find((o) => o.case_id === n.caseId),
+        runErrorReason: run.errorReason,
+        runDurationMs: run.durationMs,
+      });
+    }
+    return sources;
+  }
+
   // ---- predicates --------------------------------------------------------------------
 
-  private agentCases(workspaceId: string, agentId: string) {
+  /** Every run of one owner, of any scope. */
+  private ownerRuns(workspaceId: string, owner: CaseOwner) {
+    return and(
+      eq(t.evalRuns.workspaceId, workspaceId),
+      eq(t.evalRuns.ownerKind, owner.kind),
+      owner.kind === 'agent'
+        ? eq(t.evalRuns.agentId, owner.id)
+        : eq(t.evalRuns.skillId, owner.id),
+    );
+  }
+
+  /**
+   * The owner's running run of ANY scope: the single-flight guard behind the 409
+   * `eval_run_in_progress` of both inserts (SPEC-10 AC-49, EC-18). Deliberately unfiltered by scope.
+   */
+  private async anyRunningRunId(workspaceId: string, owner: CaseOwner): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: t.evalRuns.id })
+      .from(t.evalRuns)
+      .where(and(this.ownerRuns(workspaceId, owner), eq(t.evalRuns.status, 'running')));
+    return row?.id ?? null;
+  }
+
+  private async runningRunOfScope(
+    workspaceId: string,
+    owner: CaseOwner,
+    scope: EvalRunScope,
+  ): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: t.evalRuns.id })
+      .from(t.evalRuns)
+      .where(
+        and(
+          this.ownerRuns(workspaceId, owner),
+          eq(t.evalRuns.status, 'running'),
+          eq(t.evalRuns.scope, scope),
+        ),
+      );
+    return row?.id ?? null;
+  }
+
+  private ownerCases(workspaceId: string, owner: CaseOwner) {
     return and(
       eq(t.evalCases.workspaceId, workspaceId),
-      eq(t.evalCases.ownerKind, 'agent'),
-      eq(t.evalCases.ownerId, agentId),
+      eq(t.evalCases.ownerKind, owner.kind),
+      eq(t.evalCases.ownerId, owner.id),
     );
   }
 
   private agentRuns(workspaceId: string, agentId: string, finishedOnly: boolean) {
     return and(
       eq(t.evalRuns.workspaceId, workspaceId),
+      // NFR-5: a skill run never shows up in an agent read.
+      eq(t.evalRuns.ownerKind, 'agent'),
       eq(t.evalRuns.agentId, agentId),
+      // SPEC-10 NFR-5: nor does a single-case run — every set aggregate reads `scope = 'set'` only.
+      eq(t.evalRuns.scope, RUN_SCOPE.set),
       finishedOnly ? inArray(t.evalRuns.status, [...FINISHED]) : undefined,
+    );
+  }
+
+  /** The skill's finished SET runs (`completed` | `partial`), never a single-case run (SPEC-10 NFR-5). */
+  private skillRuns(workspaceId: string, skillId: string) {
+    return and(
+      eq(t.evalRuns.workspaceId, workspaceId),
+      eq(t.evalRuns.ownerKind, 'skill'),
+      eq(t.evalRuns.skillId, skillId),
+      eq(t.evalRuns.scope, RUN_SCOPE.set),
+      inArray(t.evalRuns.status, [...FINISHED]),
     );
   }
 

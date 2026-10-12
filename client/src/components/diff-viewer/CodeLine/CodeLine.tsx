@@ -22,6 +22,7 @@ export function CodeLine({
   findings,
   renderFinding,
   highlighted = false,
+  scrollToHighlight = true,
 }: {
   ln: Line;
   path: string;
@@ -32,14 +33,17 @@ export function CodeLine({
   renderFinding?: (f: FindingRecord) => React.ReactNode;
   /** Deep-link target: outline the row and scroll it into view. Default off. */
   highlighted?: boolean;
+  /** Scroll the highlighted row into view (default). A multi-line range turns this
+   *  off so only the deep-link target scrolls, never every row of a range. */
+  scrollToHighlight?: boolean;
 }) {
   const t = useTranslations("prReview");
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
   const rowRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    if (highlighted) rowRef.current?.scrollIntoView?.({ block: "center" });
-  }, [highlighted]);
+    if (highlighted && scrollToHighlight) rowRef.current?.scrollIntoView?.({ block: "center" });
+  }, [highlighted, scrollToHighlight]);
   const lineFindings = findings ?? [];
   // Bar + label reflect only live findings (dismissed ones never count toward a
   // severity signal); every finding, dismissed included, still renders its card.

@@ -1,11 +1,7 @@
 /* Route-level constants for the Eval Dashboard (/eval and /eval/agents/:agentId). */
 
-/** One colour per metric, reused by bars, sparklines, the trend chart and KPI numbers. */
-export const METRIC_COLORS = {
-  recall: "var(--accent)",
-  precision: "var(--ok)",
-  citation: "var(--warn)",
-} as const;
+/** One colour per metric — defined with the shared trend chart, re-exported for the bars, sparklines and KPI numbers. */
+export { METRIC_COLORS } from "@/components/metric-trend";
 
 /** AC-41 / AC-53: a sparkline shows at most the last 10 finished runs. */
 export const SPARKLINE_LIMIT = 10;

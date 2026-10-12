@@ -55,6 +55,8 @@ stays unverified instead of quietly becoming a pass.*
 
 ## Step 2 — re-run the plan's own gates
 
+Gate runner — do not read `scripts/check.sh`, this is its usage: `./scripts/check.sh <server|client|core> <typecheck|lint|arch|test> ` runs ONE gate and prints one `PASS …` line or a capped failure excerpt (full log under `.claude/implementer/logs/`); `./scripts/check.sh <pkg> related <files…>` runs only the tests importing those files; `./scripts/check.sh <pkg> all` or `./scripts/check.sh all` runs every gate in one call (never loop over gates yourself — under zsh an unquoted loop variable is not word-split). Docker-backed `*.it.test.ts` are never run by it: use `cd server && pnpm exec vitest run <file>`.
+
 Re-execute the commands from the plan's own "Test plan" section yourself
 (e.g. `cd server && pnpm typecheck`) rather than only trusting the
 implementer's self-reported "Tests run" section — a report you didn't
@@ -74,6 +76,20 @@ whether that skill was actually applied IS a plan item — treat it as one row
 in the matrix, not as a general quality opinion.
 
 ## Step 4 — report
+
+You have no `Write`: **the caller saves your reply**, verbatim, to the matrix
+file it names (`.claude/sdd/<SPEC>/verify-N.md`). Never write a matrix file
+yourself (not through `Bash` either) and never say "I could not save …" —
+just return the matrix as your final message; a re-run of a prior pass is
+delivered the same way. When you are resumed for a later pass, keep the plan,
+spec and diff you already read: re-read only the files that changed since and
+answer as a delta (full rows for what was non-Pass or whose evidence changed,
+one `Pass (unchanged since <previous pass>)` count per group for the rest).
+
+A row that needs a browser (layout, overlap, scrollbars, visual state) is
+`Unverified` from you — you have no browser. If the caller says it measured
+that in the running app, mark it `Pass on caller's evidence` and quote the
+numbers it gave; never upgrade it to a plain `Pass`.
 
 Return your final message in this structure:
 

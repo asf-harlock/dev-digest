@@ -28,14 +28,8 @@ export function passParts(run: Pick<EvalRunRecord, "metrics"> | null | undefined
     : { passed: EM_DASH, total: EM_DASH };
 }
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-/** "2026-05-29 09:14" in local time; the raw string when it is not a date. */
-export function formatRanAt(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
+/** "2026-05-29 09:14" in local time — lives in `@/lib/eval-format` so shared components can use it. */
+export { formatRanAt } from "@/lib/eval-format";
 
 /** Detail page of one agent. */
 export function agentHref(agentId: string): string {

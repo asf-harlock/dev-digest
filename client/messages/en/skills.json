@@ -84,10 +84,47 @@
     "dangerZoneBody": "Removes it from all agents. This can't be undone."
   },
   "evals": {
-    "placeholderTitle": "Evals arrive in L06",
-    "placeholderBody": "The eval pipeline runs this skill's linked eval cases and tracks recall, precision and citation accuracy over time.",
+    "casesHeading": "Eval cases",
+    "noPassing": "—",
+    "newCase": "New eval case",
+    "runAll": "Run all evals",
     "runOnEvals": "Run on evals",
-    "runOnEvalsTooltip": "Evals ship in L06 — this skill has no eval cases to run yet."
+    "listLabel": "Skill eval cases",
+    "errorTitle": "Something went wrong",
+    "loadError": "Couldn’t load the eval cases.",
+    "empty": {
+      "title": "No eval cases yet",
+      "body": "No eval cases yet — create one from a diff, or turn a finding into a skill eval case on a PR"
+    },
+    "overviewError": "Couldn’t load the run summary.",
+    "retry": "Retry",
+    "lift": "Lift vs. without skill — recall {recall} · precision {precision} · citation {citation}",
+    "liftNone": "Lift vs. without skill: {value}",
+    "runHint": {
+      "noAgent": "Link this skill to an agent first",
+      "noCases": "Add an eval case first",
+      "running": "A run is already in progress for this skill"
+    },
+    "effect": {
+      "helped": "helped",
+      "hurt": "hurt",
+      "noEffectPass": "no effect · pass",
+      "noEffectFail": "no effect · fail",
+      "errored": "errored"
+    },
+    "arms": "with skill: {withSkill} · without: {withoutSkill}",
+    "runDialog": {
+      "title": "Run skill evals",
+      "carrierLabel": "Carrier agent",
+      "carrierHelp": "Every case is reviewed twice by this agent: once with the skill and once without it.",
+      "carrierOption": "{name} · v{version} · {model}",
+      "counts": "{cases, plural, one {# case} other {# cases}} · {reviews, plural, one {# review} other {# reviews}}",
+      "injectionWarning": "This skill was flagged for prompt injection — its text is sent to the model in every with-skill review",
+      "disabledWarning": "This skill or its link to {carrier} is disabled — the with-skill arm includes it anyway",
+      "cancel": "Cancel",
+      "confirm": "Run evals",
+      "starting": "Starting…"
+    }
   },
   "stats": {
     "usedBy": "Used by",

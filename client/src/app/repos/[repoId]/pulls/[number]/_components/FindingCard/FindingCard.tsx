@@ -1,6 +1,7 @@
 /* FindingCard — ported from findings.jsx (createElement → TSX).
    Severity icon+label, category, file:line, confidence, markdown rationale +
-   suggestion, accept/dismiss actions, and (SPEC-08) turn-into-eval-case.
+   suggestion, accept/dismiss actions, and (SPEC-08, SPEC-10) the one turn-into-eval-case
+   control, which opens the seeded Case Editor.
    Accept/dismiss reflect persisted timestamps. */
 "use client";
 
@@ -41,8 +42,8 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
-  /** SPEC-08: turn this finding into an eval case. Omitted where the card has no
-   *  review/agent context (e.g. the Smart Diff view) — then no button is shown. */
+  /** SPEC-08, SPEC-10: turn this finding into an eval case. Omitted where the card has no
+   *  review/agent context (e.g. the Smart Diff view) — then no control is shown. */
   evalCase?: FindingEvalCase;
 }) {
   const t = useTranslations("prReview");

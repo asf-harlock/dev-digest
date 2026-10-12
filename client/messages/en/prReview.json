@@ -142,10 +142,10 @@
   },
   "evalCase": {
     "turnInto": "Turn into eval case",
-    "creating": "Creating…",
+    "opening": "Opening…",
     "inEvalSet": "In eval set",
-    "inEvalSetLink": "In eval set — open the agent’s Evals tab",
-    "enabledHint": "Freeze this finding as an eval case for the agent that produced it",
+    "inEvalSetLink": "In eval set — open the Evals tab",
+    "enabledHint": "Review this finding as an eval case, choose its owner, then save it",
     "undecidedTooltip": "Accept or dismiss this finding first",
     "agentMissingTooltip": "The agent that produced this finding was deleted",
     "created": "Eval case created",

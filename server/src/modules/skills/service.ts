@@ -156,9 +156,15 @@ export class SkillsService {
     return row ? this.toDto(row) : undefined;
   }
 
-  /** Hard delete (and its version history / agent-links, via cascade). */
+  /**
+   * Hard delete (and its version history / agent-links, via cascade). Its eval
+   * cases carry no FK to `skills`, so they are removed in the same transaction
+   * (SPEC-09 EC-23).
+   */
   async delete(workspaceId: string, id: string): Promise<boolean> {
-    return this.repo.deleteById(workspaceId, id);
+    return this.repo.deleteById(workspaceId, id, (tx) =>
+      this.container.evalRepo.deleteBySkill(workspaceId, id, tx),
+    );
   }
 
   async listVersions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined> {

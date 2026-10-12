@@ -17,6 +17,15 @@ import {
   EvalCaseOutcome,
   EvalRunRecord,
   EvalRunDetail,
+  EvalAgentRunDetail,
+  EvalSkillRunDetail,
+  EvalSkillRunRecord,
+  EvalSkillOverview,
+  EvalSkillTrendPoint,
+  EvalSkillCaseListItem,
+  EvalLift,
+  EvalSkillRunRequest,
+  SkillEvalRunRequest,
   EvalRunStatus,
   EvalRunStart,
   EvalOverview,
@@ -249,6 +258,7 @@ describe('Eval contracts (SPEC-08)', () => {
     agent_id: 'a1',
     agent_name: 'Security',
     status: 'completed',
+    scope: 'set',
     started_at: '2026-10-01T10:00:00.000Z',
     finished_at: '2026-10-01T10:01:00.000Z',
     agent_version: 3,
@@ -371,6 +381,7 @@ describe('Eval contracts (SPEC-08)', () => {
     expect(() =>
       EvalRunDetail.parse({
         ...run(),
+        owner_kind: 'agent',
         snapshot: {
           provider: 'anthropic',
           model: 'm',
@@ -382,8 +393,165 @@ describe('Eval contracts (SPEC-08)', () => {
         case_results: [scored, errored],
       }),
     ).not.toThrow();
+    // The discriminator is required: an agent body without `owner_kind` no longer parses.
+    const agentDetail = {
+      ...run(),
+      snapshot: {
+        provider: 'anthropic',
+        model: 'm',
+        strategy: 'auto',
+        system_prompt: 'p',
+        skills: [],
+      },
+      case_set: [],
+      case_results: [],
+    };
+    expect(() => EvalRunDetail.parse(agentDetail)).toThrow();
+    expect(EvalRunDetail.parse({ ...agentDetail, owner_kind: 'agent' }).owner_kind).toBe('agent');
+    expect(() => EvalAgentRunDetail.parse({ ...agentDetail, owner_kind: 'skill' })).toThrow();
     expect(() => EvalRunStart.parse({ id: 'r1', status: 'running' })).not.toThrow();
     expect(() => EvalRunStart.parse({ id: 'r1', status: 'completed' })).toThrow();
+  });
+
+  describe('skill eval runs (SPEC-09)', () => {
+    const lift = { recall: 0.25, precision: null, citation_accuracy: -0.1 };
+    const carrier = { agent_id: 'a1', name: 'Security', version: 3, model: 'm' };
+    const skillRun = (over: Record<string, unknown> = {}) => ({
+      id: 'r2',
+      owner_kind: 'skill',
+      skill_id: 's1',
+      skill_name: 'sql-injection',
+      skill_version: 2,
+      carrier,
+      status: 'completed',
+      scope: 'set',
+      started_at: '2026-10-01T10:00:00.000Z',
+      finished_at: '2026-10-01T10:01:00.000Z',
+      cases_total: 2,
+      cases_done: 2,
+      with: metrics,
+      without: metrics,
+      lift,
+      cost_usd: 0.02,
+      duration_ms: 90000,
+      error_reason: null,
+      ...over,
+    });
+    const skillDetail = {
+      ...skillRun(),
+      snapshot: {
+        carrier: {
+          ...carrier,
+          provider: 'anthropic',
+          strategy: 'auto',
+          system_prompt: 'p',
+        },
+        skill: { name: 'sql-injection', body: 'b', version: 2 },
+        with_skills: [{ name: 'sql-injection', body: 'b' }],
+        without_skills: [],
+      },
+      case_set: [{ id: 'c1', name: 'one' }],
+      case_results: [
+        { case_id: 'c1', case_name: 'one', with: scored, without: errored, effect: 'errored' },
+      ],
+    };
+
+    it('EvalSkillRunRecord: running run has null arms and lift; lift fields may be null', () => {
+      expect(() => EvalSkillRunRecord.parse(skillRun())).not.toThrow();
+      expect(() =>
+        EvalSkillRunRecord.parse(
+          skillRun({ status: 'running', finished_at: null, with: null, without: null, lift: null }),
+        ),
+      ).not.toThrow();
+      expect(() => EvalLift.parse(lift)).not.toThrow();
+      expect(() => EvalSkillRunRecord.parse(skillRun({ owner_kind: 'agent' }))).toThrow();
+      expect(() => EvalSkillRunRecord.parse(skillRun({ carrier: { agent_id: 'a1' } }))).toThrow();
+    });
+
+    it('EvalRunDetail discriminates a skill run from an agent run by owner_kind', () => {
+      const parsed = EvalRunDetail.parse(skillDetail);
+      expect(parsed.owner_kind).toBe('skill');
+      expect(() => EvalSkillRunDetail.parse(skillDetail)).not.toThrow();
+      expect(() => EvalRunDetail.parse({ ...skillDetail, owner_kind: 'other' })).toThrow();
+      expect(() =>
+        EvalRunDetail.parse({ ...skillDetail, case_results: [{ ...skillDetail.case_results[0], effect: 'nope' }] }),
+      ).toThrow();
+      // a skill body is not accepted as an agent run and vice versa
+      expect(() => EvalAgentRunDetail.parse(skillDetail)).toThrow();
+    });
+
+    it('EvalSkillOverview / EvalSkillTrendPoint', () => {
+      const point = {
+        run_id: 'r2',
+        ran_at: 'x',
+        skill_version: 2,
+        carrier_agent_id: 'a1',
+        carrier_name: 'Security',
+        carrier_version: 3,
+        model: 'm',
+        recall: null,
+        precision: 0.5,
+        citation_accuracy: 1,
+        lift,
+        cost_usd: null,
+      };
+      expect(() => EvalSkillTrendPoint.parse(point)).not.toThrow();
+      expect(() =>
+        EvalSkillOverview.parse({
+          skill: { id: 's1', name: 'n', version: 2, enabled: true },
+          cases_total: 2,
+          running_run_id: null,
+          running_case_run: null,
+          carriers: [{ ...carrier, enabled: true, link_enabled: false }],
+          latest: skillRun(),
+          previous: null,
+          trend: [point],
+        }),
+      ).not.toThrow();
+      expect(() =>
+        EvalSkillOverview.parse({
+          skill: { id: 's1', name: 'n', version: 2, enabled: true },
+          cases_total: 0,
+          running_run_id: null,
+          running_case_run: null,
+          carriers: [{ ...carrier, enabled: true }],
+          latest: null,
+          previous: null,
+          trend: [],
+        }),
+      ).toThrow();
+    });
+
+    it('EvalSkillCaseListItem.latest_result and SkillEvalRunRequest', () => {
+      const item = {
+        id: 'c1',
+        name: 'one',
+        expectation,
+        created_at: 'x',
+        source_finding_id: null,
+        latest_result: null,
+      };
+      expect(() => EvalSkillCaseListItem.parse(item)).not.toThrow();
+      expect(() =>
+        EvalSkillCaseListItem.parse({
+          ...item,
+          latest_result: {
+            run_id: 'r2',
+            with_state: 'passed',
+            without_state: 'failed',
+            effect: 'helped',
+            expected_count: 1,
+            got_count: 1,
+            cost_usd: 0.02,
+            error_reason: null,
+          },
+        }),
+      ).not.toThrow();
+      const id = '11111111-1111-4111-8111-111111111111';
+      expect(() => SkillEvalRunRequest.parse({ carrier_agent_id: id })).not.toThrow();
+      expect(EvalSkillRunRequest).toBe(SkillEvalRunRequest);
+      expect(() => SkillEvalRunRequest.parse({ carrier_agent_id: 'nope' })).toThrow();
+    });
   });
 
   it('EvalOverview / EvalDashboard allow null metrics in trend and sparkline', () => {
@@ -393,6 +561,7 @@ describe('Eval contracts (SPEC-08)', () => {
         cases_total: 2,
         finished_runs: 1,
         running_run_id: null,
+        running_case_run: null,
         latest: run(),
         previous: null,
         trend: [
@@ -403,6 +572,7 @@ describe('Eval contracts (SPEC-08)', () => {
             recall: null,
             precision: 0.5,
             citation_accuracy: null,
+            cost_usd: null,
           },
         ],
         runs: [run()],

@@ -3,19 +3,28 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   EvalCase,
   EvalCaseDetail,
+  EvalCaseDraft,
+  EvalCaseInput,
   EvalCaseLinks,
   EvalCaseListItem,
-  EvalCaseRename,
+  EvalCaseUpdate,
   EvalCompare,
   EvalCompareQuery,
   EvalDashboard,
+  EvalFindingSkills,
   EvalOverview,
   EvalRunDetail,
   EvalRunStart,
+  EvalSkillCaseListItem,
+  EvalSkillOverview,
+  SkillEvalCaseRequest,
+  SkillEvalRunRequest,
 } from '@devdigest/shared';
 import { z } from 'zod';
+import { ValidationError } from '../../platform/errors.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
+import { INVALID_CASE_INPUT_MESSAGE, INVALID_CASE_RUN_BODY_MESSAGE } from './constants.js';
 import { EvalService } from './service.js';
 
 /**
@@ -24,27 +33,162 @@ import { EvalService } from './service.js';
  *   GET    /pulls/:id/eval-case-links     → EvalCaseLinks (findings of a PR that already have a case)
  *   GET    /agents/:id/eval-cases         → EvalCaseListItem[]
  *   GET    /eval-cases/:id                → EvalCaseDetail
- *   PATCH  /eval-cases/:id                → EvalCase (rename)
+ *   PATCH  /eval-cases/:id                → EvalCase (rename; edit rule B, SPEC-09)
  *   DELETE /eval-cases/:id                → 204
  *   POST   /agents/:id/eval-runs          → 202 EvalRunStart (runs in the background)
  *   GET    /agents/:id/eval-overview      → EvalOverview
  *   GET    /eval-runs/compare?a&b         → EvalCompare (registered before /eval-runs/:id)
  *   GET    /eval-runs/:id                 → EvalRunDetail
  *   GET    /eval-dashboard                → EvalDashboard
+ *
+ * SPEC-09 — Case Editor and finding → skill case:
+ *   POST   /agents/:id/eval-cases         → 201 EvalCase (manual case)
+ *   POST   /skills/:id/eval-cases         → 201 EvalCase (manual case)
+ *   GET    /skills/:id/eval-cases         → EvalSkillCaseListItem[]
+ *   GET    /findings/:id/eval-skills      → EvalFindingSkills
+ *   POST   /findings/:id/skill-eval-case  → 201 EvalCase, or 200 when the skill already has one
+ *   POST   /skills/:id/eval-runs          → 202 EvalRunStart (carrier agent, two arms per case)
+ *   GET    /skills/:id/eval-overview      → EvalSkillOverview
+ *   GET    /eval-runs/:id                 → EvalRunDetail (discriminated by owner_kind)
+ *
+ * SPEC-10 — Case Editor seeded from a finding:
+ *   GET    /findings/:id/eval-case-draft  → EvalCaseDraft (seed + owners; creates nothing, no LLM call)
+ *   POST   /findings/:id/eval-case        → optional EvalCaseInput body (the edited draft)
+ *   POST   /findings/:id/skill-eval-case  → optional `input` (EvalCaseInput) next to `skill_id`
+ *   POST   /eval-cases/:id/run            → 202 EvalRunStart (one case, `scope: "case"`; body `{ carrier_agent_id }`
+ *                                           for a skill-owned case, none for an agent-owned one; 409 while the
+ *                                           owner has ANY run in progress)
+ *   GET    /eval-runs/:id                 → also answers a case run (`scope: "case"`); compare answers 404 for one
+ *
  * 404 for an id outside the caller's workspace; 409/422 carry `error.code` and ids in `details`.
  */
 export default async function evalRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const service = new EvalService(app.container);
 
+  app.get(
+    '/findings/:id/eval-case-draft',
+    { schema: { params: IdParams, response: { 200: EvalCaseDraft } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.draftFromFinding(workspaceId, req.params.id);
+    },
+  );
+
+  // The body is OPTIONAL (SPEC-10 AC-8: no body = the SPEC-08 behaviour), so it is parsed by hand
+  // instead of `schema.body` - the established optional-body exception, `server/INSIGHTS.md`
+  // 2026-09-20 (precedent `reviews/routes.ts`, `conventions/routes.ts`). A malformed body is 422.
   app.post(
     '/findings/:id/eval-case',
     { schema: { params: IdParams, response: { 201: EvalCase } } },
     async (req, reply) => {
       const { workspaceId } = await getContext(app.container, req);
-      const created = await service.createFromFinding(workspaceId, req.params.id);
+      const parsed = EvalCaseInput.safeParse(req.body ?? undefined);
+      if (req.body != null && !parsed.success) {
+        throw new ValidationError(INVALID_CASE_INPUT_MESSAGE, parsed.error.issues);
+      }
+      const created = await service.createFromFinding(
+        workspaceId,
+        req.params.id,
+        parsed.success ? parsed.data : undefined,
+      );
       reply.status(201);
       return created;
+    },
+  );
+
+  app.get(
+    '/findings/:id/eval-skills',
+    { schema: { params: IdParams, response: { 200: EvalFindingSkills } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.listFindingSkills(workspaceId, req.params.id);
+    },
+  );
+
+  app.post(
+    '/findings/:id/skill-eval-case',
+    {
+      schema: {
+        params: IdParams,
+        body: SkillEvalCaseRequest,
+        response: { 200: EvalCase, 201: EvalCase },
+      },
+    },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const { case: evalCase, created } = await service.createFromFindingForSkill(
+        workspaceId,
+        req.params.id,
+        req.body.skill_id,
+        req.body.input,
+      );
+      reply.status(created ? 201 : 200);
+      return evalCase;
+    },
+  );
+
+  app.post(
+    '/agents/:id/eval-cases',
+    { schema: { params: IdParams, body: EvalCaseInput, response: { 201: EvalCase } } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const created = await service.createManualCase(
+        workspaceId,
+        { kind: 'agent', id: req.params.id },
+        req.body,
+      );
+      reply.status(201);
+      return created;
+    },
+  );
+
+  app.post(
+    '/skills/:id/eval-cases',
+    { schema: { params: IdParams, body: EvalCaseInput, response: { 201: EvalCase } } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const created = await service.createManualCase(
+        workspaceId,
+        { kind: 'skill', id: req.params.id },
+        req.body,
+      );
+      reply.status(201);
+      return created;
+    },
+  );
+
+  app.get(
+    '/skills/:id/eval-cases',
+    { schema: { params: IdParams, response: { 200: z.array(EvalSkillCaseListItem) } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.listSkillCases(workspaceId, req.params.id);
+    },
+  );
+
+  app.post(
+    '/skills/:id/eval-runs',
+    { schema: { params: IdParams, body: SkillEvalRunRequest, response: { 202: EvalRunStart } } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const started = await service.startSkillRun(
+        workspaceId,
+        req.params.id,
+        req.body.carrier_agent_id,
+        req.log,
+      );
+      reply.status(202);
+      return started;
+    },
+  );
+
+  app.get(
+    '/skills/:id/eval-overview',
+    { schema: { params: IdParams, response: { 200: EvalSkillOverview } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.skillOverview(workspaceId, req.params.id);
     },
   );
 
@@ -77,10 +221,10 @@ export default async function evalRoutes(appBase: FastifyInstance) {
 
   app.patch(
     '/eval-cases/:id',
-    { schema: { params: IdParams, body: EvalCaseRename, response: { 200: EvalCase } } },
+    { schema: { params: IdParams, body: EvalCaseUpdate, response: { 200: EvalCase } } },
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
-      return service.renameCase(workspaceId, req.params.id, req.body.name);
+      return service.updateCase(workspaceId, req.params.id, req.body);
     },
   );
 
@@ -96,6 +240,30 @@ export default async function evalRoutes(appBase: FastifyInstance) {
     async (req, reply) => {
       const { workspaceId } = await getContext(app.container, req);
       const started = await service.startRun(workspaceId, req.params.id, req.log);
+      reply.status(202);
+      return started;
+    },
+  );
+
+  // The body is OPTIONAL (an agent-owned case needs none; a skill-owned case names its carrier), so
+  // it is parsed by hand instead of `schema.body` - the established optional-body exception,
+  // `server/INSIGHTS.md` 2026-09-20 (precedent `reviews/routes.ts`, `conventions/routes.ts`).
+  // A present but malformed body is 422. SPEC-10 AC-35.
+  app.post(
+    '/eval-cases/:id/run',
+    { schema: { params: IdParams, response: { 202: EvalRunStart } } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const parsed = SkillEvalRunRequest.safeParse(req.body ?? undefined);
+      if (req.body != null && !parsed.success) {
+        throw new ValidationError(INVALID_CASE_RUN_BODY_MESSAGE, parsed.error.issues);
+      }
+      const started = await service.startCaseRun(
+        workspaceId,
+        req.params.id,
+        parsed.success ? parsed.data.carrier_agent_id : undefined,
+        req.log,
+      );
       reply.status(202);
       return started;
     },

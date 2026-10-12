@@ -55,34 +55,112 @@
   },
   "caseEditor": {
     "newCase": "New eval case",
-    "caseTitle": "Eval case · {name}",
-    "runCase": "Run case",
-    "running": "Running…",
-    "save": "Save",
-    "saving": "Saving…",
-    "nameLabel": "Name",
-    "namePlaceholder": "stripe-key-leak",
-    "inputLabel": "Input",
-    "tabs": {
+    "createTitle": "New eval case",
+    "cancel": "Cancel",
+    "fields": {
+      "name": "Name",
+      "title": "PR title",
+      "titlePlaceholder": "Add Stripe integration",
+      "description": "Description",
+      "descriptionPlaceholder": "Wire up payments via Stripe SDK.",
       "diff": "Diff",
-      "prMeta": "PR meta"
+      "diffHint": "Paste a unified diff, or only the hunks of one file.",
+      "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_xxx\"",
+      "type": "Expectation type",
+      "notes": "Notes",
+      "notesPlaceholder": "Why this case exists, what to look for"
     },
-    "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_...\"",
-    "titleLabel": "Title",
-    "titlePlaceholder": "Add Stripe integration",
-    "bodyLabel": "Body",
-    "bodyPlaceholder": "Wire up payments via Stripe SDK.",
-    "preview": "Preview",
-    "expectedOutput": "Expected output",
-    "validJson": "valid JSON",
-    "invalidJson": "invalid JSON",
-    "lastRunPassed": "Last run passed",
-    "lastRunFailed": "Last run failed",
-    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s"
+    "findingNote": "Created from a finding — only the name and notes can be edited",
+    "createdManually": "Created manually",
+    "problems": {
+      "titleRequired": "Enter a PR title",
+      "titleTooLong": "Use 200 characters or fewer",
+      "descriptionTooLong": "Use 5,000 characters or fewer",
+      "notesTooLong": "Use 2,000 characters or fewer"
+    },
+    "rejections": {
+      "diffTooLarge": "The diff is larger than 200 KB — paste only the file you need",
+      "noPatch": "This diff has no changed lines for the chosen file",
+      "rangeOutsideDiff": "The line range is outside the diff's changed lines — use new-side line numbers",
+      "invalid": "Some values were rejected — check the fields and try again",
+      "inputLocked": "This case was created from a finding — only its name and notes can be edited",
+      "undecided": "Accept or dismiss this finding first",
+      "agentMissing": "The agent that produced this finding was deleted",
+      "skillNotInRun": "This skill was not used in this review"
+    },
+    "discard": {
+      "title": "Discard changes to this case?",
+      "body": "Your edits have not been saved and will be lost.",
+      "keep": "Keep editing",
+      "confirm": "Discard changes"
+    },
+    "subtitle": {
+      "default": "Assert the expected output",
+      "seededAccepted": "Seeded from an accepted finding · assert the expected output",
+      "seededDismissed": "Seeded from a dismissed finding · assert the expected output"
+    },
+    "banner": {
+      "positive": "POSITIVE CASE",
+      "negative": "NEGATIVE CASE",
+      "mustFind": "MUST find \"{title}\" at {location}",
+      "mustFindNoTitle": "MUST find at {location}",
+      "mustFindBare": "MUST find",
+      "mustNotFlag": "MUST NOT flag at {location}",
+      "mustNotFlagBare": "MUST NOT flag"
+    },
+    "typeSwitch": {
+      "mustFind": "Must find",
+      "mustNotFlag": "Must not flag"
+    },
+    "owner": {
+      "legend": "Add to",
+      "none": "No owner is available for this finding",
+      "agent": "agent",
+      "skill": "skill",
+      "inEvalSet": "In eval set",
+      "inEvalSetLink": "{name} — In eval set, open its Evals tab"
+    },
+    "input": {
+      "heading": "Input",
+      "tabs": {
+        "diff": "Diff",
+        "files": "Files",
+        "meta": "PR meta"
+      },
+      "noFiles": "No file headers found in the diff",
+      "filesLabel": "Files in the diff",
+      "expectedFile": "expected file"
+    },
+    "expected": {
+      "heading": "Expected output",
+      "valid": "valid JSON",
+      "invalid": "invalid JSON: {reason}",
+      "skeleton": "+ Finding skeleton",
+      "reasons": {
+        "empty": "the text is empty",
+        "tooLarge": "Expected output is larger than 10 KB",
+        "notJson": "the text is not JSON",
+        "notArray": "expected an array",
+        "notOneObject": "expected exactly one object in the array",
+        "notObject": "the array item must be an object",
+        "unknownKey": "unknown key \"{key}\"",
+        "file": "file must be 1 to 500 characters",
+        "startLine": "start_line must be a whole number of 1 or more",
+        "endLine": "end_line must be a whole number of 1 or more",
+        "endBeforeStart": "end_line must not be before start_line",
+        "severity": "severity must be CRITICAL, WARNING, SUGGESTION or null",
+        "category": "category must be bug, security, perf, style, test or null",
+        "title": "title must be text of 200 characters or fewer, or null"
+      }
+    },
+    "actual": {
+      "heading": "Actual output",
+      "neverRun": "Never run yet"
+    },
+    "exists": "This owner already has a case from this finding",
+    "existsLink": "Open {name}'s Evals tab"
   },
   "evalsTab": {
-    "metricsTitle": "Eval metrics",
-    "metricsSubtitle": "Recall / Precision / Citation for this agent's eval cases",
     "casesHeading": "Eval cases",
     "newCase": "New case",
     "loadingCases": "Loading cases…",
@@ -96,7 +174,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "tabLabel": "Evals",
-    "passingSummary": "{passed} / {scored} passing",
+    "passingSummary": "{passed}/{scored} passing",
     "viewDashboard": "View full dashboard →",
     "runAll": "Run all evals",
     "starting": "Starting…",
@@ -117,17 +195,12 @@
     },
     "empty": {
       "title": "No eval cases yet",
-      "body": "No eval cases yet — accept or dismiss findings on a PR, then click Turn into eval case",
+      "body": "No eval cases yet — create one from a diff, or accept or dismiss findings on a PR and click Turn into eval case",
       "link": "Go to Pull Requests"
     },
     "case": {
       "listLabel": "Eval cases",
       "open": "Open eval case {name}",
-      "expectedGot": "expected {expected}, got {got}",
-      "mustNotFlagTag": "must not flag",
-      "severityCategory": "{severity} · {category}",
-      "typeMustFind": "must find",
-      "typeMustNotFlag": "must not flag",
       "delete": "Delete case {name}",
       "state": {
         "passed": "passed",
@@ -135,8 +208,18 @@
         "errored": "errored",
         "never_run": "never run"
       },
-      "erroredReason": "errored: {reason}"
-    }
+      "erroredReason": "errored: {reason}",
+      "edit": "Edit case {name}",
+      "resultPlain": "expected {expected, plural, one {# finding} other {# findings}}, got {got}",
+      "resultWithRecall": "expected {expected, plural, one {# finding} other {# findings}}, got {got} · recall {recall}%",
+      "badgeMustFind": "MUST FIND",
+      "badgeMustNotFlag": "MUST NOT FLAG",
+      "run": "Run case {name}",
+      "running": "Running case {name}"
+    },
+    "metricsLabel": "EVAL METRICS",
+    "scoringCaption": "Scoring is mechanical — a finding counts when file matches and line ranges overlap. No model call in the scorer.",
+    "casesCount": "{count, plural, one {# case} other {# cases}}"
   },
   "page": {
     "crumbSkillsLab": "Skills Lab",
@@ -148,49 +231,17 @@
   },
   "caseModal": {
     "title": "Eval case · {name}",
-    "close": "Close",
     "loading": "Loading the eval case…",
     "loadError": "Couldn’t load this eval case.",
-    "nameLabel": "Name",
     "namePlaceholder": "stripe-key-leak",
     "save": "Save",
     "saving": "Saving…",
     "nameRequired": "Enter a name",
     "nameTooLong": "Use 80 characters or fewer",
-    "saveError": "Couldn’t rename the case. Check the name and try again.",
-    "diffHeading": "Frozen diff",
-    "diffLabel": "Frozen diff of {file}",
-    "prHeading": "Pull request",
-    "prTitleLabel": "Title",
-    "prBodyLabel": "Body",
-    "noBody": "No description",
-    "expectationHeading": "Expectation",
-    "expectation": {
-      "type": "Type",
-      "file": "File",
-      "lines": "Lines",
-      "severity": "Severity",
-      "category": "Category",
-      "title": "Title",
-      "mustFind": "must find",
-      "mustNotFlag": "must not flag"
-    },
     "source": {
       "heading": "Source",
       "link": "Open source PR #{number}",
       "unavailable": "Source no longer available"
-    },
-    "lastResult": {
-      "heading": "Last result",
-      "neverRun": "never run",
-      "duration": "Duration",
-      "cost": "Cost",
-      "expectedGot": "expected {expected}, got {got}",
-      "state": {
-        "passed": "passed",
-        "failed": "failed",
-        "errored": "errored"
-      }
     },
     "delete": {
       "action": "Delete case",
@@ -199,7 +250,8 @@
       "confirm": "Delete case",
       "deleting": "Deleting…",
       "cancel": "Cancel",
-      "error": "Couldn’t delete the case."
+      "error": "Couldn’t delete the case.",
+      "bodySkill": "“{name}” will be removed from this skill’s eval set. Past runs keep their results."
     }
   },
   "runStatus": {
@@ -236,14 +288,6 @@
       "precision": "Precision",
       "citation": "Citation accuracy",
       "sparklineLabel": "{metric} over the last {count, plural, one {# run} other {# runs}}"
-    },
-    "trend": {
-      "title": "Metric trend",
-      "chartLabel": "Recall, precision and citation accuracy over the last {count, plural, one {# run} other {# runs}}",
-      "recall": "Recall",
-      "precision": "Precision",
-      "citation": "Citation",
-      "versionLabel": "v{version}"
     },
     "runs": {
       "title": "Recent runs",
@@ -378,5 +422,57 @@
     "deltaDown": "down {points} points",
     "deltaFlat": "no change",
     "deltaNone": "no comparison available"
+  },
+  "trend": {
+    "title": "Metric trend",
+    "chartLabel": "Recall, precision and citation accuracy over the last {count, plural, one {# run} other {# runs}}",
+    "recall": "Recall",
+    "precision": "Precision",
+    "citation": "Citation",
+    "versionLabel": "v{version}",
+    "noRunsYet": "No runs yet",
+    "tooltip": {
+      "agent": "{version} · {date} · Recall {recall} · Precision {precision} · Citation accuracy {citation} · Cost {cost}",
+      "skill": "{version} · {date} · {carrier} {carrierVersion} · {model} · With skill: recall {recall}, precision {precision}, citation accuracy {citation} · Lift: recall {liftRecall}, precision {liftPrecision}, citation accuracy {liftCitation} · Cost (both arms) {cost}"
+    }
+  },
+  "caseRun": {
+    "runOnSave": "Run on save",
+    "runCase": "Run case",
+    "starting": "Starting…",
+    "hints": {
+      "draft": "Save the case to run it",
+      "modified": "Save your changes to run it",
+      "running": "A run is in progress",
+      "noAgent": "Link this skill to an agent first"
+    },
+    "banner": {
+      "running": "Running…",
+      "passed": "Last run passed",
+      "failed": "Last run failed",
+      "errored": "Last run errored: {reason}",
+      "erroredNoReason": "Last run errored",
+      "stats": "{passed}/{total} passed · {duration} · {cost}",
+      "statsErrored": "{duration} · {cost}",
+      "effect": "Effect: {effect}",
+      "effectLabels": {
+        "helped": "helped",
+        "hurt": "hurt",
+        "noEffectPass": "no effect · pass",
+        "noEffectFail": "no effect · fail",
+        "errored": "errored"
+      }
+    },
+    "live": {
+      "started": "Case run started",
+      "completed": "Case run completed",
+      "partial": "Case run finished with an errored case",
+      "errored": "Case run failed"
+    },
+    "carrierDialog": {
+      "title": "Run skill eval case",
+      "carrierHelp": "The case is reviewed twice by this agent: once with the skill and once without it.",
+      "confirm": "Run case"
+    }
   }
 }

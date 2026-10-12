@@ -63,6 +63,29 @@ needed none of those and cannot drift.
 ## Codebase Patterns
 
 
+- **2026-10-11** — `eval_runs` rows are agent-owned OR skill-owned (SPEC-09:
+  `owner_kind`, nullable `agent_id`/`agent_version`, `skill_id`, `carrier_agent_id`),
+  and nothing but discipline keeps skill runs out of agent reads: every query that
+  lists, counts, or deletes agent runs must filter `owner_kind = 'agent'`
+  (`modules/eval/repository.ts`: `agentRuns()`, `runningRunId`,
+  `recentRunSummaries`, `deleteByAgent`; `summarySelection` casts `agentId` to
+  string relying on it). No `pnpm arch` rule or type catches a new unfiltered
+  query — the dashboard, overview and compare would silently show skill runs
+  (`test/skill-eval-runs.it.test.ts` NFR-5 tests cover only today's reads).
+  **Sharpened 2026-10-12 (SPEC-10):** the same discipline now covers a second axis,
+  `eval_runs.scope` (`'set'` | `'case'`, migration 0025). A single-case run is an
+  `eval_runs` row of size 1, so every set-aggregate reader must also filter
+  `scope = 'set'` — `agentRuns()`, `skillRuns()`, `recentRunSummaries` and the
+  set-only `runningRunId`/`runningSkillRunId` — or the KPIs, trend and dashboard show
+  a 1-case run. Leave unfiltered: `getRun`/`getRunRow`, `deleteByAgent`/
+  `deleteBySkill`, `reapRunning`, `saveProgress`/`finalizeRun` and the 409 lookup
+  (`anyRunningRunId`). A case's `latest_result` comes from its own any-scope reader
+  (`latestResultsByCase`: newest finished set run vs newest case run, errored case
+  runs included — an errored run is not "finished"), never from "the newest run".
+  The single-flight unique indexes key on the owner only, so a case run and a set
+  run of one owner already 409 each other. `test/eval-case-run.it.test.ts` (NFR-18)
+  snapshots every reader before and after a case run — extend it for a new reader.
+
 - **2026-10-06** — `pnpm arch` does not catch an adapter importing from
   `modules/`: `.dependency-cruiser.cjs` has no `src/adapters` → `src/modules`
   rule. SPEC-07's `simple-git.ts` importing PR-context limits from
@@ -403,6 +426,11 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-10-11** — SPEC-09 server side (migrations 0022–0024, skill eval runner,
+  manual cases). Recorded the `eval_runs` owner-filter invariant (Codebase
+  Patterns). The `skills-stats`/`skills.it` baseline failures and the
+  `onboarding-tour`/`context-run` flakiness reproduced and are already recorded.
 
 - **2026-10-06** — L05 review fixes (PR #21): `onboarding.head_sha` column
   (migration 0019, backfilled from `json->meta->index_sha`), staleness read

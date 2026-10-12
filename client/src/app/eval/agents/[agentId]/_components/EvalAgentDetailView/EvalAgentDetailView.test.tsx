@@ -35,11 +35,12 @@ function overview(over: Partial<EvalOverview> = {}): EvalOverview {
     cases_total: 4,
     finished_runs: 2,
     running_run_id: null,
+    running_case_run: null,
     latest: RUN_NEW,
     previous: RUN_OLD,
     trend: [
-      { run_id: "r1", ran_at: RUN_OLD.started_at, agent_version: 1, recall: 0.7, precision: null, citation_accuracy: 0.9 },
-      { run_id: "r2", ran_at: RUN_NEW.started_at, agent_version: 2, recall: 0.75, precision: 0.8, citation_accuracy: 0.9 },
+      { run_id: "r1", ran_at: RUN_OLD.started_at, agent_version: 1, recall: 0.7, precision: null, citation_accuracy: 0.9, cost_usd: null },
+      { run_id: "r2", ran_at: RUN_NEW.started_at, agent_version: 2, recall: 0.75, precision: 0.8, citation_accuracy: 0.9, cost_usd: 0.12 },
     ],
     runs: [RUN_NEW, RUN_OLD],
     ...over,
@@ -107,6 +108,16 @@ describe("EvalAgentDetailView (SPEC-08)", () => {
     expect(within(precision).getByText("80%")).toBeInTheDocument();
     expect(within(precision).getByText("no comparison available")).toBeInTheDocument(); // EC-20
     expect(screen.getByRole("img", { name: "Recall, precision and citation accuracy over the last 2 runs" })).toBeInTheDocument();
+
+    // AC-56/AC-57/EC-27: the shared trend's tooltip — version, date, three metrics, cost ("—" when null).
+    const trendRuns = screen.getAllByRole("button", { name: /^v\d · / });
+    expect(trendRuns).toHaveLength(2);
+    expect(trendRuns[0]).toHaveAccessibleName(expect.stringContaining("Precision — · Citation accuracy 90% · Cost —"));
+    expect(trendRuns[1]).toHaveAccessibleName(expect.stringContaining("Recall 75% · Precision 80% · Citation accuracy 90% · Cost $0.12"));
+    fireEvent.focus(trendRuns[1]!);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("v2 ·");
+    fireEvent.keyDown(trendRuns[1]!, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     // Compare opens with the two selected finished runs, old → new.
     fireEvent.click(screen.getByRole("checkbox", { name: "Select run v2 for comparison" }));

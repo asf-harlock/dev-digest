@@ -1044,7 +1044,7 @@ d('SPEC-08 eval routes (Testcontainers pg)', () => {
   // =========================================================================
 
   describe('GET /agents/:id/eval-overview', () => {
-    it('AC-57/AC-38/EC-36: latest/previous are the two newest FINISHED runs, trend ≤30 chronological, runs ≤50 newest first', async () => {
+    it('AC-57/AC-38/EC-36: latest/previous are the two newest FINISHED runs, trend ≤100 chronological, runs ≤50 newest first', async () => {
       const app = await makeApp();
       const agent = await makeAgent(app);
       await insertCaseRow(agent.id);
@@ -1069,11 +1069,11 @@ d('SPEC-08 eval routes (Testcontainers pg)', () => {
       expect(o.previous.id).toBe(finished[48]!.id);
       expect(o.latest.agent_name).toBe(agent.name);
 
-      expect(o.trend).toHaveLength(30);
-      expect(o.trend.map((p: { run_id: string }) => p.run_id)).toEqual(finished.slice(20).map((r) => r.id)); // chronological
+      expect(o.trend).toHaveLength(50); // AC-58: window is 100 finished runs, so all 50 fit
+      expect(o.trend.map((p: { run_id: string }) => p.run_id)).toEqual(finished.map((r) => r.id)); // chronological
       const gap = o.trend.find((p: { run_id: string }) => p.run_id === finished[47]!.id);
       expect(gap.recall).toBeNull(); // EC-36: a gap, never 0
-      expect(o.trend[0]).toMatchObject({ agent_version: finished[20]!.agentVersion, recall: 0.2 });
+      expect(o.trend[20]).toMatchObject({ agent_version: finished[20]!.agentVersion, recall: 0.2 });
 
       expect(o.runs).toHaveLength(50);
       expect(o.runs[0].id).toBe(running.id);
@@ -1468,7 +1468,7 @@ d('SPEC-08 eval read performance (NFR-13)', () => {
     const overview = await timed(`/agents/${agents[0]!.id}/eval-overview`);
     expect(overview.ms).toBeLessThan(500);
     expect(overview.body).toMatchObject({ cases_total: 50, finished_runs: 50 });
-    expect(overview.body.trend).toHaveLength(30);
+    expect(overview.body.trend).toHaveLength(50);
     expect(overview.body.runs).toHaveLength(50);
     await app.close();
   }, 180_000);

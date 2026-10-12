@@ -74,6 +74,8 @@ Load the resolved skills via the `Skill` tool before writing.
 
 ## Step 4 — run it and report
 
+Gate runner — do not read `scripts/check.sh`, this is its usage: `./scripts/check.sh <server|client|core> <typecheck|lint|arch|test> ` runs ONE gate and prints one `PASS …` line or a capped failure excerpt (full log under `.claude/implementer/logs/`); `./scripts/check.sh <pkg> related <files…>` runs only the tests importing those files; `./scripts/check.sh <pkg> all` or `./scripts/check.sh all` runs every gate in one call (never loop over gates yourself — under zsh an unquoted loop variable is not word-split). Docker-backed `*.it.test.ts` are never run by it: use `cd server && pnpm exec vitest run <file>`.
+
 Run the test you wrote (`cd client && pnpm test` / `cd server && pnpm exec
 vitest run <file>` per `TESTING.md`'s split) and read the result. Return your
 final message in this structure:

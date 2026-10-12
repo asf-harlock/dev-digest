@@ -155,6 +155,47 @@ after it). `run_traces.trace` gets `specs_read` (attached paths, prompt order) a
 `project_context` (every listed document with its exact sent `text`), also on
 failure or cancel.
 
+## Eval case routes from a finding (SPEC-10)
+
+The Case Editor opens seeded from a decided finding; nothing is created until Save.
+Module `modules/eval/`; none of these routes makes an LLM call.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `GET /findings/:id/eval-case-draft` | — | `EvalCaseDraft` `{ name, expectation, input_diff, input_meta, owners }`. `name` is "From finding: {title}" cut to 80 characters in all; `expectation.type` is `must_find` (accepted) or `must_not_flag` (dismissed); `input_diff` is the finding's file diff frozen by the SPEC-08 rules; `owners` is `[{ kind, id, name, has_case, case_id }]` — the review's agent when it still exists in the workspace, then the skills recorded for the review's run, in run order. 404 outside the workspace; 422 `finding_undecided` · `agent_missing` (no agent AND no recorded skill) · `no_patch` · `range_outside_diff`. |
+| `POST /findings/:id/eval-case` | optional `EvalCaseInput` (the edited draft) | `201 EvalCase` for the review's agent. No body = the SPEC-08 behaviour (slug name, the finding's own seed). With a body: 204,800-byte diff cap, pasted-diff parsing and grounding (`422 frozen_diff_too_large` · `no_patch` · `range_outside_diff`), then the case is stored with `source_finding_id` and the finding's PR number and repo in `input_meta`. A malformed body is `422 validation_error`. `409 eval_case_exists` (`details.case_id`) when the agent already has a case from the finding. |
+| `POST /findings/:id/skill-eval-case` | `{ skill_id, input? }` — `input` is an optional `EvalCaseInput`, same rules as above | `201 EvalCase`, or `200` with the existing case when the skill already has one made from the finding. `422 skill_not_in_run` when the skill is not recorded for the finding's run. |
+
+The body of `POST /findings/:id/eval-case` is parsed by hand (it is optional), so a
+bad body is mapped to `422 validation_error` in the handler rather than by `schema.body`.
+
+## Single-case eval run (SPEC-10)
+
+A case can be run on its own. It is an `eval_runs` row with `scope: "case"` (column
+`eval_runs.scope`, `'set'` for every earlier run) on the same executor as the set run;
+it makes real LLM calls (one review for an agent-owned case, two - with and without the
+skill - for a skill-owned case) and writes nothing to `reviews`, `findings`, `agent_runs`,
+`agent_run_skills` or `run_traces`.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `POST /eval-cases/:id/run` | none for an agent-owned case; `{ carrier_agent_id }` (UUID) for a skill-owned case (`422 validation_error` when missing or malformed) | `202 EvalRunStart` `{ id, status: "running" }` before any review. 404 case or carrier outside the workspace; `422 no_agent_linked` when the carrier is not linked to the skill; `409 eval_run_in_progress` (`details.run_id`) while the owner has ANY run in progress, a set run or a case run alike. A disabled agent still runs. The body is parsed by hand (it is optional), like the finding routes above. |
+| `GET /eval-runs/:id` | — | Also answers a case run: `scope: "case"`, snapshot, one-case `case_set`, per-case result, `cases_done`, `cases_total`. Every run record and detail carries `scope`. |
+| `GET /eval-runs/compare?a&b` | — | `404` when either id is a case run. |
+
+A case run finishes `completed` (the case was scored) or `errored` (with `error_reason`);
+the boot reaper marks one left `running` as `errored` / `interrupted`.
+
+What a case run never changes: every run aggregate of `GET /agents/:id/eval-overview`,
+`GET /skills/:id/eval-overview` and `GET /eval-dashboard` (`latest`, `previous`, `trend`,
+`runs`, `finished_runs`, `sparkline`, `recent_runs`) reads `scope = 'set'` runs only, and
+`running_run_id` is a running SET run only. A running case run is reported as
+`running_case_run: { run_id, case_id } | null` on both overviews.
+
+What a case run does change: each case's `latest_result` in `GET /agents/:id/eval-cases`,
+`GET /skills/:id/eval-cases` and `GET /eval-cases/:id` is the later-started of the owner's
+newest finished set run and the case's newest case run, an `errored` case run included.
+
 ## Review context (non-obvious)
 
 What the reviewer actually sends to the model is assembled in

@@ -1,0 +1,1 @@
+export { EffectLabel } from "./EffectLabel";

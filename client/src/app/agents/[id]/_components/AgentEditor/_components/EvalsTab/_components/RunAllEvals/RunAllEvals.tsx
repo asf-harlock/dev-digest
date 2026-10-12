@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
-import type { EvalRunDetail } from "@devdigest/shared";
+import type { EvalAgentRunDetail } from "@devdigest/shared";
 import { useEvalRun, useStartEvalRun } from "@/lib/hooks/eval";
 import { currentCaseNumber, finishedMessageKey } from "./helpers";
 import { s } from "./styles";
@@ -16,17 +16,21 @@ export function RunAllEvals({
   agentId,
   casesTotal,
   runningRunId,
+  caseRunning = false,
 }: {
   agentId: string;
   casesTotal: number;
   /** `overview.running_run_id` — a run started elsewhere (another tab) is followed too. */
   runningRunId: string | null;
+  /** A single-case run of the agent is executing (`running_case_run`, or one started here): every
+   *  run of the owner disables **Run all evals** (SPEC-10 AC-49). */
+  caseRunning?: boolean;
 }) {
   const t = useTranslations("eval");
   const start = useStartEvalRun(agentId);
   const [startedRunId, setStartedRunId] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState<string | null>(null);
-  const [finishedRun, setFinishedRun] = React.useState<EvalRunDetail | null>(null);
+  const [finishedRun, setFinishedRun] = React.useState<EvalAgentRunDetail | null>(null);
 
   const runId = runningRunId ?? startedRunId;
   const run = useEvalRun(runId, {
@@ -42,7 +46,7 @@ export function RunAllEvals({
   });
 
   const noCases = casesTotal === 0;
-  const busy = start.isPending || run.isRunning || runningRunId !== null;
+  const busy = start.isPending || run.isRunning || runningRunId !== null || caseRunning;
   const disabled = busy || noCases;
   const hint = noCases ? t("tooltips.noCases") : busy ? t("tooltips.runInProgress") : undefined;
 
@@ -68,7 +72,7 @@ export function RunAllEvals({
   return (
     <div style={s.wrap}>
       <span title={hint}>
-        <Button kind="primary" icon="Play" loading={start.isPending} disabled={disabled} onClick={onClick}>
+        <Button kind="secondary" size="sm" icon="Play" loading={start.isPending} disabled={disabled} onClick={onClick}>
           {start.isPending ? t("evalsTab.starting") : t("evalsTab.runAll")}
         </Button>
       </span>

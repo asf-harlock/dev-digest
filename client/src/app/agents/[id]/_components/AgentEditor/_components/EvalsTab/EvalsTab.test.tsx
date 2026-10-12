@@ -1,8 +1,8 @@
 /* EvalsTab.test.tsx — SPEC-08 Evals tab of the agent editor (AC-10..AC-18, AC-35/36,
-   AC-39, EC-22, EC-23, UI-3). `fetch` is the outside world; hooks, api.ts and
-   react-query are real. */
+   AC-39, EC-22, EC-23, UI-3), as redesigned by SPEC-10 (AC-27..AC-30). `fetch` is the
+   outside world; hooks, api.ts and react-query are real. */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent, EvalCaseDetail, EvalCaseListItem, EvalOverview } from "@devdigest/shared";
@@ -42,6 +42,7 @@ function overview(over: Partial<EvalOverview> = {}): EvalOverview {
     cases_total: 2,
     finished_runs: 0,
     running_run_id: null,
+    running_case_run: null,
     latest: null,
     previous: null,
     trend: [],
@@ -129,12 +130,14 @@ function renderTab() {
 }
 
 describe("EvalsTab (SPEC-08)", () => {
-  it("EC-22: an agent with no cases gets the empty state with a link to Pull Requests, and Run all is disabled", async () => {
+  it("EC-22/EC-45: an agent with no cases gets the empty state with a New eval case action and a link to Pull Requests, and Run all is disabled", async () => {
     stubApi({ overview: overview({ cases_total: 0 }), cases: [] });
     renderTab();
 
     expect(
-      await screen.findByText(/accept or dismiss findings on a PR, then click Turn into eval case/),
+      await screen.findByText(
+        "No eval cases yet — create one from a diff, or accept or dismiss findings on a PR and click Turn into eval case",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to Pull Requests" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("button", { name: "Run all evals" })).toBeDisabled();
@@ -148,16 +151,18 @@ describe("EvalsTab (SPEC-08)", () => {
     renderTab();
 
     const list = await screen.findByRole("list", { name: "Eval cases" });
-    expect(within(list).getAllByText("never run")).toHaveLength(2);
+    expect(within(list).getAllByRole("img", { name: "never run" })).toHaveLength(2);
 
     const kpis = screen.getByRole("group", { name: "Latest eval run metrics" });
     expect(within(kpis).getAllByText("—").length).toBeGreaterThanOrEqual(4);
     expect(within(kpis).getAllByText("No finished run yet").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/passing/)).not.toBeInTheDocument();
+    // AC-28: the pill and the count show even before any result.
+    expect(screen.getByText("0/0 passing")).toBeInTheDocument();
+    expect(screen.getByText("2 cases")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run all evals" })).toBeEnabled();
   });
 
-  it("AC-11/12/13/35/36/39: shows each case's latest result, '{passed} / {scored} passing', the KPI cards and the dashboard link", async () => {
+  it("AC-27..AC-30: shows the EVAL METRICS label, each case's latest result with recall, '{passed}/{scored} passing', the KPI cards, their caption and the dashboard link", async () => {
     stubApi({
       overview: overview({
         finished_runs: 2,
@@ -178,12 +183,26 @@ describe("EvalsTab (SPEC-08)", () => {
 
     await screen.findByRole("list", { name: "Eval cases" });
     // errored and never-run cases are not scored (AC-13).
-    expect(screen.getByText("1 / 2 passing")).toBeInTheDocument();
-    expect(screen.getByText("expected 1, got 2")).toBeInTheDocument();
+    expect(screen.getByText("1/2 passing")).toBeInTheDocument();
+    expect(screen.getByText("4 cases")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "EVAL METRICS" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Scoring is mechanical — a finding counts when file matches and line ranges overlap. No model call in the scorer.",
+      ),
+    ).toBeInTheDocument();
+    // AC-30: " · recall x%" (100 passed / 0 failed) for must_find only, ICU plural on the count.
+    expect(screen.getByText("expected 1 finding, got 2 · recall 100%")).toBeInTheDocument();
+    expect(screen.getByText("expected 1 finding, got 0 · recall 0%")).toBeInTheDocument();
     expect(screen.getByText("errored: provider timeout")).toBeInTheDocument();
-    expect(screen.getAllByText("src/config.ts:11-12")).toHaveLength(3);
-    expect(screen.getAllByText("CRITICAL · security").length).toBeGreaterThan(0);
-    expect(screen.getByText("a.ts:1-2")).toBeInTheDocument();
+    // AC-29: a MUST FIND / MUST NOT FLAG badge beside each name, the severity tag for must_find only.
+    expect(screen.getAllByText("MUST FIND")).toHaveLength(3);
+    expect(screen.getAllByText("MUST NOT FLAG")).toHaveLength(1);
+    expect(screen.getAllByText("CRITICAL · security").length).toBe(3);
+    expect(screen.getByRole("img", { name: "passed" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "failed" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Edit case / })).toHaveLength(4);
+    for (const edit of screen.getAllByRole("button", { name: /^Edit case / })) expect(edit).toHaveTextContent("Edit");
 
     const kpis = screen.getByRole("group", { name: "Latest eval run metrics" });
     expect(within(kpis).getByText("75%")).toBeInTheDocument(); // recall
@@ -207,13 +226,16 @@ describe("EvalsTab (SPEC-08)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Eval case · stripe-key-leak")).toBeInTheDocument();
 
-    // Frozen PR meta and diff render as text, never as markup.
-    expect(within(dialog).getByText("Add <b>Stripe</b>")).toBeInTheDocument();
-    expect(within(dialog).getByText("Body <script>x</script>")).toBeInTheDocument();
+    // Frozen PR meta and diff are read-only field values, never markup.
+    expect((within(dialog).getByRole("textbox", { name: "Diff" }) as HTMLTextAreaElement).value).toContain(
+      '<img src=x onerror="alert(1)">',
+    );
+    fireEvent.click(within(dialog).getByRole("tab", { name: "PR meta" }));
+    expect(within(dialog).getByLabelText("PR title")).toHaveValue("Add <b>Stripe</b>");
+    expect(within(dialog).getByLabelText("Description")).toHaveValue("Body <script>x</script>");
     expect(dialog.querySelector("img")).toBeNull();
     expect(dialog.querySelector("script")).toBeNull();
     expect(dialog.querySelector("b")).toBeNull();
-    expect(within(dialog).getByText(/<img src=x onerror="alert\(1\)">/)).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: "Open source PR #7" })).toHaveAttribute("href", "/repos/r1/pulls/7");
 
     // Save is disabled until the name changes; an empty name is rejected client-side.
@@ -240,6 +262,7 @@ describe("EvalsTab (SPEC-08)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Open eval case orphan" }));
     const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("tab", { name: "PR meta" }));
     expect(await within(dialog).findByText("Source no longer available")).toBeInTheDocument();
     expect(within(dialog).queryByRole("link", { name: /Open source PR/ })).not.toBeInTheDocument();
   });
@@ -285,5 +308,81 @@ describe("EvalsTab (SPEC-08)", () => {
     renderTab();
     const link = await screen.findByRole("link", { name: "Go to Pull Requests" });
     expect(minPx(link, "minHeight")).toBeGreaterThanOrEqual(24);
+  });
+
+  it("SPEC-09 AC-43/AC-44/AC-13: New eval case sits after Run all evals, each row has an edit action before delete, and both open the Case Editor", async () => {
+    const c = caseItem({ id: "c1", name: "case-a" });
+    stubApi({ overview: overview(), cases: [c], detail: detail(c, { source_finding_id: null, source: null, input_meta: { pr_number: null, repo_full_name: null, title: "T", body: null } }) });
+    renderTab();
+
+    const list = await screen.findByRole("list", { name: "Eval cases" });
+    const rowButtons = within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+    expect(rowButtons).toEqual(["Open eval case case-a", "Run case case-a", "Edit case case-a", "Delete case case-a"]);
+    expect(screen.getByRole("button", { name: "New eval case" })).toBeEnabled();
+    // AC-28: Run all evals first, then New eval case.
+    const header = [screen.getByRole("button", { name: "Run all evals" }), screen.getByRole("button", { name: "New eval case" })];
+    expect(header[0]!.compareDocumentPosition(header[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // A blank editor from the header button.
+    fireEvent.click(screen.getByRole("button", { name: "New eval case" }));
+    let dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("New eval case", { selector: "div" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // The edit action opens the stored case; a case made by hand says so (AC-19).
+    fireEvent.click(screen.getByRole("button", { name: "Edit case case-a" }));
+    dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Eval case · case-a")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("tab", { name: "PR meta" }));
+    expect(within(dialog).getByText("Created manually")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("link", { name: /Open source PR/ })).not.toBeInTheDocument();
+  });
+
+  it("SPEC-09 EC-45: the empty state offers a New eval case action next to the Pull Requests link", async () => {
+    stubApi({ overview: overview({ cases_total: 0 }), cases: [] });
+    renderTab();
+    await screen.findByText(/create one from a diff/);
+    expect(screen.getAllByRole("button", { name: "New eval case" })).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Go to Pull Requests" })).toHaveAttribute("href", "/");
+  });
+
+  it("SPEC-09 AC-55/AC-56/EC-27: the Metric trend sits under the KPI cards with v{agent version} labels and a tooltip carrying date, metrics and cost ('—' when the cost is null)", async () => {
+    stubApi({
+      overview: overview({
+        finished_runs: 2,
+        latest: runRecord(),
+        trend: [
+          { run_id: "r1", ran_at: "2026-09-01T10:00:00", agent_version: 1, recall: 0.7, precision: null, citation_accuracy: 0.9, cost_usd: 0.12 },
+          { run_id: "r2", ran_at: "2026-09-02T10:00:00", agent_version: 2, recall: 0.75, precision: 0.8, citation_accuracy: 0.9, cost_usd: null },
+        ],
+      }),
+      cases: [caseItem({ id: "c1", name: "case-a" })],
+    });
+    renderTab();
+
+    const chart = await screen.findByRole("img", { name: "Recall, precision and citation accuracy over the last 2 runs" });
+    expect(within(chart).getByText("v1")).toBeInTheDocument();
+    expect(within(chart).getByText("v2")).toBeInTheDocument();
+
+    const runs = screen.getAllByRole("button", { name: /^v\d · / });
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toHaveAccessibleName(
+      "v1 · 2026-09-01 10:00 · Recall 70% · Precision — · Citation accuracy 90% · Cost $0.12",
+    );
+    expect(runs[1]).toHaveAccessibleName(
+      "v2 · 2026-09-02 10:00 · Recall 75% · Precision 80% · Citation accuracy 90% · Cost —",
+    );
+    act(() => runs[1]!.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent(runs[1]!.getAttribute("aria-label")!);
+    expect(screen.getByRole("tooltip")).not.toHaveTextContent("$0.00");
+  });
+
+  it("SPEC-09 EC-30: an agent with cases but no finished run shows 'No runs yet' instead of the chart", async () => {
+    stubApi({ overview: overview(), cases: [caseItem({ id: "c1", name: "case-a" })] });
+    renderTab();
+    expect(await screen.findByText("No runs yet")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /over the last/ })).not.toBeInTheDocument();
   });
 });
