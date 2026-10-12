@@ -350,14 +350,15 @@ export const ConventionCategory = z.enum([
 ]);
 export type ConventionCategory = z.infer<typeof ConventionCategory>;
 
-export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export const ConventionStatus = z.enum(['pending', 'accepted', 'dismissed']);
 export type ConventionStatus = z.infer<typeof ConventionStatus>;
 
 export const ConventionEvidence = z.object({
   path: z.string(),
   start_line: z.number().int().positive(),
   end_line: z.number().int().positive(),
-  snippet: z.string(),
+  /** @deprecated use `preview` — the full snippet is no longer returned. */
+  preview: z.string(),
 });
 export type ConventionEvidence = z.infer<typeof ConventionEvidence>;
 
@@ -365,10 +366,12 @@ export const ConventionCandidate = z.object({
   id: z.string(),
   scan_id: z.string(),
   category: ConventionCategory,
-  rule: z.string(),
+  text: z.string(),
   evidence: ConventionEvidence,
-  confidence: z.number().min(0).max(1),
+  confidence: z.enum(['low', 'medium', 'high']),
   status: ConventionStatus,
+  source: z.enum(['local', 'ai']),
+  tags: z.array(z.string()).optional(),
   created_at: z.string(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
@@ -397,14 +400,31 @@ export const ConventionScan = z.object({
 });
 export type ConventionScan = z.infer<typeof ConventionScan>;
 
-/** Response shape shared by `POST .../extract` and `GET /repos/:id/conventions`. */
+/** Response shape of `POST .../extract`. */
 export const ConventionsSnapshot = z.object({
   scan: ConventionScan.nullable(),
   candidates: z.array(ConventionCandidate),
 });
 export type ConventionsSnapshot = z.infer<typeof ConventionsSnapshot>;
 
-/** Grouping strategy for `POST /repos/:id/conventions/draft-skills`. */
+/** Cursor page returned by `GET /repos/:id/conventions`. */
+export const ConventionsPage = z.object({
+  items: z.array(ConventionCandidate),
+  next_cursor: z.string().nullable(),
+});
+export type ConventionsPage = z.infer<typeof ConventionsPage>;
+
+/** A portable export of a repo's accepted conventions (`POST /repos/:id/conventions/export`). */
+export const ConventionsExport = z.object({
+  id: z.string(),
+  repo_id: z.string(),
+  file: z.string(),
+  count: z.number().int(),
+  share_token: z.string(),
+});
+export type ConventionsExport = z.infer<typeof ConventionsExport>;
+
+/** Grouping strategy for `POST /repos/:id/conventions/skill-drafts`. */
 export const ConventionDraftGrouping = z.enum(['merge', 'per_candidate', 'per_category']);
 export type ConventionDraftGrouping = z.infer<typeof ConventionDraftGrouping>;
 

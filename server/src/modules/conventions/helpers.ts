@@ -186,20 +186,28 @@ export function verifyEvidence(
 
 // ---- Row -> DTO mapping ------------------------------------------------------
 
+/** Coarse bucket shown in the UI instead of the raw score. */
+export function confidenceBucket(score: number): 'low' | 'medium' | 'high' {
+  if (score >= 0.8) return 'high';
+  if (score >= 0.5) return 'medium';
+  return 'low';
+}
+
 export function toConventionDto(row: ConventionRow): ConventionCandidate {
   return {
     id: row.id,
     scan_id: row.scanId,
     category: row.category as ConventionCategory,
-    rule: row.rule,
+    text: row.rule,
     evidence: {
       path: row.evidencePath,
       start_line: row.evidenceStartLine,
       end_line: row.evidenceEndLine,
-      snippet: row.evidenceSnippet,
+      preview: row.evidenceSnippet.split('\n').slice(0, 3).join('\n'),
     },
-    confidence: row.confidence,
-    status: row.status as ConventionStatus,
+    confidence: confidenceBucket(row.confidence),
+    status: (row.status === 'rejected' ? 'dismissed' : row.status) as ConventionStatus,
+    source: row.confidence >= 1 ? 'local' : 'ai',
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -218,7 +226,7 @@ export function toScanDto(row: RepoConventionScanRow): ConventionScan {
   };
 }
 
-// ---- Skill-draft assembly (POST .../draft-skills — pure, no DB write) ------
+// ---- Skill-draft assembly (POST .../skill-drafts — pure, no DB write) ------
 
 /** Slugify to a skill-name-safe slug (mirrors the skills module's D3 pattern). */
 function slugify(input: string): string {
