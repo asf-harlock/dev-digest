@@ -72,6 +72,19 @@ needed none of those and cannot drift.
   string relying on it). No `pnpm arch` rule or type catches a new unfiltered
   query — the dashboard, overview and compare would silently show skill runs
   (`test/skill-eval-runs.it.test.ts` NFR-5 tests cover only today's reads).
+  **Sharpened 2026-10-12 (SPEC-10):** the same discipline now covers a second axis,
+  `eval_runs.scope` (`'set'` | `'case'`, migration 0025). A single-case run is an
+  `eval_runs` row of size 1, so every set-aggregate reader must also filter
+  `scope = 'set'` — `agentRuns()`, `skillRuns()`, `recentRunSummaries` and the
+  set-only `runningRunId`/`runningSkillRunId` — or the KPIs, trend and dashboard show
+  a 1-case run. Leave unfiltered: `getRun`/`getRunRow`, `deleteByAgent`/
+  `deleteBySkill`, `reapRunning`, `saveProgress`/`finalizeRun` and the 409 lookup
+  (`anyRunningRunId`). A case's `latest_result` comes from its own any-scope reader
+  (`latestResultsByCase`: newest finished set run vs newest case run, errored case
+  runs included — an errored run is not "finished"), never from "the newest run".
+  The single-flight unique indexes key on the owner only, so a case run and a set
+  run of one owner already 409 each other. `test/eval-case-run.it.test.ts` (NFR-18)
+  snapshots every reader before and after a case run — extend it for a new reader.
 
 - **2026-10-06** — `pnpm arch` does not catch an adapter importing from
   `modules/`: `.dependency-cruiser.cjs` has no `src/adapters` → `src/modules`
