@@ -35,7 +35,10 @@ export function Button({
     fontSize: fs,
     fontWeight: 500,
     borderRadius: 6,
-    border: "1px solid transparent",
+    // Longhands only: `kinds`/`hoverMap` change `borderColor`, which React warns about next to `border`.
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "transparent",
     whiteSpace: "nowrap",
     transition: "background .12s, border-color .12s, color .12s",
     lineHeight: 1.2,

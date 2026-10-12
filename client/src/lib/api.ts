@@ -18,7 +18,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/** Sends the request and returns the `ok` response; every failure is an `ApiError`. */
+async function request(path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -58,14 +59,34 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new ApiError(message, res.status, code, details);
   }
 
+  return res;
+}
+
+async function readBody<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  return readBody<T>(await request(path, init));
+}
+
+/** Like `apiFetch`, but also returns the HTTP status — for the few routes whose
+ *  `200` and `201` mean different things (a case that already existed vs a new one). */
+export async function apiFetchWithStatus<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number; data: T }> {
+  const res = await request(path, init);
+  return { status: res.status, data: await readBody<T>(res) };
 }
 
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+  postWithStatus: <T>(path: string, body?: unknown) =>
+    apiFetchWithStatus<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) =>

@@ -43,12 +43,19 @@ function findingsForLine(ln: Line, matched: Map<string, FindingRecord[]>): Findi
   return out;
 }
 
+/** Whether a rendered line is a new-side line inside the inclusive range. */
+function inHighlightRange(ln: Line, range: { start: number; end: number } | null): boolean {
+  if (!range || (ln.kind !== "add" && ln.kind !== "ctx") || ln.newNo === undefined) return false;
+  return ln.newNo >= range.start && ln.newNo <= range.end;
+}
+
 export function FileCard({
   file,
   commenting,
   findings,
   forceOpen = false,
   highlightLine = null,
+  highlightRange = null,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -61,6 +68,10 @@ export function FileCard({
   /** Deep-link target: new-side line to outline and scroll to. Ignored when
    *  the line is not a rendered new-side line (the file still opens). */
   highlightLine?: number | null;
+  /** New-side line range (inclusive) to outline, e.g. an eval case's expectation.
+   *  Additive: no scrolling, and independent of `forceOpen`. `highlightLine` wins
+   *  for scrolling when both are set. */
+  highlightRange?: { start: number; end: number } | null;
 }) {
   const t = useTranslations("shell");
   const tSmart = useTranslations("prReview");
@@ -157,7 +168,8 @@ export function FileCard({
                 commenting={commenting}
                 findings={findingsForLine(ln, matchedFindings)}
                 renderFinding={findings?.renderFinding}
-                highlighted={i === highlightIdx}
+                highlighted={i === highlightIdx || inHighlightRange(ln, highlightRange)}
+                scrollToHighlight={i === highlightIdx}
               />
             ))
           )}

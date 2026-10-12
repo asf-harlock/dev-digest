@@ -141,6 +141,48 @@
       "when": 1791309061190,
       "tag": "0019_zippy_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791716543362,
+      "tag": "0020_eager_cassandra_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791716548861,
+      "tag": "0021_strong_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791725227606,
+      "tag": "0022_slimy_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791726792278,
+      "tag": "0023_mighty_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791726803834,
+      "tag": "0024_bouncy_sleepwalker",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791800192025,
+      "tag": "0025_lovely_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

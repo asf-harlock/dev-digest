@@ -42,4 +42,20 @@ describe("DiffViewer", () => {
     expect(marked).toHaveLength(1);
     expect(marked[0]).toHaveTextContent("from-b");
   });
+
+  it("SPEC-09 AC-8: highlightRange outlines the range's new-side lines in every file card, forces nothing open and scrolls nothing", () => {
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
+    scroll.mockClear();
+    const C: PrFile = { path: "src/c.ts", additions: 1, deletions: 0, patch: patch("from-c") };
+    // New-side lines: 1 keep, 2 added, 3 end.
+    renderWithIntl(<DiffViewer files={[A, B, C]} highlightRange={{ start: 2, end: 3 }} />);
+
+    const marked = [...document.querySelectorAll('[data-highlighted="true"]')];
+    expect(marked.map((el) => el.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining("from-a"), expect.stringContaining("from-c")]),
+    );
+    expect(marked).toHaveLength(4); // lines 2 and 3 in A and in C
+    expect(screen.queryByText("from-b")).not.toBeInTheDocument(); // large file stays collapsed
+    expect(scroll).not.toHaveBeenCalled();
+  });
 });

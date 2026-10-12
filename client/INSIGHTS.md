@@ -21,6 +21,28 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-10-12** — A modal rendered INSIDE a finding card comes out translucent and
+  slides under the sticky PR header. A decided (accepted/dismissed) `FindingCard` has
+  `opacity: 0.6` + `overflow: hidden` (`FindingCard/styles.ts:16`), which is also a
+  stacking context, so a `position: fixed; z-index: 50` child inherits the opacity
+  and cannot rise above the header. `getComputedStyle(dialog).opacity` still reads 1
+  — only a screenshot or walking the ancestors shows it. `EvalCaseButton` first
+  mounted `<CaseEditor>` in the card; it now uses `createPortal(…, document.body)`
+  with a `stopPropagation` wrapper so a click in the modal does not toggle the card.
+  The button is only enabled for decided cards, so the bug showed every time.
+  `FindingCard/_components/EvalCaseButton/EvalCaseButton.tsx`
+
+- **2026-10-11** — The kit charts in `src/vendor/ui/charts/` cannot show an
+  absent metric or a whole-point delta, so a metric that can be `null` (recall
+  with no `must_find` cases) must not go through them. `LineChart` coerces a
+  missing value with `s.data[i] ?? 0` and fixes the y-range to 0.6–1.0, so a
+  null draws as 0% and low scores clip off the chart. `MetricCard` prints its
+  `delta` prop as `Math.abs(delta).toFixed(2)`, so "▲ 4 pt" renders as "4.00".
+  `Sparkline` takes no gaps. The Eval pages use their own SVG (`GapSparkline`,
+  `MetricTrend`) and render the delta under the card with `formatDeltaPoints`.
+  Reusing the kit here passes typecheck and shows wrong numbers.
+  `client/src/vendor/ui/charts/LineChart.tsx`, `client/src/app/eval/_components/GapSparkline`
+
 - **2026-09-24** — On a fire-and-forget endpoint (`POST /pulls/:id/intent`
   returns `{status:"running"}` at once), `useMutation().isPending` is not a
   loading state. It flips back within milliseconds while the real work runs for
@@ -64,6 +86,28 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `components/severity-counts/SeverityCounts.tsx`.
 
 ## Codebase Patterns
+
+- **2026-10-11** — A shared component under `src/components/` may not contain a
+  `_components/` folder of its own: the `no-private-component-from-outside-app`
+  rule (`client/.dependency-cruiser.cjs:39-45`, `from: ^src/(components|lib|vendor)/`,
+  `to: _components/`) matches ANY `_components/` path, including the shared
+  component's own. A multi-part shared component is therefore a set of sibling
+  folders under `src/components/<name>/` (`eval-case-editor/CaseEditor/`,
+  `EditorModal/`, `DiffPreview/`, …), the shape `components/diff-viewer/` already
+  has. Hit when promoting `CaseModal` to `src/components/`; `pnpm arch` caught it.
+
+- **2026-10-11** — `FindingsPanel.test.tsx` mocks `lib/hooks/eval` wholesale and
+  renders without a `QueryClientProvider`, so any component that ends up in the
+  panel and uses a NEW hook module throws "No QueryClient set" in a test that
+  never touches that feature. Adding `SkillEvalMenu` (hooks from
+  `lib/hooks/skill-eval`) needed its own `vi.mock` there
+  (`app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/FindingsPanel.test.tsx:24`)
+  — or an opt-in prop (`FindingCard`'s `skillEval`) so cards in other tests never
+  mount it.
+  > **Correction 2026-10-12:** SPEC-10 removed `SkillEvalMenu` and the `skillEval`
+  > prop. The trap itself stands: the card now calls `useFindingSkills` (from
+  > `lib/hooks/skill-eval`), so `FindingsPanel.test.tsx` keeps a `vi.mock` of that
+  > module, retargeted to `useFindingSkills` and `useEvalCaseDraft`.
 
 - **2026-09-29** — A new editor tab needs its key added in TWO places, or `?tab=<key>`
   silently falls back to the first tab: the editor's `constants.ts` **and** the
@@ -109,6 +153,23 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   `nav.ts` edit is out of bounds.
 
 ## Tool & Library Notes
+
+- **2026-10-12** — The kit `Modal` does not constrain a numeric `width`. It centers
+  the dialog in `display: grid; place-items: center` with an auto column, so its
+  `maxWidth: 100%` is a cyclic percentage that resolves to nothing and the track
+  grows to the content: a `width={1080}` dialog was 1080 px wide in a 768 px window
+  (right column and **Save** off-screen). `vendor/ui` is read-only, so the caller
+  fits the width: `useFittedModalWidth(max)` in `src/lib/modal-width.ts` returns
+  `min(max, innerWidth - 56)` (28 px kit padding per side). Other kit `Modal` users
+  (`CreateAgentModal` 620, `NewSkillModal` 640, `CreateSkillFromConventionsModal`
+  720) have the same latent overflow below those widths. `vendor/ui/kit/Modal.tsx:22-36`
+
+- **2026-10-12** — The kit `Button` renders `<button {...rest}>` with no default
+  `type`, so a `Button` inside a `<form onSubmit>` is a submit button. The Case
+  Editor's "+ Finding skeleton" saved the case (a stored manual case was PATCHed
+  and, as a `replace`, lost its history). The first test missed it only because the
+  name was empty and validation blocked the save. Put `type="button"` on every kit
+  `Button` in a form that must not submit. `vendor/ui/primitives/Button.tsx:69`
 
 - **2026-10-03** — `format.relativeTime(date)` from next-intl 3.26 does not
   measure from the current time. The server `NextIntlClientProvider` injects
@@ -158,6 +219,19 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-12** — Console error `Updating a style property during rerender
+  (borderColor) when a conflicting property is set (borderLeftColor)`:
+  `borderColor` and `borderWidth` are themselves shorthands (all four sides), so
+  avoiding `border` vs `borderLeft` is not enough — `borderColor` + `borderLeftColor`
+  warns as soon as either value changes on rerender (`FindingCard` toggled
+  `borderColor` on `focused`; `ConventionCard` would on `status`). Fix: write every
+  side as a longhand (`borderTopColor`/`Right`/`Bottom`/`Left`, same for `*Width`).
+  `FindingCard/styles.ts`, `ConventionCard/styles.ts`.
+  **Same day:** the same warning came from `border` + `borderLeftWidth`
+  (`TypeBanner`, `ResultBanner`) and `border` + a hover `borderColor` in the kit
+  `Button` (`vendor/ui/primitives/Button.tsx`). Any `border` shorthand whose value or
+  sibling longhand changes between renders triggers it.
+
 - **2026-09-30** — `next build`/`next dev` fails with `Module not found: Can't
   resolve './contracts/findings.js'` when any client file imports a runtime
   VALUE (a function or const, not a type) from `@devdigest/shared`. That pulls
@@ -185,6 +259,16 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
   fireEvents. `LinkToAgentPanel.test.tsx` (agent picker → `useAgentSkills`).
 
 ## Session Notes
+
+- **2026-10-12** — SPEC-10 (Case Editor from a finding, per-case Run, Evals tab
+  redesign). Recorded three kit/stacking traps found only in the browser or by the
+  bug reviewer (What Doesn't Work, Tool & Library Notes) and corrected the
+  `SkillEvalMenu` entry. Later: fixed the React border shorthand warning in the
+  FindingCard and ConventionCard styles (Recurring Errors & Fixes).
+
+- **2026-10-11** — SPEC-09 (Case Editor, skill eval runs, metric trend). Recorded
+  the `src/components/**` no-`_components/` rule and the `FindingsPanel` hook-mock
+  trap (Codebase Patterns).
 
 - **2026-09-29** — Built `scripts/check.sh` to cut implementer gate output;
   the `getByRole` role-list entry (Tool & Library Notes) came from measuring

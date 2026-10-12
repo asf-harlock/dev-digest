@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Severity, FindingCategory } from './findings.js';
 
 /**
  * Conformance, Onboarding, Eval, Memory, Conventions, Skills,
@@ -165,28 +166,43 @@ export const OnboardingTourGenerateRequest = z.object({
 export type OnboardingTourGenerateRequest = z.infer<typeof OnboardingTourGenerateRequest>;
 
 // ---- Eval ----
-export const EvalPerTrace = z.object({
-  name: z.string(),
-  pass: z.boolean(),
-  expected: z.unknown(),
-  actual: z.unknown(),
-});
-export type EvalPerTrace = z.infer<typeof EvalPerTrace>;
-
-export const EvalRun = z.object({
-  recall: z.number().min(0).max(1),
-  precision: z.number().min(0).max(1),
-  citation_accuracy: z.number().min(0).max(1),
-  traces_passed: z.number().int(),
-  traces_total: z.number().int(),
-  duration_ms: z.number().int(),
-  cost_usd: z.number().nullable(),
-  per_trace: z.array(EvalPerTrace),
-});
-export type EvalRun = z.infer<typeof EvalRun>;
-
+// SPEC-08. Case-side shapes live here; run / overview / dashboard / compare
+// shapes live in `eval-ci.ts` (they need `Provider`, declared further down).
+// No `.default()` on purpose: both vendor copies must stay byte-identical here.
 export const EvalOwnerKind = z.enum(['skill', 'agent']);
 export type EvalOwnerKind = z.infer<typeof EvalOwnerKind>;
+
+export const EvalExpectationType = z.enum(['must_find', 'must_not_flag']);
+export type EvalExpectationType = z.infer<typeof EvalExpectationType>;
+
+/** What the case asserts. Scoring reads type/file/lines only; the rest is display. */
+export const EvalExpectation = z.object({
+  type: EvalExpectationType,
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  severity: z.string().nullish(),
+  category: z.string().nullish(),
+  title: z.string().nullish(),
+});
+export type EvalExpectation = z.infer<typeof EvalExpectation>;
+
+/** PR facts frozen at case-creation time. */
+export const EvalCaseMeta = z.object({
+  // Manual (Case Editor) cases have no PR; persisted jsonb, so `.nullish()`.
+  pr_number: z.number().int().nullish(),
+  repo_full_name: z.string().nullish(),
+  title: z.string(),
+  body: z.string().nullable(),
+});
+export type EvalCaseMeta = z.infer<typeof EvalCaseMeta>;
+
+/** Where the case came from; may no longer exist (the case outlives its PR). */
+export const EvalCaseSource = z.object({
+  repo_id: z.string(),
+  pr_number: z.number().int().nullish(),
+});
+export type EvalCaseSource = z.infer<typeof EvalCaseSource>;
 
 export const EvalCase = z.object({
   id: z.string(),
@@ -194,12 +210,218 @@ export const EvalCase = z.object({
   owner_id: z.string(),
   name: z.string(),
   input_diff: z.string(),
-  input_files: z.unknown(),
-  input_meta: z.unknown(),
-  expected_output: z.unknown(),
-  notes: z.string().nullish(),
+  input_meta: EvalCaseMeta,
+  expectation: EvalExpectation,
+  source_finding_id: z.string().nullable(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  /** Set on the `PATCH /eval-cases/:id` response only: the case id this one replaced (SPEC-09). */
+  replaced_from_id: z.string().nullish(),
 });
 export type EvalCase = z.infer<typeof EvalCase>;
+
+export const EvalFindingLabel = z.enum(['tp', 'fp', 'unlabeled']);
+export type EvalFindingLabel = z.infer<typeof EvalFindingLabel>;
+
+/** A validated / grounded / redacted finding the agent produced for a case. */
+export const EvalActualFinding = z.object({
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  title: z.string(),
+  severity: z.string(),
+  category: z.string(),
+  label: EvalFindingLabel,
+});
+export type EvalActualFinding = z.infer<typeof EvalActualFinding>;
+
+/** What a case did for a skill: with-skill arm vs without-skill arm. */
+export const EvalCaseEffect = z.enum([
+  'helped',
+  'hurt',
+  'no_effect_pass',
+  'no_effect_fail',
+  'errored',
+]);
+export type EvalCaseEffect = z.infer<typeof EvalCaseEffect>;
+
+/**
+ * Latest finished result of a case; "never run" is `null` on the parent, not a value.
+ * `findings` / `effect` are `.nullish()`: outcomes persisted before SPEC-10 carry no
+ * findings, and `effect` is only set for a skill-owned case.
+ */
+export const EvalCaseLatestResult = z.object({
+  run_id: z.string(),
+  state: z.enum(['passed', 'failed', 'errored']),
+  expected_count: z.number().int().nullable(),
+  got_count: z.number().int().nullable(),
+  duration_ms: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  error_reason: z.string().nullable(),
+  findings: z.array(EvalActualFinding).nullish(),
+  effect: EvalCaseEffect.nullish(),
+});
+export type EvalCaseLatestResult = z.infer<typeof EvalCaseLatestResult>;
+
+export const EvalCaseListItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  created_at: z.string(),
+  latest_result: EvalCaseLatestResult.nullable(),
+});
+export type EvalCaseListItem = z.infer<typeof EvalCaseListItem>;
+
+export const EvalCaseDetail = EvalCase.extend({
+  source: EvalCaseSource.nullable(),
+  latest_result: EvalCaseLatestResult.nullable(),
+});
+export type EvalCaseDetail = z.infer<typeof EvalCaseDetail>;
+
+/** `PATCH /eval-cases/:id` — rename only (the agent tab's `{ name }` body). */
+export const EvalCaseRename = z.object({
+  name: z.string().min(1).max(80),
+});
+export type EvalCaseRename = z.infer<typeof EvalCaseRename>;
+
+// ---- Eval — Case Editor (SPEC-09) ----
+/** Expectation as typed in the Case Editor; stricter than the stored `EvalExpectation`. */
+export const EvalExpectationInput = z
+  .object({
+    type: EvalExpectationType,
+    file: z.string().min(1).max(500),
+    start_line: z.number().int().min(1),
+    end_line: z.number().int().min(1),
+    severity: Severity.nullish(),
+    category: FindingCategory.nullish(),
+    title: z.string().max(200).nullish(),
+  })
+  .refine((e) => e.end_line >= e.start_line, {
+    message: 'end_line must be >= start_line',
+    path: ['end_line'],
+  });
+export type EvalExpectationInput = z.infer<typeof EvalExpectationInput>;
+
+/**
+ * `POST /agents/:id/eval-cases` and `POST /skills/:id/eval-cases`.
+ * `input_diff` has NO size cap here on purpose: the 204,800-byte cap is a service
+ * check (after the owner 404, before parsing) returning `422 frozen_diff_too_large`.
+ */
+export const EvalCaseInput = z.object({
+  name: z.string().min(1).max(80),
+  notes: z.string().max(2000).nullish(),
+  input_diff: z.string(),
+  input_meta: z.object({
+    title: z.string().min(1).max(200),
+    body: z.string().max(5000).nullish(),
+  }),
+  expectation: EvalExpectationInput,
+});
+export type EvalCaseInput = z.infer<typeof EvalCaseInput>;
+
+/** `PATCH /eval-cases/:id` — every top-level key optional; nested objects are complete when present. */
+export const EvalCaseUpdate = EvalCaseInput.partial();
+export type EvalCaseUpdate = z.infer<typeof EvalCaseUpdate>;
+
+/** A row of `GET /skills/:id/eval-cases`; `latest_result` is `null` until a skill run exists. */
+export const EvalSkillCaseListItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  created_at: z.string(),
+  source_finding_id: z.string().nullable(),
+  latest_result: z
+    .object({
+      run_id: z.string(),
+      with_state: z.enum(['passed', 'failed', 'errored']),
+      without_state: z.enum(['passed', 'failed', 'errored']),
+      effect: EvalCaseEffect,
+      expected_count: z.number().int().nullable(),
+      got_count: z.number().int().nullable(),
+      cost_usd: z.number().nullable(),
+      error_reason: z.string().nullable(),
+    })
+    .nullable(),
+});
+export type EvalSkillCaseListItem = z.infer<typeof EvalSkillCaseListItem>;
+
+/** `GET /findings/:id/eval-skills`. */
+export const EvalFindingSkills = z.object({
+  skills: z.array(
+    z.object({
+      skill_id: z.string(),
+      name: z.string(),
+      has_case: z.boolean(),
+      case_id: z.string().nullable(),
+    }),
+  ),
+});
+export type EvalFindingSkills = z.infer<typeof EvalFindingSkills>;
+
+/**
+ * `GET /findings/:id/eval-case-draft` (SPEC-10) — the editable seed the Case Editor
+ * opens with, plus every owner (the review's agent and its skills) a case can go to.
+ */
+export const EvalCaseDraftOwner = z.object({
+  kind: EvalOwnerKind,
+  id: z.string(),
+  name: z.string(),
+  has_case: z.boolean(),
+  case_id: z.string().nullable(),
+});
+export type EvalCaseDraftOwner = z.infer<typeof EvalCaseDraftOwner>;
+
+export const EvalCaseDraft = z.object({
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  input_meta: EvalCaseMeta,
+  owners: z.array(EvalCaseDraftOwner),
+});
+export type EvalCaseDraft = z.infer<typeof EvalCaseDraft>;
+
+/**
+ * `POST /findings/:id/skill-eval-case` → 201 | 200 `EvalCase`.
+ * `input` (SPEC-10) is the edited case from the Case Editor; absent = the finding's own seed.
+ */
+export const SkillEvalCaseRequest = z.object({
+  skill_id: z.string().uuid(),
+  input: EvalCaseInput.optional(),
+});
+export type SkillEvalCaseRequest = z.infer<typeof SkillEvalCaseRequest>;
+
+/** `GET /pulls/:id/eval-case-links` — findings of a PR that already have a case. */
+export const EvalCaseLinks = z.object({
+  links: z.array(
+    z.object({
+      finding_id: z.string(),
+      case_id: z.string(),
+      agent_id: z.string(),
+    }),
+  ),
+});
+export type EvalCaseLinks = z.infer<typeof EvalCaseLinks>;
+
+// ---- Eval — per-case outcome ----
+// `EvalFindingLabel` / `EvalActualFinding` are declared above `EvalCaseLatestResult`.
+/** `pass`, `expected_count`, `got_count` are null exactly when `status = 'errored'`. */
+export const EvalCaseOutcome = z.object({
+  case_id: z.string(),
+  name: z.string(),
+  expectation_type: EvalExpectationType,
+  status: z.enum(['scored', 'errored']),
+  pass: z.boolean().nullable(),
+  error_reason: z.string().nullable(),
+  expected_count: z.number().int().nullable(),
+  got_count: z.number().int().nullable(),
+  findings: z.array(EvalActualFinding),
+  grounding_kept: z.number().int(),
+  grounding_total: z.number().int(),
+  duration_ms: z.number().int(),
+  cost_usd: z.number().nullable(),
+});
+export type EvalCaseOutcome = z.infer<typeof EvalCaseOutcome>;
 
 // ---- Memory ----
 export const MemoryScope = z.enum(['repo', 'global', 'team']);

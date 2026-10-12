@@ -29,3 +29,14 @@ describe("Onboarding Tour nav (SPEC-05)", () => {
     expect(activeKeyFor("/onboarding")).toBe("");
   });
 });
+
+describe("Eval Dashboard nav (SPEC-08)", () => {
+  it("AC-51: the item sits in Skills Lab after Conventions and is active on /eval and agent detail pages", () => {
+    const group = NAV.find((g) => g.items.some((i) => i.key === "eval"));
+    const keys = group?.items.map((i) => i.key) ?? [];
+    expect(keys.indexOf("eval")).toBeGreaterThan(keys.indexOf("conventions"));
+    expect(group?.items.find((i) => i.key === "eval")).toMatchObject({ label: "Eval Dashboard", href: "/eval" });
+    expect(activeKeyFor("/eval")).toBe("eval");
+    expect(activeKeyFor("/eval/agents/ag1")).toBe("eval");
+  });
+});

@@ -17,6 +17,7 @@ import { Container, type ContainerOverrides } from './platform/container.js';
 import { AppError } from './platform/errors.js';
 import { modules } from './modules/index.js';
 import { ReviewService } from './modules/reviews/service.js';
+import { EvalService } from './modules/eval/service.js';
 
 // Attach the DI container to every request/instance.
 declare module 'fastify' {
@@ -82,6 +83,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (reaped > 0) app.log.info({ reaped }, 'reaped stale running agent_runs on boot');
   } catch (err) {
     app.log.warn({ err: (err as Error).message }, 'stale-run reaping failed (non-fatal)');
+  }
+
+  // Same reasoning for eval runs left 'running' by a dead process (SPEC-08 EC-14):
+  // marked errored with reason 'interrupted'. Awaited, single API instance only.
+  try {
+    const reapedEval = await new EvalService(container).reapStaleRuns();
+    if (reapedEval > 0) app.log.info({ reaped: reapedEval }, 'reaped stale running eval_runs on boot');
+  } catch (err) {
+    app.log.warn({ err: (err as Error).message }, 'stale eval-run reaping failed (non-fatal)');
   }
 
   // Security headers (X-Content-Type-Options, X-Frame-Options, …). The API
@@ -156,8 +166,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       });
       return;
     }
-    app.log.error(err);
     const e = err as { statusCode?: number; message?: string };
+    // Body over `bodyLimit` (SPEC-09 EC-42): Fastify already sets 413; give it a stable code
+    // so a client can tell it from a real 500. Not an error worth a server-side stack trace.
+    if (e.statusCode === 413) {
+      reply.status(413).send({
+        error: { code: 'payload_too_large', message: e.message ?? 'Payload too large' },
+      });
+      return;
+    }
+    app.log.error(err);
     reply.status(e.statusCode ?? 500).send({
       error: { code: 'internal_error', message: e.message ?? 'Internal error' },
     });

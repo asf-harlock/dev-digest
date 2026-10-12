@@ -1,0 +1,1 @@
+ALTER TABLE "eval_runs" ADD COLUMN "scope" text DEFAULT 'set' NOT NULL;

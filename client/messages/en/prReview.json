@@ -139,5 +139,22 @@
   },
   "tabs": {
     "context": "PR context"
+  },
+  "evalCase": {
+    "turnInto": "Turn into eval case",
+    "opening": "Opening…",
+    "inEvalSet": "In eval set",
+    "inEvalSetLink": "In eval set — open the Evals tab",
+    "enabledHint": "Review this finding as an eval case, choose its owner, then save it",
+    "undecidedTooltip": "Accept or dismiss this finding first",
+    "agentMissingTooltip": "The agent that produced this finding was deleted",
+    "created": "Eval case created",
+    "errors": {
+      "noPatch": "This file has no diff to freeze",
+      "rangeOutsideDiff": "The PR changed since this review — re-run the review and create the case from the new finding",
+      "undecided": "Accept or dismiss this finding first",
+      "agentMissing": "The agent that produced this finding was deleted",
+      "generic": "Couldn’t create the eval case."
+    }
   }
 }

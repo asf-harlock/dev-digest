@@ -1,0 +1,50 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for RunOnSaveToggle. */
+export const s = {
+  wrap: { display: "inline-flex", alignItems: "center" } satisfies CSSProperties,
+  button: (on: boolean, disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 28,
+    padding: "2px 4px",
+    background: "transparent",
+    border: "none",
+    fontSize: 13,
+    fontWeight: on ? 600 : 500,
+    color: "var(--text-primary)",
+    opacity: disabled ? 0.6 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  }),
+  track: (on: boolean): CSSProperties => ({
+    position: "relative",
+    display: "inline-block",
+    width: 34,
+    height: 20,
+    borderRadius: 99,
+    background: on ? "var(--accent)" : "var(--border-strong)",
+    transition: "background .15s",
+    flexShrink: 0,
+  }),
+  knob: (on: boolean): CSSProperties => ({
+    position: "absolute",
+    top: 2,
+    left: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 99,
+    background: "#fff",
+    transform: on ? "translateX(14px)" : "none",
+    transition: "transform .15s",
+    boxShadow: "0 1px 3px rgba(0,0,0,.3)",
+  }),
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+} as const;

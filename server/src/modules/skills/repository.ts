@@ -15,6 +15,9 @@ import type { SkillRow, SkillVersionRow } from '../../db/rows.js';
  */
 export type { SkillRow, SkillVersionRow };
 
+/** A drizzle transaction handle — what `Db.transaction` passes to its callback. */
+export type DbTx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
 export interface InsertSkill {
   workspaceId: string;
   name: string;
@@ -197,13 +200,24 @@ export class SkillsRepository {
     }
   }
 
-  /** Hard delete. `agent_skills` / `agent_run_skills` cascade via FK. */
-  async deleteById(workspaceId: string, id: string): Promise<boolean> {
-    const rows = await this.db
-      .delete(t.skills)
-      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
-      .returning({ id: t.skills.id });
-    return rows.length > 0;
+  /**
+   * Hard delete. `agent_skills` / `agent_run_skills` cascade via FK. Runs in one
+   * transaction; `beforeDelete(tx)` runs inside it first, so dependants with no
+   * FK to `skills` (eval cases, SPEC-09 EC-23) go atomically with the skill.
+   */
+  async deleteById(
+    workspaceId: string,
+    id: string,
+    beforeDelete?: (tx: DbTx) => Promise<void>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      if (beforeDelete) await beforeDelete(tx);
+      const rows = await tx
+        .delete(t.skills)
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+        .returning({ id: t.skills.id });
+      return rows.length > 0;
+    });
   }
 
   /** Version history, newest first. */

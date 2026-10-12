@@ -7,8 +7,10 @@ import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
 import { SeverityCounts, severityCounts } from "@/components/severity-counts";
-import { FindingCard } from "../FindingCard";
+import { FindingCard, type FindingEvalCase } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
+import { useAgents } from "../../../../../../../lib/hooks/agents";
+import { usePullEvalCaseLinks } from "../../../../../../../lib/hooks/eval";
 import { KEY_TO_ACTION } from "./constants";
 import { visibleFindings } from "./helpers";
 import { s } from "./styles";
@@ -16,11 +18,15 @@ import { s } from "./styles";
 export function FindingsPanel({
   findings,
   prId,
+  agentId,
   repoFullName,
   headSha,
 }: {
   findings: FindingRecord[];
   prId: string;
+  /** The agent that produced these findings (`review.agent_id`); a null / unknown agent is
+   *  only an owner that is gone — the review's skills can still own a case (EC-3, EC-4). */
+  agentId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
 }) {
@@ -29,6 +35,26 @@ export function FindingsPanel({
   const [hideLow, setHideLow] = React.useState(false);
   const [severityFilter, setSeverityFilter] = React.useState<string | null>(null);
   const [focusIdx, setFocusIdx] = React.useState(0);
+
+  // SPEC-08, SPEC-10: which findings already have an eval case and whether the producing
+  // agent still exists. The case itself is made in the Case Editor the card opens.
+  const links = usePullEvalCaseLinks(prId);
+  const agents = useAgents();
+  const linkByFinding = React.useMemo(
+    () => new Map((links.data?.links ?? []).map((l) => [l.finding_id, l])),
+    [links.data],
+  );
+  // Only call the agent "missing" once the agent list has loaded — never while it loads.
+  const agentMissing = !agentId || (agents.data !== undefined && !agents.data.some((a) => a.id === agentId));
+
+  const evalCaseFor = (findingId: string): FindingEvalCase => {
+    const link = linkByFinding.get(findingId);
+    return {
+      link: link ? { caseId: link.case_id, agentId: link.agent_id } : null,
+      agentMissing,
+      pullId: prId,
+    };
+  };
 
   // Counts come off the FULL list, never the filtered one, so the numbers stay
   // put while you filter. They do drop on dismiss — severityCounts skips
@@ -48,8 +74,12 @@ export function FindingsPanel({
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      // While a modal is open (the Case Editor a card opens) these are not finding shortcuts,
+      // whatever has focus: it can fall to <body> behind the modal.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.key === "j") setFocusIdx((i) => Math.min(i + 1, shown.length - 1));
       else if (e.key === "k") setFocusIdx((i) => Math.max(i - 1, 0));
       else if (KEY_TO_ACTION[e.key] && shown[focusIdx]) {
@@ -95,6 +125,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              evalCase={evalCaseFor(f.id)}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

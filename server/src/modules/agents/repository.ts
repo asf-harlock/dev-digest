@@ -15,6 +15,9 @@ import { samePathList } from '../_shared/context-paths.js';
 import type { AgentRow, AgentVersionRow } from '../../db/rows.js';
 export type { AgentRow, AgentVersionRow };
 
+/** A drizzle transaction handle — what `Db.transaction` passes to its callback. */
+export type DbTx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
 export interface InsertAgent {
   workspaceId: string;
   name: string;
@@ -75,13 +78,24 @@ export class AgentsRepository {
 
   /** Delete an agent (scoped to workspace). Versions/skill-links cascade;
    *  agent_runs keep their history with agent_id set null. Returns false if
-   *  no such agent existed in the workspace. */
-  async deleteById(workspaceId: string, id: string): Promise<boolean> {
-    const rows = await this.db
-      .delete(t.agents)
-      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
-      .returning({ id: t.agents.id });
-    return rows.length > 0;
+   *  no such agent existed in the workspace.
+   *
+   *  Runs in one transaction. `beforeDelete(tx)` runs inside it first, so
+   *  dependants with no FK to `agents` (eval cases/runs, SPEC-08 EC-9) are
+   *  removed atomically with the agent: all commit, or none. */
+  async deleteById(
+    workspaceId: string,
+    id: string,
+    beforeDelete?: (tx: DbTx) => Promise<void>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      if (beforeDelete) await beforeDelete(tx);
+      const rows = await tx
+        .delete(t.agents)
+        .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
+        .returning({ id: t.agents.id });
+      return rows.length > 0;
+    });
   }
 
   /** Insert an agent AND record version 1 in agent_versions (immutable snapshot). */

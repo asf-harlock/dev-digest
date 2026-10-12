@@ -18,6 +18,7 @@ export function DiffViewer({
   findings,
   targetPath = null,
   highlightLine = null,
+  highlightRange = null,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -29,6 +30,9 @@ export function DiffViewer({
   targetPath?: string | null;
   /** New-side line to highlight inside the target file. */
   highlightLine?: number | null;
+  /** New-side line range (inclusive) outlined in every file card; additive to
+   *  `highlightLine` and never scrolls. */
+  highlightRange?: { start: number; end: number } | null;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -44,6 +48,7 @@ export function DiffViewer({
           findings={findings}
           forceOpen={targetPath != null && f.path === targetPath}
           highlightLine={targetPath != null && f.path === targetPath ? highlightLine : null}
+          highlightRange={highlightRange}
         />
       ))}
     </div>

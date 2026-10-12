@@ -1,7 +1,8 @@
 /* FindingCard — ported from findings.jsx (createElement → TSX).
    Severity icon+label, category, file:line, confidence, markdown rationale +
-   suggestion, accept/dismiss actions. Accept/dismiss reflect persisted
-   timestamps. */
+   suggestion, accept/dismiss actions, and (SPEC-08, SPEC-10) the one turn-into-eval-case
+   control, which opens the seeded Case Editor.
+   Accept/dismiss reflect persisted timestamps. */
 "use client";
 
 import React from "react";
@@ -19,7 +20,8 @@ import {
 } from "@devdigest/ui";
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
-import { lineLabel } from "./helpers";
+import { lineLabel, type FindingEvalCase } from "./helpers";
+import { EvalCaseButton } from "./_components/EvalCaseButton";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
 
@@ -31,6 +33,7 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  evalCase,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -39,6 +42,9 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** SPEC-08, SPEC-10: turn this finding into an eval case. Omitted where the card has no
+   *  review/agent context (e.g. the Smart Diff view) — then no control is shown. */
+  evalCase?: FindingEvalCase;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
@@ -114,6 +120,7 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {evalCase && <EvalCaseButton finding={f} evalCase={evalCase} />}
           </div>
         </div>
       )}

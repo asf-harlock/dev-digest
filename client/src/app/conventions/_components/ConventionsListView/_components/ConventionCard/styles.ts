@@ -10,11 +10,17 @@ const ACCENT: Record<ConventionStatus, string> = {
 export const s = {
   card: (status: ConventionStatus): CSSProperties => ({
     borderRadius: 8,
+    // Per-side longhands only — `borderColor` is a shorthand, and mixing it with
+    // `borderLeftColor` makes React warn when `status` changes.
     borderStyle: "solid",
-    borderColor: "var(--border)",
-    borderWidth: 1,
-    borderLeftWidth: 3,
+    borderTopColor: "var(--border)",
+    borderRightColor: "var(--border)",
+    borderBottomColor: "var(--border)",
     borderLeftColor: ACCENT[status],
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderLeftWidth: 3,
     background: "var(--bg-elevated)",
     padding: 16,
     opacity: status === "rejected" ? 0.65 : 1,
