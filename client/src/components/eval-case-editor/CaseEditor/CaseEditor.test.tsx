@@ -105,6 +105,8 @@ const change = (label: string, value: string) =>
 const diffBox = () => screen.getByRole("textbox", { name: "Diff" });
 const changeDiff = (value: string) => fireEvent.change(diffBox(), { target: { value } });
 const openTab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
+/** A save keeps the editor open on the stored case, which can then be run straight away. */
+const runCaseEnabled = () => waitFor(() => expect(screen.getByRole("button", { name: "Run case" })).toBeEnabled());
 
 /** An Expected output text for the first file of TWO_FILES. */
 const expectedAt = (over: Record<string, unknown> = {}) =>
@@ -162,8 +164,8 @@ describe("CaseEditor create (SPEC-09, SPEC-10)", () => {
 
     fillNewCase();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toMatch(/\/agents\/ag1\/eval-cases$/);
     expect(post.body).toEqual({
@@ -178,12 +180,13 @@ describe("CaseEditor create (SPEC-09, SPEC-10)", () => {
 
   it("AC-25/UI-4: a skill owner posts to its own route, and markup in the diff stays text", async () => {
     const calls = stubApi((c) => (c.method === "POST" ? { status: 201, body: { id: "n" } } : undefined));
-    const { onClose } = renderEditor({ owner: { kind: "skill", id: "sk1" } });
+    const { onClose, onSaved } = renderEditor({ owner: { kind: "skill", id: "sk1" } });
 
     fillNewCase();
     expect(screen.getByRole("dialog").querySelector("img")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
     expect(calls.find((c) => c.method === "POST")!.url).toMatch(/\/skills\/sk1\/eval-cases$/);
   });
 
@@ -342,7 +345,8 @@ describe("CaseEditor open an existing case (SPEC-09, SPEC-10)", () => {
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     change("Name", "renamed");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    await runCaseEnabled();
+    expect(onClose).not.toHaveBeenCalled();
     const patch = calls.find((c) => c.method === "PATCH")!;
     expect(patch.url).toMatch(/\/eval-cases\/c1$/);
     expect(patch.body).toEqual({ name: "renamed" });
@@ -410,7 +414,8 @@ describe("CaseEditor open an existing case (SPEC-09, SPEC-10)", () => {
 
     change("Expected output", expectedAt({ end_line: 3, severity: "WARNING", category: "bug" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await runCaseEnabled();
+    expect(onClose).not.toHaveBeenCalled();
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
       expectation: { type: "must_find", file: "src/a.ts", start_line: 2, end_line: 3, severity: "WARNING", category: "bug", title: null },
     });
@@ -446,7 +451,8 @@ describe("CaseEditor open an existing case (SPEC-09, SPEC-10)", () => {
 
     change("Notes", "why this matters");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await runCaseEnabled();
+    expect(onClose).not.toHaveBeenCalled();
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({ notes: "why this matters" });
   });
 
@@ -517,14 +523,14 @@ describe("CaseEditor seeded from a finding (SPEC-10 AC-4..AC-6, AC-12, EC-5)", (
     expect(screen.getByText("NEGATIVE CASE")).toBeInTheDocument();
   });
 
-  it("AC-6: Save sends the edited draft to the skill route of the picked owner and closes", async () => {
+  it("AC-6: Save sends the edited draft to the skill route of the picked owner and stays open", async () => {
     const calls = stubApi((c) => (c.method === "POST" ? { status: 201, body: { id: "n", owner_kind: "skill" } } : undefined));
     const { onClose, onSaved } = renderEditor({ owner: null, seed: seed() });
     fireEvent.click(screen.getByRole("radio", { name: /Crypto/ }));
     change("Name", "mine");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toMatch(/\/findings\/f1\/skill-eval-case$/);
     expect(post.body).toEqual({
@@ -541,12 +547,13 @@ describe("CaseEditor seeded from a finding (SPEC-10 AC-4..AC-6, AC-12, EC-5)", (
 
   it("AC-6: an agent owner posts the input to the agent's finding route", async () => {
     const calls = stubApi((c) => (c.method === "POST" ? { status: 201, body: { id: "n", owner_id: "ag1" } } : undefined));
-    const { onClose } = renderEditor({
+    const { onClose, onSaved } = renderEditor({
       owner: null,
       seed: seed({ ...SEED, owners: [{ kind: "agent", id: "ag1", name: "Security", has_case: false, case_id: null }] }),
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toMatch(/\/findings\/f1\/eval-case$/);
     expect(post.body).toMatchObject({ name: "From finding: Hardcoded secret", expectation: { type: "must_find", title: "Hardcoded secret" } });

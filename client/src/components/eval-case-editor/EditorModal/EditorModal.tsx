@@ -104,8 +104,8 @@ export function EditorModal({
   onClose: () => void;
   /** A save created the case (not called for a rename or an edit). */
   onSaved?: () => void;
-  /** A save with **Run on save** on keeps the editor open on the saved case (AC-45, AC-51): the
-   *  caller switches to it (its id is a new one after a replace) with the owner it belongs to. */
+  /** A successful save keeps the editor open on the saved case (AC-45, AC-51): the caller switches
+   *  to it (its id is a new one after a replace) with the owner it belongs to. */
   onStay?: (caseId: string, owner: CaseOwner) => void;
   onRequestDelete?: (caseId: string, name: string) => void;
   escapeEnabled: boolean;
@@ -190,20 +190,21 @@ export function EditorModal({
 
   const canSave = !pending && !hasVisibleError && expected === null && (seed ? target !== null : dirty);
 
-  /** A save succeeded. Without **Run on save** the editor closes; with it the editor stays on the
-   *  saved case and starts the run: straight away for an agent-owned case, after the carrier
-   *  dialog for a skill-owned one (cancelling it keeps the saved case, EC-31). A rejected or failed
-   *  save never gets here, so it starts nothing (EC-16). */
+  /** A save succeeded: the editor stays open on the saved case, so **Run case** becomes available
+   *  (amends SPEC-10 AC-9). With **Run on save** it also starts the run: straight away for an
+   *  agent-owned case, after the carrier dialog for a skill-owned one (cancelling it keeps the saved
+   *  case, EC-31). A rejected or failed save never gets here, so it starts nothing (EC-16). */
   const finish = (savedId: string, created: boolean) => {
     if (created) onSaved?.();
-    if (!runOnSave || !runOwner) {
+    if (!runOwner || !onStay) {
       onClose();
       return;
     }
     setEdits({});
     setTouched(new Set());
     setRejection(null);
-    onStay?.(savedId, runOwner);
+    onStay(savedId, runOwner);
+    if (!runOnSave) return;
     if (runOwner.kind === "agent") caseRun.startAgentCase(savedId);
     else setCarrierCaseId(savedId);
   };

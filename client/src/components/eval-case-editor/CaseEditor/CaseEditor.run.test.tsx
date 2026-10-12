@@ -468,13 +468,15 @@ describe("Run on save - agent-owned (AC-45, EC-16, EC-17)", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("without the switch a successful save closes the editor and starts nothing", async () => {
+  it("without the switch a successful save keeps the editor open on the case, starts nothing and enables Run case", async () => {
     const calls = stubApi(world());
     const { onClose } = renderEditor();
     await loaded();
     change("Name", "renamed");
+    expect(screen.getByRole("button", { name: "Run case" })).toBeDisabled();
     fireEvent.click(save());
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run case" })).toBeEnabled());
+    expect(onClose).not.toHaveBeenCalled();
     expect(posts(calls, RUN_ROUTE)).toHaveLength(0);
   });
 

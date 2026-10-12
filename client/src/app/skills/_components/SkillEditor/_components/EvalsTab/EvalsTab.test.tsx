@@ -269,7 +269,7 @@ describe("skill EvalsTab", () => {
     expect(screen.getAllByRole("button", { name: "New eval case" })).toHaveLength(2);
   });
 
-  it("AC-9/AC-12: creating a case posts to the skill's route, closes the editor and shows it at the top as never run", async () => {
+  it("AC-9/AC-12: creating a case posts to the skill's route, keeps the editor open and shows it at the top as never run", async () => {
     const calls = stubApi({ cases: [item({ id: "c1", name: "older" })] });
     renderTab();
     await screen.findByRole("list", { name: "Skill eval cases" });
@@ -287,8 +287,8 @@ describe("skill EvalsTab", () => {
     fireEvent.change(within(dialog).getByLabelText("PR title"), { target: { value: "T" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/skills/sk1/eval-cases"))).toBe(true);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/skills/sk1/eval-cases"))).toBe(true));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     // Scoped to the case list: the trend legend (SPEC-09 C3) is a list too.
     const caseList = () => screen.getByRole("list", { name: "Skill eval cases" });
     await waitFor(() => expect(within(caseList()).getAllByRole("listitem")).toHaveLength(2));

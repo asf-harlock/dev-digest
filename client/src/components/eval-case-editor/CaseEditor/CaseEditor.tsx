@@ -14,10 +14,10 @@ import { EditorModal, type CaseOwner, type CaseSeed } from "../EditorModal";
  * - a manual case → edit: prefilled, every field editable;
  * - a case with a source finding → name and notes editable, the rest read-only (AC-13).
  *
- * Closing with unsaved changes asks first (EC-10). A successful save closes the editor — unless
- * **Run on save** is on (SPEC-10 AC-45): then the editor stays open on the saved case (a new id
- * after a replace) and starts its run. The lists refresh through the hooks' invalidation. `escapeEnabled` is false while a
- * dialog stacked on top (the delete confirmation) owns the Escape key.
+ * Closing with unsaved changes asks first (EC-10). A successful save keeps the editor open on the
+ * saved case (a new id after a replace), so it can be run right away; with **Run on save** on
+ * (SPEC-10 AC-45) the run starts by itself. The lists refresh through the hooks' invalidation.
+ * `escapeEnabled` is false while a dialog stacked on top (the delete confirmation) owns the Escape key.
  */
 export function CaseEditor({
   owner = null,
@@ -37,7 +37,7 @@ export function CaseEditor({
   onRequestDelete?: (caseId: string, name: string) => void;
   escapeEnabled?: boolean;
 }) {
-  /** The case a save with **Run on save** left the editor on; it takes over from `caseId`/`seed`. */
+  /** The case a save left the editor on; it takes over from `caseId`/`seed`. */
   const [saved, setSaved] = React.useState<{ caseId: string; owner: CaseOwner } | null>(null);
   const activeId = saved?.caseId ?? caseId;
   const { data: c, isLoading, isError } = useEvalCase(activeId);
