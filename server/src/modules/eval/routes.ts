@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   EvalCase,
   EvalCaseDetail,
+  EvalCaseDraft,
   EvalCaseInput,
   EvalCaseLinks,
   EvalCaseListItem,
@@ -20,8 +21,10 @@ import {
   SkillEvalRunRequest,
 } from '@devdigest/shared';
 import { z } from 'zod';
+import { ValidationError } from '../../platform/errors.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
+import { INVALID_CASE_INPUT_MESSAGE } from './constants.js';
 import { EvalService } from './service.js';
 
 /**
@@ -48,18 +51,43 @@ import { EvalService } from './service.js';
  *   GET    /skills/:id/eval-overview      → EvalSkillOverview
  *   GET    /eval-runs/:id                 → EvalRunDetail (discriminated by owner_kind)
  *
+ * SPEC-10 — Case Editor seeded from a finding:
+ *   GET    /findings/:id/eval-case-draft  → EvalCaseDraft (seed + owners; creates nothing, no LLM call)
+ *   POST   /findings/:id/eval-case        → optional EvalCaseInput body (the edited draft)
+ *   POST   /findings/:id/skill-eval-case  → optional `input` (EvalCaseInput) next to `skill_id`
+ *
  * 404 for an id outside the caller's workspace; 409/422 carry `error.code` and ids in `details`.
  */
 export default async function evalRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const service = new EvalService(app.container);
 
+  app.get(
+    '/findings/:id/eval-case-draft',
+    { schema: { params: IdParams, response: { 200: EvalCaseDraft } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.draftFromFinding(workspaceId, req.params.id);
+    },
+  );
+
+  // The body is OPTIONAL (SPEC-10 AC-8: no body = the SPEC-08 behaviour), so it is parsed by hand
+  // instead of `schema.body` - the established optional-body exception, `server/INSIGHTS.md`
+  // 2026-09-20 (precedent `reviews/routes.ts`, `conventions/routes.ts`). A malformed body is 422.
   app.post(
     '/findings/:id/eval-case',
     { schema: { params: IdParams, response: { 201: EvalCase } } },
     async (req, reply) => {
       const { workspaceId } = await getContext(app.container, req);
-      const created = await service.createFromFinding(workspaceId, req.params.id);
+      const parsed = EvalCaseInput.safeParse(req.body ?? undefined);
+      if (req.body != null && !parsed.success) {
+        throw new ValidationError(INVALID_CASE_INPUT_MESSAGE, parsed.error.issues);
+      }
+      const created = await service.createFromFinding(
+        workspaceId,
+        req.params.id,
+        parsed.success ? parsed.data : undefined,
+      );
       reply.status(201);
       return created;
     },
@@ -89,6 +117,7 @@ export default async function evalRoutes(appBase: FastifyInstance) {
         workspaceId,
         req.params.id,
         req.body.skill_id,
+        req.body.input,
       );
       reply.status(created ? 201 : 200);
       return evalCase;

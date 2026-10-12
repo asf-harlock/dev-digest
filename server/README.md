@@ -155,6 +155,20 @@ after it). `run_traces.trace` gets `specs_read` (attached paths, prompt order) a
 `project_context` (every listed document with its exact sent `text`), also on
 failure or cancel.
 
+## Eval case routes from a finding (SPEC-10)
+
+The Case Editor opens seeded from a decided finding; nothing is created until Save.
+Module `modules/eval/`; none of these routes makes an LLM call.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `GET /findings/:id/eval-case-draft` | — | `EvalCaseDraft` `{ name, expectation, input_diff, input_meta, owners }`. `name` is "From finding: {title}" cut to 80 characters in all; `expectation.type` is `must_find` (accepted) or `must_not_flag` (dismissed); `input_diff` is the finding's file diff frozen by the SPEC-08 rules; `owners` is `[{ kind, id, name, has_case, case_id }]` — the review's agent when it still exists in the workspace, then the skills recorded for the review's run, in run order. 404 outside the workspace; 422 `finding_undecided` · `agent_missing` (no agent AND no recorded skill) · `no_patch` · `range_outside_diff`. |
+| `POST /findings/:id/eval-case` | optional `EvalCaseInput` (the edited draft) | `201 EvalCase` for the review's agent. No body = the SPEC-08 behaviour (slug name, the finding's own seed). With a body: 204,800-byte diff cap, pasted-diff parsing and grounding (`422 frozen_diff_too_large` · `no_patch` · `range_outside_diff`), then the case is stored with `source_finding_id` and the finding's PR number and repo in `input_meta`. A malformed body is `422 validation_error`. `409 eval_case_exists` (`details.case_id`) when the agent already has a case from the finding. |
+| `POST /findings/:id/skill-eval-case` | `{ skill_id, input? }` — `input` is an optional `EvalCaseInput`, same rules as above | `201 EvalCase`, or `200` with the existing case when the skill already has one made from the finding. `422 skill_not_in_run` when the skill is not recorded for the finding's run. |
+
+The body of `POST /findings/:id/eval-case` is parsed by hand (it is optional), so a
+bad body is mapped to `422 validation_error` in the handler rather than by `schema.body`.
+
 ## Review context (non-obvious)
 
 What the reviewer actually sends to the model is assembled in

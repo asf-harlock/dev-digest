@@ -2,29 +2,37 @@
 
 import React from "react";
 import { useEvalCase } from "@/lib/hooks/eval";
-import { EditorModal, type CaseOwner } from "../EditorModal";
+import { EditorModal, type CaseOwner, type CaseSeed } from "../EditorModal";
 
 /**
- * The Case Editor modal, shared by the agent and the skill Evals tab (SPEC-09).
+ * The Case Editor modal, shared by the agent and the skill Evals tab and the finding card
+ * (SPEC-09, SPEC-10).
  *
- * - no `caseId` → create: every field empty but the type (AC-5);
- * - a manual case → edit: prefilled, every field editable (AC-13, AC-14, AC-15);
- * - a case with a source finding → name and notes editable, the rest read-only (EC-7).
+ * - `seed` → a draft built from a finding (AC-1): editable until the first Save, the owner
+ *   chosen in the picker, nothing created until Save;
+ * - no `caseId` → create: every field empty but the type;
+ * - a manual case → edit: prefilled, every field editable;
+ * - a case with a source finding → name and notes editable, the rest read-only (AC-13).
  *
- * Closing with unsaved changes asks first (EC-8). A successful save closes the editor;
+ * Closing with unsaved changes asks first (EC-10). A successful save closes the editor;
  * the lists refresh through the hooks' invalidation. `escapeEnabled` is false while a
  * dialog stacked on top (the delete confirmation) owns the Escape key.
  */
 export function CaseEditor({
-  owner,
+  owner = null,
+  seed = null,
   caseId = null,
   onClose,
+  onSaved,
   onRequestDelete,
   escapeEnabled = true,
 }: {
-  owner: CaseOwner;
+  owner?: CaseOwner | null;
+  seed?: CaseSeed | null;
   caseId?: string | null;
   onClose: () => void;
+  /** A save created the case — the finding card toasts and refreshes. */
+  onSaved?: () => void;
   onRequestDelete?: (caseId: string, name: string) => void;
   escapeEnabled?: boolean;
 }) {
@@ -33,9 +41,11 @@ export function CaseEditor({
   return (
     <EditorModal
       owner={owner}
+      seed={seed}
       c={c ?? null}
       load={load}
       onClose={onClose}
+      onSaved={onSaved}
       onRequestDelete={onRequestDelete}
       escapeEnabled={escapeEnabled}
     />

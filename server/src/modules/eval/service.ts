@@ -1,6 +1,7 @@
 import type {
   EvalCase,
   EvalCaseDetail,
+  EvalCaseDraft,
   EvalCaseInput,
   EvalCaseLinks,
   EvalCaseListItem,
@@ -34,6 +35,7 @@ import {
 import {
   armSnapshot,
   buildCaseMeta,
+  buildFindingInputMeta,
   buildSkillRunSnapshot,
   buildManualMeta,
   classifyEdit,
@@ -46,11 +48,14 @@ import {
   isAgentRunRow,
   isSkillRunRow,
   recallOf,
+  resolveExpectationTitle,
   slugify,
   summaryFromRow,
   toCaseListItem,
   toCaseRef,
+  toDraftOwners,
   toErrorReason,
+  toEvalCaseDraft,
   toEvalCaseDto,
   toLatestResult,
   toRunDetail,
@@ -96,10 +101,52 @@ export class EvalService {
   // ===========================================================================
 
   /**
+   * SPEC-10 AC-1..AC-3, EC-1..EC-4, EC-29, NFR-1: the Case Editor's seed. Creates nothing and
+   * makes no LLM call. Order: 404 → finding_undecided → agent_missing (no agent AND no recorded
+   * skill) → no_patch / range_outside_diff (the SPEC-08 freezing rules).
+   */
+  async draftFromFinding(workspaceId: string, findingId: string): Promise<EvalCaseDraft> {
+    const ctx = await this.repo.findingContext(workspaceId, findingId);
+    if (!ctx) throw new NotFoundError(NOT_FOUND.finding);
+
+    const type = expectationTypeFor(ctx.finding.acceptedAt, ctx.finding.dismissedAt);
+    if (!type) throw evalError(EVAL_ERROR.findingUndecided, 422);
+
+    const agent = ctx.agentId && ctx.agentExists && ctx.agentName !== null
+      ? { id: ctx.agentId, name: ctx.agentName }
+      : null;
+    const [agentCase, recorded] = await Promise.all([
+      agent
+        ? this.repo.getCaseBySourceFinding(workspaceId, findingId, { kind: 'agent', id: agent.id })
+        : Promise.resolve(undefined),
+      this.repo.findingSkills(workspaceId, findingId),
+    ]);
+    const skills = recorded?.skills ?? [];
+    if (!agent && skills.length === 0) throw evalError(EVAL_ERROR.agentMissing, 422);
+
+    const frozen = freezeFileDiff(await this.loadRawDiff(ctx), {
+      file: ctx.finding.file,
+      start_line: ctx.finding.startLine,
+      end_line: ctx.finding.endLine,
+      kind: ctx.finding.kind,
+    });
+    if (!frozen.ok) throw evalError(frozen.reason, 422);
+
+    const owners = toDraftOwners(agent ? { ...agent, caseId: agentCase?.id ?? null } : null, skills);
+    return toEvalCaseDraft(ctx, type, frozen.diff, owners);
+  }
+
+  /**
    * AC-2..AC-7, EC-1..EC-8. Checks run in the EC-35 order:
    * 404 → finding_undecided → agent_missing → eval_case_exists → no_patch → range_outside_diff.
+   * SPEC-10 AC-6..AC-8: with an `input` (the Case Editor's edited draft) the last two checks are the
+   * manual-case validation of that input; without one the behaviour is unchanged.
    */
-  async createFromFinding(workspaceId: string, findingId: string): Promise<EvalCase> {
+  async createFromFinding(
+    workspaceId: string,
+    findingId: string,
+    input?: EvalCaseInput,
+  ): Promise<EvalCase> {
     const ctx = await this.repo.findingContext(workspaceId, findingId);
     if (!ctx) throw new NotFoundError(NOT_FOUND.finding);
 
@@ -111,19 +158,21 @@ export class EvalService {
     const existing = await this.repo.getCaseBySourceFinding(workspaceId, findingId, owner);
     if (existing) throw evalError(EVAL_ERROR.caseExists, 409, { case_id: existing.id });
 
-    return toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner));
+    return toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner, input));
   }
 
   /**
    * SPEC-09 AC-48..AC-53, EC-35..EC-37, EC-39, EC-43, EC-44. Check order:
    * 404 (finding, skill) → finding_undecided → skill_not_in_run → an existing
    * case of that skill answers 200 → no_patch / range_outside_diff → insert 201.
+   * SPEC-10 AC-6..AC-8: an `input` replaces the last two checks by the manual-case validation.
    * Makes no LLM call (NFR-1).
    */
   async createFromFindingForSkill(
     workspaceId: string,
     findingId: string,
     skillId: string,
+    input?: EvalCaseInput,
   ): Promise<{ case: EvalCase; created: boolean }> {
     const ctx = await this.repo.findingContext(workspaceId, findingId);
     if (!ctx) throw new NotFoundError(NOT_FOUND.finding);
@@ -144,7 +193,10 @@ export class EvalService {
     if (existing) return { case: toEvalCaseDto(existing), created: false };
 
     try {
-      return { case: toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner)), created: true };
+      return {
+        case: toEvalCaseDto(await this.insertFindingCase(workspaceId, ctx, type, owner, input)),
+        created: true,
+      };
     } catch (err) {
       // Lost a race against a second request for the same skill + finding (EC-39).
       if (err instanceof AppError && err.code === EVAL_ERROR.caseExists) {
@@ -155,13 +207,33 @@ export class EvalService {
     }
   }
 
-  /** Freeze the finding's file diff and insert the owner's case (SPEC-08 AC-2..AC-7 rules, shared by both owners). */
+  /**
+   * Freeze the finding's file diff and insert the owner's case (SPEC-08 AC-2..AC-7 rules, shared by
+   * both owners). With an `input` (SPEC-10 AC-7) the case is the edited draft instead: validated and
+   * frozen by the manual-case rules, still tied to the finding and to the finding's PR.
+   */
   private async insertFindingCase(
     workspaceId: string,
     ctx: FindingCaseContext,
     type: NonNullable<ReturnType<typeof expectationTypeFor>>,
     owner: CaseOwner,
+    input?: EvalCaseInput,
   ) {
+    if (input) {
+      const { diff, expectation } = this.freezeCaseInput(input, ctx.finding);
+      return this.repo.insertCase({
+        workspaceId,
+        owner,
+        name: input.name,
+        inputDiff: diff,
+        inputFiles: [expectation.file],
+        inputMeta: buildFindingInputMeta(input.input_meta, ctx.pull, ctx.repo.fullName),
+        expectation,
+        sourceFindingId: ctx.finding.id,
+        notes: input.notes ?? null,
+      });
+    }
+
     const frozen = freezeFileDiff(await this.loadRawDiff(ctx), {
       file: ctx.finding.file,
       start_line: ctx.finding.startLine,
@@ -195,6 +267,33 @@ export class EvalService {
   }
 
   /**
+   * The validation both manual routes and the finding routes with an `input` share (EC-1 order):
+   * 204,800-byte cap → pasted-diff parsing + grounding (`no_patch` / `range_outside_diff`).
+   * Returns the frozen diff and the stored expectation (severity / category null for `must_not_flag`).
+   */
+  private freezeCaseInput(input: EvalCaseInput, finding?: FindingCaseContext['finding']) {
+    if (exceedsDiffLimit(input.input_diff)) throw evalError(EVAL_ERROR.frozenDiffTooLarge, 422);
+
+    const exp = input.expectation;
+    // A finding route keeps the finding's `kind` (full-file kinds only need the file present, as the
+    // draft route grounded them) while the location is still the finding's own; an edited file or
+    // line range gets the strict hunk-intersection check (SPEC-10 AC-7, EC-9).
+    const sameLocation =
+      finding !== undefined &&
+      exp.file === finding.file &&
+      exp.start_line === finding.startLine &&
+      exp.end_line === finding.endLine;
+    const frozen = freezePastedDiff(input.input_diff, {
+      file: exp.file,
+      start_line: exp.start_line,
+      end_line: exp.end_line,
+      ...(sameLocation ? { kind: finding.kind } : {}),
+    });
+    if (!frozen.ok) throw evalError(frozen.reason, 422);
+    return { diff: frozen.diff, expectation: effectiveExpectation(exp, exp.title) };
+  }
+
+  /**
    * SPEC-09 AC-9, AC-10, AC-11, AC-45, AC-46, EC-1..EC-3, EC-41. Order (EC-1):
    * 404 owner → 204,800-byte cap → pasted-diff parsing + grounding → insert.
    */
@@ -204,24 +303,16 @@ export class EvalService {
     input: EvalCaseInput,
   ): Promise<EvalCase> {
     await this.requireOwner(workspaceId, owner);
-    if (exceedsDiffLimit(input.input_diff)) throw evalError(EVAL_ERROR.frozenDiffTooLarge, 422);
-
-    const exp = input.expectation;
-    const frozen = freezePastedDiff(input.input_diff, {
-      file: exp.file,
-      start_line: exp.start_line,
-      end_line: exp.end_line,
-    });
-    if (!frozen.ok) throw evalError(frozen.reason, 422);
+    const { diff, expectation } = this.freezeCaseInput(input);
 
     const row = await this.repo.insertCase({
       workspaceId,
       owner,
       name: input.name,
-      inputDiff: frozen.diff,
-      inputFiles: [exp.file],
+      inputDiff: diff,
+      inputFiles: [expectation.file],
       inputMeta: buildManualMeta(input.input_meta),
-      expectation: effectiveExpectation(exp),
+      expectation,
       sourceFindingId: null,
       notes: input.notes ?? null,
     });
@@ -351,7 +442,10 @@ export class EvalService {
       // A finding-derived case keeps its stored expectation: only name / notes can differ here.
       const expectation =
         update.expectation && !row.sourceFindingId
-          ? effectiveExpectation(update.expectation, stored.title)
+          ? effectiveExpectation(
+              update.expectation,
+              resolveExpectationTitle(update.expectation.title, stored.title),
+            )
           : undefined;
       const updated = await this.repo.updateCaseInPlace(workspaceId, id, {
         name: update.name,
@@ -363,7 +457,10 @@ export class EvalService {
     }
 
     // Replace: every field not in the body keeps its stored value.
-    const exp = effectiveExpectation(update.expectation ?? stored, stored.title);
+    const exp = effectiveExpectation(
+      update.expectation ?? stored,
+      resolveExpectationTitle(update.expectation?.title, stored.title),
+    );
     const frozen = freezePastedDiff(update.input_diff ?? row.inputDiff, {
       file: exp.file,
       start_line: exp.start_line,

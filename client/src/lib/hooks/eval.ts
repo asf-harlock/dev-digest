@@ -5,13 +5,15 @@
    status leaves `running`. Contracts are imported as TYPES only: a runtime
    import from `@devdigest/shared` breaks `next build` (client/INSIGHTS.md).
    SPEC-09 adds the Case Editor writes here (create by hand, edit/replace) for both
-   owners; the skill-only reads live in hooks/skill-eval.ts. */
+   owners; the skill-only reads live in hooks/skill-eval.ts. SPEC-10 adds the finding's
+   Case Editor seed (`useEvalCaseDraft`) and the optional edited input of the finding route. */
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   EvalCase,
   EvalCaseDetail,
+  EvalCaseDraft,
   EvalCaseInput,
   EvalCaseLinks,
   EvalCaseListItem,
@@ -43,6 +45,8 @@ export const evalKeys = {
   /** Prefix of every finding → skills query (SPEC-09). */
   findingSkillsAll: ["eval-finding-skills"] as const,
   findingSkills: (findingId: string | null | undefined) => ["eval-finding-skills", findingId] as const,
+  /** The editable seed of a finding's Case Editor (SPEC-10). */
+  draft: (findingId: string | null | undefined) => ["eval-case-draft", findingId] as const,
   /** Prefix of every PR's finding → case links query. */
   linksAll: ["eval-case-links"] as const,
   overview: (agentId: string | null | undefined) => ["eval-overview", agentId] as const,
@@ -209,7 +213,7 @@ export function useDeleteEvalCase() {
 // Turn a finding into a case
 // ---------------------------------------------------------------------------
 
-/** Codes of the 422s the PR page renders inline (EC-1, EC-2, EC-4, EC-5). */
+/** Codes of the 422s the PR page renders inline (EC-1, EC-2, EC-3, EC-4). */
 export type EvalCaseRejection =
   | "finding_undecided"
   | "agent_missing"
@@ -223,47 +227,82 @@ const CASE_REJECTIONS: readonly string[] = [
   "range_outside_diff",
 ];
 
+/** The finding's own 422 (`EvalCaseRejection`) or a Case Editor one — a save that carries
+ *  an edited input can also be `validation_error` / `frozen_diff_too_large` (EC-9). */
+export type FindingCaseRejection = EvalCaseRejection | CaseSaveRejection;
+
+/** Maps an `ApiError` of a finding route to the inline rejection it stands for, or null
+ *  (network, 5xx, 404 → rethrown and toasted once by the global handler). */
+export function findingCaseRejection(err: unknown): FindingCaseRejection | null {
+  if (err instanceof ApiError && err.status === 422 && err.code && CASE_REJECTIONS.includes(err.code)) {
+    return err.code as EvalCaseRejection;
+  }
+  return caseSaveRejection(err);
+}
+
+/** `GET /findings/:id/eval-case-draft` (SPEC-10 AC-1): the seed the Case Editor opens with.
+ *  Fetched on the click (`enabled`), never on mount, and never reused: a stale diff must not
+ *  seed a modal, so the entry is dropped (`gcTime: 0`) and re-read on every open. A 422
+ *  (`finding_undecided`, `agent_missing`, `no_patch`, `range_outside_diff`) is an answer the
+ *  control explains next to itself — `findingCaseRejection(draft.error)`. */
+export function useEvalCaseDraft(findingId: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: evalKeys.draft(findingId),
+    queryFn: () => api.get<EvalCaseDraft>(`/findings/${findingId}/eval-case-draft`),
+    enabled: enabled && !!findingId,
+    retry: retryUnlessClientError,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
 export type CreateEvalCaseResult =
   /** 201 — the case was created. */
   | { kind: "created"; caseId: string; agentId: string }
-  /** 409 `eval_case_exists` — already in the set; shown as "In eval set" (EC-3).
+  /** 409 `eval_case_exists` — already in the set; shown as "In eval set" (EC-5).
    *  `caseId` comes from the error `details` and is null if the server omitted it. */
   | { kind: "exists"; caseId: string | null }
-  /** A 422 the UI explains inline with a prReview.json string. */
-  | { kind: "rejected"; code: EvalCaseRejection };
+  /** A 422 the UI explains inline. */
+  | { kind: "rejected"; code: FindingCaseRejection };
+
+/** What `useCreateEvalCaseFromFinding` takes: a finding id (the server freezes the finding
+ *  itself, SPEC-08) or the id plus the edited case of the Case Editor (SPEC-10 AC-6). */
+export type FindingCaseRequest = string | { findingId: string; input?: EvalCaseInput };
 
 /**
- * `POST /findings/:id/eval-case`, no body. `mutate(findingId)`.
+ * `POST /findings/:id/eval-case`, with the edited `EvalCaseInput` as the body when there
+ * is one. `mutate(findingId)` or `mutate({ findingId, input })`.
  *
  * The mutation RESOLVES (does not throw) for the outcomes the UI handles itself —
- * 201, 409 `eval_case_exists`, and the four 422 codes — so the global
- * MutationCache does not also raise a generic toast for them. Anything else
- * (network, 5xx, 404) still throws and is toasted once by the global handler.
+ * 201, 409 `eval_case_exists`, and the 422 codes — so the global MutationCache does not
+ * also raise a generic toast for them. Anything else (network, 5xx, 404) still throws and
+ * is toasted once by the global handler.
  *
  * @param pullId the PR the finding belongs to — its case-links query is refreshed.
  */
 export function useCreateEvalCaseFromFinding(pullId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (findingId: string): Promise<CreateEvalCaseResult> => {
+    mutationFn: async (request: FindingCaseRequest): Promise<CreateEvalCaseResult> => {
+      const { findingId, input } = typeof request === "string" ? { findingId: request, input: undefined } : request;
       try {
-        const created = await api.post<EvalCase>(`/findings/${findingId}/eval-case`);
+        const created = await api.post<EvalCase>(`/findings/${findingId}/eval-case`, input);
         return { kind: "created", caseId: created.id, agentId: created.owner_id };
       } catch (err) {
-        if (err instanceof ApiError) {
-          if (err.status === 409 && err.code === "eval_case_exists") {
-            return { kind: "exists", caseId: detailsId(err.details, ["case_id", "caseId", "id"]) };
-          }
-          if (err.status === 422 && err.code && CASE_REJECTIONS.includes(err.code)) {
-            return { kind: "rejected", code: err.code as EvalCaseRejection };
-          }
+        if (err instanceof ApiError && err.status === 409 && err.code === "eval_case_exists") {
+          return { kind: "exists", caseId: detailsId(err.details, ["case_id", "caseId", "id"]) };
         }
+        const code = findingCaseRejection(err);
+        if (code) return { kind: "rejected", code };
         throw err;
       }
     },
-    onSuccess: (result, findingId) => {
+    onSuccess: (result, request) => {
       if (result.kind === "rejected") return;
       if (result.kind === "created") {
+        const findingId = typeof request === "string" ? request : request.findingId;
         // Flip the card to "In eval set" without waiting for the refetch.
         qc.setQueryData<EvalCaseLinks>(evalKeys.links(pullId), (old) => ({
           links: [
@@ -273,6 +312,7 @@ export function useCreateEvalCaseFromFinding(pullId: string | null | undefined) 
         }));
       }
       qc.invalidateQueries({ queryKey: evalKeys.links(pullId) });
+      qc.invalidateQueries({ queryKey: evalKeys.findingSkillsAll });
       qc.invalidateQueries({ queryKey: evalKeys.casesAll });
       qc.invalidateQueries({ queryKey: ["eval-overview"] });
     },

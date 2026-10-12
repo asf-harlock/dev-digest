@@ -229,31 +229,30 @@ describe("skill EvalsTab", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
 
-    // Row 1: never run, SEVERITY · category, file:start-end.
-    expect(within(rows[0]!).getByText("never run")).toBeInTheDocument();
+    // Row 1: never run icon, MUST FIND badge, SEVERITY · category tag (SPEC-10 AC-29).
+    expect(within(rows[0]!).getByRole("img", { name: "never run" })).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("MUST FIND")).toBeInTheDocument();
     expect(within(rows[0]!).getByText("WARNING · test")).toBeInTheDocument();
-    expect(within(rows[0]!).getByText("src/a.ts:3-4")).toBeInTheDocument();
     expect(within(rows[0]!).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Open eval case missing-test",
       "Edit case missing-test",
       "Delete case missing-test",
     ]);
 
-    // Row 2: with-skill result, must not flag tag, truncated name keeps its full text in a title.
-    expect(within(rows[1]!).getByText("passed")).toBeInTheDocument();
-    expect(within(rows[1]!).getByText("expected 1, got 2")).toBeInTheDocument();
-    expect(within(rows[1]!).getAllByText("must not flag").length).toBeGreaterThan(0);
+    // Row 2: with-skill result (no recall for must_not_flag, SPEC-10 AC-30), MUST NOT FLAG badge,
+    // truncated name keeps its full text in a title.
+    expect(within(rows[1]!).getByRole("img", { name: "passed" })).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("expected 1 finding, got 2")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("MUST NOT FLAG")).toBeInTheDocument();
     expect(within(rows[1]!).getByText(long)).toHaveAttribute("title", long);
-    expect(within(rows[1]!).getByText("src/very/long/path/file.ts:1-9")).toHaveAttribute(
-      "title",
-      "src/very/long/path/file.ts:1-9",
-    );
 
     // No agent linked → Run all evals is disabled with its reason (EC-11).
     const runAll = screen.getByRole("button", { name: "Run all evals" });
     await waitFor(() => expect(runAll).toBeDisabled());
     expect(runAll.parentElement).toHaveAttribute("title", "Link this skill to an agent first");
-    expect(screen.getByText("—")).toBeInTheDocument(); // no finished run → no passing count
+    // No finished run → "0/0 passing" and no value in any KPI card (SPEC-10 AC-28, AC-31).
+    expect(screen.getByText("0/0 passing")).toBeInTheDocument();
+    expect(screen.getByText("2 cases")).toBeInTheDocument();
   });
 
   it("EC-29: no cases shows the empty state with a New eval case action", async () => {
@@ -275,13 +274,14 @@ describe("skill EvalsTab", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "New eval case" })[0]!);
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "brand-new" } });
-    fireEvent.change(within(dialog).getByLabelText("PR title"), { target: { value: "T" } });
-    fireEvent.change(within(dialog).getByLabelText("Diff"), {
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Diff" }), {
       target: { value: "@@ -1,1 +1,2 @@\n a\n+b" },
     });
-    fireEvent.change(within(dialog).getByLabelText("File"), { target: { value: "src/a.ts" } });
-    fireEvent.change(within(dialog).getByLabelText("Start line"), { target: { value: "2" } });
-    fireEvent.change(within(dialog).getByLabelText("End line"), { target: { value: "2" } });
+    fireEvent.change(within(dialog).getByLabelText("Expected output"), {
+      target: { value: JSON.stringify([{ file: "src/a.ts", start_line: 2, end_line: 2 }]) },
+    });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "PR meta" }));
+    fireEvent.change(within(dialog).getByLabelText("PR title"), { target: { value: "T" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -291,7 +291,7 @@ describe("skill EvalsTab", () => {
     await waitFor(() => expect(within(caseList()).getAllByRole("listitem")).toHaveLength(2));
     const top = within(caseList()).getAllByRole("listitem")[0]!;
     expect(within(top).getByText("brand-new")).toBeInTheDocument();
-    expect(within(top).getByText("never run")).toBeInTheDocument();
+    expect(within(top).getByRole("img", { name: "never run" })).toBeInTheDocument();
   });
 
   it("AC-13/AC-17/AC-18: edit opens the stored case; delete asks naming the case and removes its row", async () => {
@@ -335,7 +335,14 @@ describe("skill EvalsTab run flow (SPEC-09 Phase B)", () => {
     });
     renderTab();
 
-    expect(await screen.findByText("3 / 4 passing")).toBeInTheDocument();
+    expect(await screen.findByText("3/4 passing")).toBeInTheDocument();
+    // SPEC-10 AC-31: the EVAL METRICS label, the caption and the four KPI cards of the with-skill arm.
+    expect(screen.getByRole("heading", { name: "EVAL METRICS" })).toBeInTheDocument();
+    expect(screen.getByText(/Scoring is mechanical/)).toBeInTheDocument();
+    const kpis = screen.getByRole("group", { name: "Latest eval run metrics" });
+    expect(within(kpis).getByText("54%")).toBeInTheDocument(); // with-skill recall, not the without arm's 50%
+    expect(within(kpis).getByText("3/4")).toBeInTheDocument(); // with-skill traces passed
+    expect(screen.queryByRole("link", { name: /full dashboard/ })).not.toBeInTheDocument();
     expect(
       screen.getByText("Lift vs. without skill — recall ▲ 4 pt · precision 0 pt · citation 0 pt"),
     ).toBeInTheDocument();
@@ -364,11 +371,12 @@ describe("skill EvalsTab run flow (SPEC-09 Phase B)", () => {
     });
   });
 
-  it("EC-30: a never-run skill shows no passing count and no lift", async () => {
+  it("EC-30: a never-run skill shows no KPI value, no lift and an empty passing pill", async () => {
     stubApi({ cases: [item()], overview: { carriers: CARRIERS } });
     renderTab();
     expect(await screen.findByText("Lift vs. without skill: —")).toBeInTheDocument();
-    expect(screen.queryByText(/passing/)).not.toBeInTheDocument();
+    expect(screen.getByText("0/0 passing")).toBeInTheDocument();
+    expect(screen.getAllByText("No finished run yet").length).toBeGreaterThan(0);
   });
 
   it("EC-13: no cases disables Run all evals with its hint", async () => {

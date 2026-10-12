@@ -2,18 +2,20 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { IconBtn } from "@devdigest/ui";
+import { Button, IconBtn } from "@devdigest/ui";
 import type { EvalExpectation } from "@devdigest/shared";
 import type { EvalCaseState } from "@/lib/eval-format";
 import { CaseStateLabel } from "../case-state-label";
-import { expectationLocation, severityCategoryParts } from "./helpers";
+import { recallPercent, severityCategoryTag } from "./helpers";
 import { s } from "./styles";
 
-/** One `<li>` of an eval case list, shared by the agent and the skill Evals tab:
- *  state label, name, type, `file:start-end`, tag, "expected n, got m", an edit and a
- *  delete action. Long names, paths and reasons truncate with an ellipsis and keep the
- *  full text in `title` (EC-29, EC-33). Every string is rendered as escaped React text
- *  (UI-3, UI-8); the caller owns the surrounding `<ul>`. */
+/** One `<li>` of an eval case list, shared by the agent and the skill Evals tab (SPEC-10 AC-29,
+ *  AC-30): a status icon with an accessible name, the case name, a MUST FIND / MUST NOT FLAG
+ *  badge, the result line ("expected n finding(s), got m", plus " · recall x%" for a
+ *  `must_find` case), at the right the `SEVERITY · category` tag, **Edit** (icon and text) and a
+ *  delete icon. Long names and reasons truncate with an ellipsis and keep the full text in
+ *  `title` (EC-12). Every string is rendered as escaped React text (UI-3, UI-7); the caller owns
+ *  the surrounding `<ul>`. */
 export function EvalCaseRow({
   id,
   name,
@@ -34,15 +36,14 @@ export function EvalCaseRow({
   errorReason: string | null;
   /** Extra meta after the result — the skill tab's effect label. Absent on the agent tab. */
   trailing?: React.ReactNode;
-  /** Row click and the edit action both open the Case Editor (AC-13). */
+  /** Row click and the edit action both open the Case Editor. */
   onOpen: (caseId: string) => void;
   onDelete: (caseId: string, name: string) => void;
 }) {
   const t = useTranslations("eval");
-  const location = expectationLocation(expectation);
   const mustFind = expectation.type === "must_find";
-  const { severity, category } = severityCategoryParts(expectation);
-  const tag = mustFind ? [severity, category].filter(Boolean).join(" · ") : t("evalsTab.case.mustNotFlagTag");
+  const tag = severityCategoryTag(expectation);
+  const recall = recallPercent(expectation.type, state);
   return (
     <li style={s.row}>
       <button
@@ -51,41 +52,41 @@ export function EvalCaseRow({
         aria-label={t("evalsTab.case.open", { name })}
         onClick={() => onOpen(id)}
       >
-        <span style={s.line}>
-          <span style={s.name} title={name}>
-            {name}
-          </span>
-          <CaseStateLabel state={state} />
+        <span style={s.stateIcon}>
+          <CaseStateLabel state={state} showText={false} />
         </span>
-        <span style={s.meta}>
-          <span style={s.type}>
-            {mustFind ? t("evalsTab.case.typeMustFind") : t("evalsTab.case.typeMustNotFlag")}
-          </span>
-          <span className="mono" style={s.location} title={location}>
-            {location}
-          </span>
-          {tag && <span style={s.tag}>{tag}</span>}
-          {result && (
-            <span style={s.result}>
-              {t("evalsTab.case.expectedGot", { expected: result.expected, got: result.got })}
+        <span style={s.text}>
+          <span style={s.line}>
+            <span style={s.name} title={name}>
+              {name}
             </span>
-          )}
-          {trailing}
-          {state === "errored" && errorReason && (
-            <span style={s.reason} title={errorReason}>
-              {t("evalsTab.case.erroredReason", { reason: errorReason })}
+            <span style={s.badge(mustFind)}>
+              {mustFind ? t("evalsTab.case.badgeMustFind") : t("evalsTab.case.badgeMustNotFlag")}
             </span>
-          )}
+          </span>
+          <span style={s.meta}>
+            {result && (
+              <span style={s.result}>
+                {recall === null
+                  ? t("evalsTab.case.resultPlain", { expected: result.expected, got: result.got })
+                  : t("evalsTab.case.resultWithRecall", { expected: result.expected, got: result.got, recall })}
+              </span>
+            )}
+            {trailing}
+            {state === "errored" && errorReason && (
+              <span style={s.reason} title={errorReason}>
+                {t("evalsTab.case.erroredReason", { reason: errorReason })}
+              </span>
+            )}
+          </span>
         </span>
       </button>
+      {tag && <span style={s.tag}>{tag}</span>}
       <span style={s.actions}>
-        <IconBtn icon="Edit" label={t("evalsTab.case.edit", { name })} onClick={() => onOpen(id)} />
-        <IconBtn
-          icon="Trash"
-          label={t("evalsTab.case.delete", { name })}
-          danger
-          onClick={() => onDelete(id, name)}
-        />
+        <Button kind="ghost" size="sm" icon="Edit" aria-label={t("evalsTab.case.edit", { name })} onClick={() => onOpen(id)}>
+          {t("evalsTab.edit")}
+        </Button>
+        <IconBtn icon="Trash" label={t("evalsTab.case.delete", { name })} danger onClick={() => onDelete(id, name)} />
       </span>
     </li>
   );

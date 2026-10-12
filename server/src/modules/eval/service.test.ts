@@ -101,6 +101,7 @@ function makeWorld() {
             },
             agentId: AGENT,
             agentExists: true,
+            agentName: 'agent',
             pull: { id: 'pr-1', number: 7, title: 'PR', body: null, base: 'main', headSha: 'abc' },
             repo: { owner: 'acme', name: 'x', fullName: 'acme/x' },
           }

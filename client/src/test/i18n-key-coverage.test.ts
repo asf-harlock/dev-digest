@@ -12,19 +12,20 @@ import { fileURLToPath } from "node:url";
 const CLIENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = path.join(CLIENT, "src");
 
-/** The SPEC-09 surface: shared case editor/row/dialog/state label/trend, both Evals tabs,
- *  the skill editor's run flow and the finding-card skill menu. */
+/** The SPEC-09 / SPEC-10 surface: shared case editor/row/dialog/state label/KPI cards/trend,
+ *  both Evals tabs, the skill editor's run flow and the finding card's eval-case control. */
 const ROOTS = [
   "components/eval-case-editor",
   "components/eval-case-row",
   "components/delete-case-dialog",
   "components/case-state-label",
+  "components/eval-kpi-cards",
   "components/metric-trend",
   "app/agents/[id]/_components/AgentEditor/_components/EvalsTab",
   "app/skills/_components/SkillEditor/_components/EvalsTab",
   "app/skills/_components/SkillEditor/_components/RunDialog",
   "app/skills/_components/SkillEditor/use-skill-eval-flow.ts",
-  "app/repos/[repoId]/pulls/[number]/_components/FindingCard/_components/SkillEvalMenu",
+  "app/repos/[repoId]/pulls/[number]/_components/FindingCard/_components/EvalCaseButton",
 ];
 
 function sourceFiles(rel: string): string[] {
@@ -72,13 +73,15 @@ function usesIn(file: string): Use[] {
   return out;
 }
 
-describe("next-intl key coverage (SPEC-09 NFR-6)", () => {
+describe("next-intl key coverage (SPEC-09 NFR-6, SPEC-10 NFR-20)", () => {
   const files = ROOTS.flatMap(sourceFiles);
   const uses = files.flatMap(usesIn);
 
   it("scans the SPEC-09 components and finds their keys", () => {
-    expect(files.length).toBeGreaterThan(20);
-    expect(uses.length).toBeGreaterThan(80);
+    // Re-counted for the SPEC-10 root set: 97 files and 173 `t(...)` uses. The floors sit a
+    // small margin below, so a root dropped from ROOTS by mistake still fails here.
+    expect(files.length).toBeGreaterThan(90);
+    expect(uses.length).toBeGreaterThan(160);
     // Spot checks that the scanner sees namespaces and the new trend keys.
     expect(uses.some((u) => u.ns === "eval" && u.key === "trend.tooltip.skill")).toBe(true);
     expect(uses.some((u) => u.ns === "skills" && u.key.startsWith("evals.runDialog"))).toBe(true);

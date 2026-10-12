@@ -1,7 +1,8 @@
 /* EvalsTab — the agent's eval set and its latest metrics (SPEC-08 AC-10..AC-39,
-   SPEC-09 AC-43..AC-45, AC-55, AC-56). KPI cards for the latest finished run, the Metric
-   trend chart, the case list (row or edit → Case Editor, delete → confirmation),
-   "+ New eval case" and "Run all evals". Data comes from hooks/eval.ts only. */
+   SPEC-09 AC-43..AC-45, AC-55, AC-56; SPEC-10 AC-27, AC-28). The EVAL METRICS label with the
+   dashboard link, the KPI cards of the latest finished run with their caption, the Metric
+   trend chart, the case list (row or edit → Case Editor, delete → confirmation), "Run all
+   evals" and the primary "New eval case". Data comes from hooks/eval.ts only. */
 "use client";
 
 import React from "react";
@@ -12,9 +13,9 @@ import type { Agent } from "@devdigest/shared";
 import { useAgentEvalCases, useAgentEvalOverview } from "@/lib/hooks/eval";
 import { CaseEditor } from "@/components/eval-case-editor";
 import { AgentMetricTrend } from "@/components/metric-trend";
+import { EvalKpiCards } from "@/components/eval-kpi-cards";
 import { DeleteCaseDialog } from "@/components/delete-case-dialog";
 import { EvalCaseList } from "./_components/EvalCaseList";
-import { EvalKpiCards } from "./_components/EvalKpiCards";
 import { RunAllEvals } from "./_components/RunAllEvals";
 import { PULL_REQUESTS_HREF, dashboardHref } from "./constants";
 import { passingCounts } from "./helpers";
@@ -30,7 +31,6 @@ export function EvalsTab({ agent }: { agent: Agent }) {
 
   const list = cases.data ?? [];
   const { passed, scored } = passingCounts(list);
-  const hasFinishedRun = overview.data?.latest != null;
   const closeEditor = React.useCallback(() => setEditing(null), []);
   const closeDelete = React.useCallback(() => setDeleteTarget(null), []);
   const afterDelete = React.useCallback(() => {
@@ -42,10 +42,8 @@ export function EvalsTab({ agent }: { agent: Agent }) {
     <div style={s.wrap}>
       <section style={s.section}>
         <div style={s.header}>
-          <div style={s.titleBlock}>
-            <h2 style={s.title}>{t("evalsTab.metricsTitle")}</h2>
-            <p style={s.subtitle}>{t("evalsTab.metricsSubtitle")}</p>
-          </div>
+          <h2 style={s.title}>{t("evalsTab.metricsLabel")}</h2>
+          <span style={s.spacer} />
           <Link href={dashboardHref(agent.id)} style={s.dashboardLink}>
             {t("evalsTab.viewDashboard")}
           </Link>
@@ -60,7 +58,10 @@ export function EvalsTab({ agent }: { agent: Agent }) {
           <Skeleton height={120} />
         ) : (
           <>
-            <EvalKpiCards latest={overview.data.latest} previous={overview.data.previous} />
+            <EvalKpiCards
+              latest={overview.data.latest?.metrics ?? null}
+              previous={overview.data.previous?.metrics ?? null}
+            />
             <AgentMetricTrend trend={overview.data.trend} />
           </>
         )}
@@ -69,13 +70,9 @@ export function EvalsTab({ agent }: { agent: Agent }) {
       <section style={s.section}>
         <div style={s.sectionHead}>
           <h2 style={s.sectionTitle}>{t("evalsTab.casesHeading")}</h2>
-          <span style={s.passing}>
-            {hasFinishedRun ? t("evalsTab.passingSummary", { passed, scored }) : t("evalsTab.noValue")}
-          </span>
-          <span style={{ flex: 1 }} />
-          <Button kind="secondary" size="sm" icon="Plus" onClick={() => setEditing("new")}>
-            {t("caseEditor.newCase")}
-          </Button>
+          <span style={s.pill}>{t("evalsTab.passingSummary", { passed, scored })}</span>
+          <span style={s.count}>{t("evalsTab.casesCount", { count: list.length })}</span>
+          <span style={s.spacer} />
           {overview.data && (
             <RunAllEvals
               agentId={agent.id}
@@ -83,6 +80,9 @@ export function EvalsTab({ agent }: { agent: Agent }) {
               runningRunId={overview.data.running_run_id}
             />
           )}
+          <Button kind="primary" size="sm" icon="Plus" onClick={() => setEditing("new")}>
+            {t("caseEditor.newCase")}
+          </Button>
         </div>
 
         {cases.isError ? (

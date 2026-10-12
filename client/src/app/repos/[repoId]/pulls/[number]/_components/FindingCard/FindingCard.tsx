@@ -1,7 +1,7 @@
 /* FindingCard — ported from findings.jsx (createElement → TSX).
    Severity icon+label, category, file:line, confidence, markdown rationale +
-   suggestion, accept/dismiss actions, and (SPEC-08, SPEC-09) turn-into-eval-case
-   and turn-into-skill-eval-case.
+   suggestion, accept/dismiss actions, and (SPEC-08, SPEC-10) the one turn-into-eval-case
+   control, which opens the seeded Case Editor.
    Accept/dismiss reflect persisted timestamps. */
 "use client";
 
@@ -22,7 +22,6 @@ import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel, type FindingEvalCase } from "./helpers";
 import { EvalCaseButton } from "./_components/EvalCaseButton";
-import { SkillEvalMenu } from "./_components/SkillEvalMenu";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
 
@@ -35,7 +34,6 @@ export function FindingCard({
   repoFullName,
   headSha,
   evalCase,
-  skillEval,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -44,12 +42,9 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
-  /** SPEC-08: turn this finding into an eval case. Omitted where the card has no
-   *  review/agent context (e.g. the Smart Diff view) — then no button is shown. */
+  /** SPEC-08, SPEC-10: turn this finding into an eval case. Omitted where the card has no
+   *  review/agent context (e.g. the Smart Diff view) — then no control is shown. */
   evalCase?: FindingEvalCase;
-  /** SPEC-09: show "Turn into skill eval case" after the eval-case button. Opt-in like
-   *  `evalCase` — only the review's findings panel has the run/skill context. */
-  skillEval?: boolean;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
@@ -126,7 +121,6 @@ export function FindingCard({
               {t("finding.dismiss")}
             </Button>
             {evalCase && <EvalCaseButton finding={f} evalCase={evalCase} />}
-            {skillEval && <SkillEvalMenu finding={f} />}
           </div>
         </div>
       )}

@@ -3,6 +3,8 @@ import type {
   EvalCaseUpdate,
   EvalAgentRunDetail,
   EvalSkillCaseListItem,
+  EvalCaseDraft,
+  EvalCaseDraftOwner,
   EvalCaseLatestResult,
   EvalCaseListItem,
   EvalCaseMeta,
@@ -23,8 +25,10 @@ import type {
 import type { EvalCaseRow, EvalRunRow } from '../../db/rows.js';
 import { AppError } from '../../platform/errors.js';
 import {
+  CASE_NAME_MAX,
   CASE_SLUG_FALLBACK,
   CASE_SLUG_MAX,
+  DRAFT_NAME_PREFIX,
   ERROR_REASON_MAX,
   EVAL_ERROR_MESSAGE,
   EVAL_TASK_LINE,
@@ -33,7 +37,14 @@ import {
 } from './constants.js';
 import { diffUnchanged } from './pasted-diff.js';
 import { classifyEffect } from './arms.js';
-import type { CarrierRow, EvalRunSummary, EvalSkillRunSummary, EvalSkillTrendRow, SkillForRun } from './types.js';
+import type {
+  CarrierRow,
+  EvalRunSummary,
+  EvalSkillRunSummary,
+  EvalSkillTrendRow,
+  FindingCaseContext,
+  SkillForRun,
+} from './types.js';
 
 /**
  * SPEC-08 pure transforms: slugs, row → DTO mapping, small derivations.
@@ -140,7 +151,13 @@ export function toLatestResult(
     duration_ms: outcome.duration_ms,
     cost_usd: outcome.cost_usd,
     error_reason: outcome.error_reason,
+    findings: findingsOf(outcome),
   };
+}
+
+/** AC-26, EC-13: the stored `findings` are required, but a fixture or an older document can lack them → `null`. */
+function findingsOf(outcome: EvalCaseOutcome): EvalCaseLatestResult['findings'] {
+  return Array.isArray(outcome.findings) ? outcome.findings : null;
 }
 
 export function toCaseListItem(
@@ -417,6 +434,8 @@ export function toSkillDetailLatest(
     duration_ms: w.duration_ms + wo.duration_ms,
     cost_usd: bothArmsCost(w, wo),
     error_reason: w.error_reason,
+    findings: findingsOf(w),
+    effect: classifyEffect(w, wo),
   };
 }
 
@@ -501,6 +520,80 @@ export function buildCaseMeta(
 
 // ---- Case Editor (SPEC-09) -----------------------------------------------------
 
+/** AC-4 / UI-6: "From finding: {title}", the whole name cut to the 80-character case-name limit. */
+export function buildDraftName(title: string): string {
+  return `${DRAFT_NAME_PREFIX}${title}`.slice(0, CASE_NAME_MAX).trimEnd();
+}
+
+/**
+ * SPEC-10 AC-3, EC-4: the owner picker's entries — the review's agent (when it still exists in the
+ * workspace), then its skills in run order. `findingSkills` hands them over already ordered.
+ */
+export function toDraftOwners(
+  agent: { id: string; name: string; caseId: string | null } | null,
+  skills: readonly { skillId: string; name: string; caseId: string | null }[],
+): EvalCaseDraftOwner[] {
+  const owners: EvalCaseDraftOwner[] = [];
+  if (agent) {
+    owners.push({
+      kind: 'agent',
+      id: agent.id,
+      name: agent.name,
+      has_case: agent.caseId !== null,
+      case_id: agent.caseId,
+    });
+  }
+  for (const s of skills) {
+    owners.push({
+      kind: 'skill',
+      id: s.skillId,
+      name: s.name,
+      has_case: s.caseId !== null,
+      case_id: s.caseId,
+    });
+  }
+  return owners;
+}
+
+/** SPEC-10 AC-2: the editable seed — the finding's expectation, its frozen file diff and the PR facts. */
+export function toEvalCaseDraft(
+  ctx: FindingCaseContext,
+  type: EvalExpectation['type'],
+  frozenDiff: string,
+  owners: EvalCaseDraftOwner[],
+): EvalCaseDraft {
+  const f = ctx.finding;
+  return {
+    name: buildDraftName(f.title),
+    expectation: {
+      type,
+      file: f.file,
+      start_line: f.startLine,
+      end_line: f.endLine,
+      severity: f.severity,
+      category: f.category,
+      title: f.title,
+    },
+    input_diff: frozenDiff,
+    input_meta: buildCaseMeta(ctx.pull, ctx.repo.fullName),
+    owners,
+  };
+}
+
+/** SPEC-10 AC-7: an edited finding case keeps the editor's title / body and the finding's PR number and repo. */
+export function buildFindingInputMeta(
+  input: { title: string; body?: string | null },
+  pull: { number: number },
+  repoFullName: string,
+): EvalCaseMeta {
+  return {
+    pr_number: pull.number,
+    repo_full_name: repoFullName,
+    title: input.title,
+    body: emptyToNull(input.body),
+  };
+}
+
 /** AC-11: a manual case has no PR; `title` / `body` come from the editor's fields. */
 export function buildManualMeta(input: { title: string; body?: string | null }): EvalCaseMeta {
   return {
@@ -526,6 +619,17 @@ export function effectiveExpectation(
     category: mustFind ? (input.category ?? null) : null,
     title: title ?? null,
   };
+}
+
+/**
+ * SPEC-10 AC-25: the expectation title a PATCH stores — the edited one when the body carries it
+ * (`null` clears it), else the stored one. Title is display only, never part of the match key.
+ */
+export function resolveExpectationTitle(
+  edited: string | null | undefined,
+  stored: string | null | undefined,
+): string | null {
+  return (edited !== undefined ? edited : stored) ?? null;
 }
 
 export type EditKind = 'in_place' | 'replace' | 'locked';
@@ -564,9 +668,12 @@ export function classifyEdit(
         exp.type !== stored.type));
 
   if (existing.sourceFindingId) {
+    // A title the body does not carry is not a change; one it carries that differs is (EC-6, EC-7).
     const qualifiersChanged =
       exp !== undefined &&
-      (nul(exp.severity) !== nul(stored.severity) || nul(exp.category) !== nul(stored.category));
+      (nul(exp.severity) !== nul(stored.severity) ||
+        nul(exp.category) !== nul(stored.category) ||
+        (exp.title !== undefined && nul(exp.title) !== nul(stored.title)));
     return inputChanged || qualifiersChanged ? 'locked' : 'in_place';
   }
   return inputChanged ? 'replace' : 'in_place';

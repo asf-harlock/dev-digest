@@ -68,7 +68,7 @@ export function RunAllEvals({
   return (
     <div style={s.wrap}>
       <span title={hint}>
-        <Button kind="primary" icon="Play" loading={start.isPending} disabled={disabled} onClick={onClick}>
+        <Button kind="secondary" size="sm" icon="Play" loading={start.isPending} disabled={disabled} onClick={onClick}>
           {start.isPending ? t("evalsTab.starting") : t("evalsTab.runAll")}
         </Button>
       </span>

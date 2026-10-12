@@ -7,11 +7,10 @@ import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
 import { SeverityCounts, severityCounts } from "@/components/severity-counts";
-import { FindingCard, type EvalRejectionCode, type FindingEvalCase } from "../FindingCard";
+import { FindingCard, type FindingEvalCase } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { useAgents } from "../../../../../../../lib/hooks/agents";
-import { useCreateEvalCaseFromFinding, usePullEvalCaseLinks } from "../../../../../../../lib/hooks/eval";
-import { notify } from "../../../../../../../lib/toast";
+import { usePullEvalCaseLinks } from "../../../../../../../lib/hooks/eval";
 import { KEY_TO_ACTION } from "./constants";
 import { visibleFindings } from "./helpers";
 import { s } from "./styles";
@@ -25,8 +24,8 @@ export function FindingsPanel({
 }: {
   findings: FindingRecord[];
   prId: string;
-  /** The agent that produced these findings (`review.agent_id`); null/unknown agent
-   *  disables "Turn into eval case" (EC-2). */
+  /** The agent that produced these findings (`review.agent_id`); a null / unknown agent is
+   *  only an owner that is gone — the review's skills can still own a case (EC-3, EC-4). */
   agentId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
@@ -37,12 +36,10 @@ export function FindingsPanel({
   const [severityFilter, setSeverityFilter] = React.useState<string | null>(null);
   const [focusIdx, setFocusIdx] = React.useState(0);
 
-  // SPEC-08: which findings already have an eval case, whether the producing agent
-  // still exists, and the last 422 per finding.
+  // SPEC-08, SPEC-10: which findings already have an eval case and whether the producing
+  // agent still exists. The case itself is made in the Case Editor the card opens.
   const links = usePullEvalCaseLinks(prId);
   const agents = useAgents();
-  const createCase = useCreateEvalCaseFromFinding(prId);
-  const [rejections, setRejections] = React.useState<Record<string, EvalRejectionCode>>({});
   const linkByFinding = React.useMemo(
     () => new Map((links.data?.links ?? []).map((l) => [l.finding_id, l])),
     [links.data],
@@ -55,17 +52,7 @@ export function FindingsPanel({
     return {
       link: link ? { caseId: link.case_id, agentId: link.agent_id } : null,
       agentMissing,
-      creating: createCase.isPending && createCase.variables === findingId,
-      rejection: rejections[findingId] ?? null,
-      onCreate: () => {
-        setRejections(({ [findingId]: _cleared, ...rest }) => rest);
-        createCase.mutate(findingId, {
-          onSuccess: (result) => {
-            if (result.kind === "rejected") setRejections((r) => ({ ...r, [findingId]: result.code }));
-            else if (result.kind === "created") notify.success(t("evalCase.created"));
-          },
-        });
-      },
+      pullId: prId,
     };
   };
 
@@ -87,8 +74,12 @@ export function FindingsPanel({
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      // While a modal is open (the Case Editor a card opens) these are not finding shortcuts,
+      // whatever has focus: it can fall to <body> behind the modal.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.key === "j") setFocusIdx((i) => Math.min(i + 1, shown.length - 1));
       else if (e.key === "k") setFocusIdx((i) => Math.max(i - 1, 0));
       else if (KEY_TO_ACTION[e.key] && shown[focusIdx]) {
@@ -135,7 +126,6 @@ export function FindingsPanel({
               repoFullName={repoFullName}
               headSha={headSha}
               evalCase={evalCaseFor(f.id)}
-              skillEval
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

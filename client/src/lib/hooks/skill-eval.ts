@@ -15,10 +15,11 @@ import type {
   EvalSkillCaseListItem,
   EvalSkillOverview,
   EvalSkillRunDetail,
+  SkillEvalCaseRequest,
   SkillEvalRunRequest,
 } from "@devdigest/shared";
 import { api, ApiError } from "../api";
-import { detailsId, evalKeys, saveEvalCase, type SaveEvalCaseResult } from "./eval";
+import { caseSaveRejection, detailsId, evalKeys, saveEvalCase, type CaseSaveRejection, type SaveEvalCaseResult } from "./eval";
 import { useRunPolling, type RunPollingCallbacks } from "./eval-run-polling";
 
 /** `GET /skills/:id/eval-cases` — newest first; `latest_result` is null until a skill run exists. */
@@ -56,12 +57,14 @@ export function useFindingSkills(findingId: string | null | undefined, enabled: 
   });
 }
 
-/** 422 codes the finding card renders inline (EC-35, EC-37, EC-44). */
+/** 422 codes the Case Editor renders inline for a skill owner (SPEC-09 EC-35, EC-37, EC-44;
+ *  SPEC-10 adds the editor's own: `validation_error`, `frozen_diff_too_large`). */
 export type SkillCaseRejection =
   | "finding_undecided"
   | "skill_not_in_run"
   | "no_patch"
-  | "range_outside_diff";
+  | "range_outside_diff"
+  | CaseSaveRejection;
 
 const SKILL_CASE_REJECTIONS: readonly string[] = [
   "finding_undecided",
@@ -71,35 +74,49 @@ const SKILL_CASE_REJECTIONS: readonly string[] = [
 ];
 
 export type CreateSkillCaseResult =
-  /** 201 (created) or 200 (the skill already had a case for this finding — EC-39). */
+  /** 201 — the case was created. */
   | { kind: "created"; caseId: string; skillId: string }
+  /** 200 — the skill already had a case made from this finding (second tab, earlier
+   *  session). Treated like the agent route's 409 (SPEC-10 EC-5): no second case. */
+  | { kind: "exists"; caseId: string; skillId: string }
   | { kind: "rejected"; code: SkillCaseRejection };
 
+/** What `useCreateSkillCaseFromFinding` takes: a skill id (the server freezes the finding,
+ *  SPEC-09) or the id plus the edited case of the Case Editor (SPEC-10 AC-6). */
+export type SkillCaseRequest = string | { skillId: string; input?: EvalCaseInput };
+
 /**
- * `POST /findings/:id/skill-eval-case` with `{ skill_id }`. `mutate(skillId)`.
+ * `POST /findings/:id/skill-eval-case` with `{ skill_id, input? }`.
+ * `mutate(skillId)` or `mutate({ skillId, input })`.
  *
- * Resolves for the 201/200 and the four 422 codes so the menu explains them itself;
+ * Resolves for the 201/200 and the 422 codes so the Case Editor explains them itself;
  * anything else (network, 5xx, 404) throws and is toasted once by the global handler.
- * On success the skill's menu item flips to "In eval set" without a reload (AC-52).
+ * On success the skill's entry in the finding's skill list flips to "has a case" without a
+ * reload, and the finding card's state refreshes (AC-9).
  */
 export function useCreateSkillCaseFromFinding(findingId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (skillId: string): Promise<CreateSkillCaseResult> => {
+    mutationFn: async (request: SkillCaseRequest): Promise<CreateSkillCaseResult> => {
+      const { skillId, input } = typeof request === "string" ? { skillId: request, input: undefined } : request;
+      const body: SkillEvalCaseRequest = input ? { skill_id: skillId, input } : { skill_id: skillId };
       try {
-        const created = await api.post<EvalCase>(`/findings/${findingId}/skill-eval-case`, {
-          skill_id: skillId,
-        });
-        return { kind: "created", caseId: created.id, skillId };
+        const { status, data } = await api.postWithStatus<EvalCase>(
+          `/findings/${findingId}/skill-eval-case`,
+          body,
+        );
+        return { kind: status === 200 ? "exists" : "created", caseId: data.id, skillId };
       } catch (err) {
         if (err instanceof ApiError && err.status === 422 && err.code && SKILL_CASE_REJECTIONS.includes(err.code)) {
           return { kind: "rejected", code: err.code as SkillCaseRejection };
         }
+        const code = caseSaveRejection(err);
+        if (code) return { kind: "rejected", code };
         throw err;
       }
     },
     onSuccess: (result) => {
-      if (result.kind !== "created") return;
+      if (result.kind === "rejected") return;
       qc.setQueryData<EvalFindingSkills>(evalKeys.findingSkills(findingId), (old) =>
         old
           ? {
@@ -111,6 +128,7 @@ export function useCreateSkillCaseFromFinding(findingId: string | null | undefin
       );
       qc.invalidateQueries({ queryKey: evalKeys.findingSkills(findingId) });
       qc.invalidateQueries({ queryKey: evalKeys.skillCases(result.skillId) });
+      qc.invalidateQueries({ queryKey: evalKeys.skillOverview(result.skillId) });
     },
   });
 }

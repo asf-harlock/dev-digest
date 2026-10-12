@@ -3,6 +3,17 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
+
+// The control reads the finding's skills and, on a click, its draft; mocked like the panel test
+// does so the card renders without a QueryClient.
+vi.mock("../../../../../../../lib/hooks/eval", () => ({
+  useEvalCaseDraft: () => ({ data: undefined, isError: false, isFetching: false, error: null, refetch: vi.fn() }),
+  findingCaseRejection: () => null,
+}));
+vi.mock("../../../../../../../lib/hooks/skill-eval", () => ({
+  useFindingSkills: () => ({ data: { skills: [] }, isSuccess: true, isLoading: false, isError: false }),
+}));
+
 import { FindingCard } from "./FindingCard";
 
 afterEach(cleanup);
@@ -69,20 +80,14 @@ describe("FindingCard (smoke, both themes)", () => {
   });
 });
 
-describe("FindingCard eval case (SPEC-08)", () => {
-  const evalCase = {
-    link: null,
-    agentMissing: false,
-    creating: false,
-    rejection: null,
-    onCreate: vi.fn(),
-  };
+describe("FindingCard eval case (SPEC-08, SPEC-10)", () => {
+  const evalCase = { link: null, agentMissing: false, pullId: "pr1" };
 
-  it("AC-1: an expanded card with an evalCase shows Turn into eval case after Accept and Dismiss", () => {
+  it("AC-1/AC-10: an expanded decided card with an evalCase shows the one Turn into eval case control after Accept and Dismiss", () => {
     const decided = { ...FINDING, accepted_at: "2026-09-17T00:00:00Z" };
     renderWithIntl(<FindingCard f={decided} defaultExpanded onAction={() => {}} evalCase={evalCase} />);
-    fireEvent.click(screen.getByRole("button", { name: "Turn into eval case" }));
-    expect(evalCase.onCreate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Turn into eval case" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /skill eval case/i })).not.toBeInTheDocument();
   });
 
   it("shows no eval button where the card has no review/agent context (evalCase omitted)", () => {

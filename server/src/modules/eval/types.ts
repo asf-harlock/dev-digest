@@ -107,6 +107,8 @@ export interface FindingCaseContext {
   agentId: string | null;
   /** Whether that agent still exists in the workspace. */
   agentExists: boolean;
+  /** That agent's current name in the workspace (SPEC-10 owner picker); null when it no longer exists. */
+  agentName: string | null;
   pull: {
     id: string;
     number: number;

@@ -1,60 +1,28 @@
 import type {
   EvalCaseDetail,
+  EvalCaseDraft,
   EvalCaseInput,
   EvalCaseUpdate,
+  EvalExpectation,
   EvalExpectationType,
-  FindingCategory,
-  PrFile,
-  Severity,
 } from "@devdigest/shared";
 import {
+  CATEGORIES,
   DESCRIPTION_MAX_LENGTH,
+  EXPECTED_KEYS,
+  EXPECTED_MAX_BYTES,
   FILE_MAX_LENGTH,
   MAX_DIFF_BYTES,
   NAME_MAX_LENGTH,
   NOTES_MAX_LENGTH,
+  SEVERITIES,
   TITLE_MAX_LENGTH,
 } from "./constants";
 
-/** +/- line counts of a unified diff. Only lines after the first hunk header count,
- *  so a `--- a/x` / `+++ b/x` file header is never mistaken for content. */
-export function countPatchLines(diff: string): { additions: number; deletions: number } {
-  let additions = 0;
-  let deletions = 0;
-  let inHunk = false;
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("@@")) {
-      inHunk = true;
-      continue;
-    }
-    if (!inHunk) continue;
-    if (line.startsWith("+")) additions += 1;
-    else if (line.startsWith("-")) deletions += 1;
-  }
-  return { additions, deletions };
-}
-
-/** Drops the `diff --git` / `index` / `---` / `+++` header lines before the first hunk:
- *  the shared DiffViewer's parser has no header handling and would draw them as rows.
- *  A diff with no `@@` line is returned unchanged. */
-export function stripDiffHeaders(diff: string): string {
-  const lines = diff.split("\n");
-  const first = lines.findIndex((line) => line.startsWith("@@"));
-  return first <= 0 ? diff : lines.slice(first).join("\n");
-}
-
-/** The frozen diff as the single file the shared DiffViewer renders. The viewer draws
- *  every line as escaped text, so nothing in the diff is interpreted as HTML or
- *  Markdown (UI-3). The stored `input_diff` is not modified. */
-export function frozenDiffFile(c: Pick<EvalCaseDetail, "input_diff" | "expectation">): PrFile {
-  const patch = stripDiffHeaders(c.input_diff);
-  return { path: c.expectation.file, patch, ...countPatchLines(patch) };
-}
-
 // ---------------------------------------------------------------------------
-// Pasted diff (AC-6, AC-7, AC-8) — a client mirror of the server's pasted-diff
-// reading, used only to offer the file choices and to draw the preview. The server
-// re-reads the diff and stays the authority (EC-2, EC-3).
+// Pasted diff — a client mirror of the server's pasted-diff reading, used only to list
+// the diff's files (Files tab, skeleton). The server re-reads the diff and stays the
+// authority (EC-2, EC-9).
 // ---------------------------------------------------------------------------
 
 const FILE_MARKER = "diff --git ";
@@ -133,7 +101,7 @@ export function splitPastedDiff(pasted: string): DiffSection[] {
   return lines.some((l) => l.startsWith(FILE_MARKER)) ? splitGit(lines) : splitHeaderless(lines);
 }
 
-/** New-side file paths found in the diff, first-seen order (AC-6); `[]` for bare hunks (AC-7). */
+/** New-side file paths found in the diff, first-seen order (AC-17, AC-21); `[]` for bare hunks. */
 export function pastedDiffPaths(pasted: string): string[] {
   const paths: string[] = [];
   for (const section of splitPastedDiff(pasted)) {
@@ -142,138 +110,232 @@ export function pastedDiffPaths(pasted: string): string[] {
   return paths;
 }
 
-/** Every hunk of the chosen file, headers dropped — what the preview draws (AC-8).
- *  Bare-hunk sections belong to whichever file the user typed. Empty when none. */
-export function chosenFileHunks(pasted: string, file: string): string {
-  const out: string[] = [];
-  for (const section of splitPastedDiff(pasted)) {
-    if (section.path !== null && section.path !== file) continue;
-    const first = section.lines.findIndex((l) => l.startsWith(HUNK_MARKER));
-    if (first >= 0) out.push(...section.lines.slice(first));
-  }
-  return out.join("\n").replace(/\n+$/, "");
-}
-
-/** The preview's single file, or null while the chosen file has no hunk (AC-8). */
-export function previewFile(pasted: string, file: string): PrFile | null {
-  const patch = chosenFileHunks(pasted, file);
-  if (!patch) return null;
-  return { path: file, patch, ...countPatchLines(patch) };
-}
-
-/**
- * The file the case is about: one of the diff's new-side paths (the first until the
- * user picks another that is still in the diff, AC-6), or the typed path when the
- * diff holds bare hunks (AC-7).
- */
-export function resolveFile(pasted: string, chosen: string): { paths: string[]; file: string } {
-  const paths = pastedDiffPaths(pasted);
-  if (paths.length === 0) return { paths, file: chosen.trim() };
-  return { paths, file: paths.includes(chosen) ? chosen : (paths[0] ?? "") };
-}
-
 // ---------------------------------------------------------------------------
 // The draft
 // ---------------------------------------------------------------------------
 
-/** What the editor shows. Strings throughout so a half-typed number is representable. */
+/** What the editor shows. Strings throughout so half-typed input is representable. The
+ *  expectation lives in `expected` as the JSON text of the Expected output pane (AC-20). */
 export interface CaseDraft {
   name: string;
+  /** PR title (PR meta tab). */
   title: string;
   description: string;
   diff: string;
-  file: string;
   type: EvalExpectationType;
-  start: string;
-  end: string;
-  severity: Severity | "";
-  category: FindingCategory | "";
+  expected: string;
   notes: string;
 }
 
-/** AC-5: every field empty except the type, `must_find`. */
-export function emptyDraft(): CaseDraft {
-  return {
-    name: "",
-    title: "",
-    description: "",
-    diff: "",
-    file: "",
-    type: "must_find",
-    start: "",
-    end: "",
-    severity: "",
-    category: "",
-    notes: "",
-  };
+/** The expectation as `EvalCaseInput` carries it. */
+export type ExpectationInput = EvalCaseInput["expectation"];
+
+/** The Expected output text of an expectation: an array of exactly one object with the six
+ *  keys in a fixed order (AC-20). `type` is not part of it. */
+export function expectedText(e: Pick<EvalExpectation, "file" | "start_line" | "end_line" | "severity" | "category" | "title">): string {
+  return JSON.stringify(
+    [
+      {
+        file: e.file,
+        start_line: e.start_line,
+        end_line: e.end_line,
+        severity: e.severity ?? null,
+        category: e.category ?? null,
+        title: e.title ?? null,
+      },
+    ],
+    null,
+    2,
+  );
 }
 
-/** AC-13: prefilled with the stored case. */
+/** AC-21: one object, `file` the first new-side path of the diff (empty when there is none),
+ *  both lines `1`, severity / category / title `null`. */
+export function skeletonText(diff: string): string {
+  return expectedText({ file: pastedDiffPaths(diff)[0] ?? "", start_line: 1, end_line: 1, severity: null, category: null, title: null });
+}
+
+/** A blank new case: every field empty except the type, `must_find` (AC-18). */
+export function emptyDraft(): CaseDraft {
+  return { name: "", title: "", description: "", diff: "", type: "must_find", expected: "", notes: "" };
+}
+
+/** A stored case, prefilled. */
 export function draftFromCase(c: EvalCaseDetail): CaseDraft {
-  const e = c.expectation;
   return {
     name: c.name,
     title: c.input_meta.title,
     description: c.input_meta.body ?? "",
     diff: c.input_diff,
-    file: e.file,
-    type: e.type,
-    start: String(e.start_line),
-    end: String(e.end_line),
-    severity: (e.severity ?? "") as Severity | "",
-    category: (e.category ?? "") as FindingCategory | "",
+    type: c.expectation.type,
+    expected: expectedText(c.expectation),
     notes: c.notes ?? "",
   };
 }
 
-/** Create, edit a manual case, or view a finding-derived case (EC-7). */
+/** The finding's seed (AC-2, AC-4): everything but the notes is filled in. */
+export function draftFromSeed(d: EvalCaseDraft): CaseDraft {
+  return {
+    name: d.name,
+    title: d.input_meta.title,
+    description: d.input_meta.body ?? "",
+    diff: d.input_diff,
+    type: d.expectation.type,
+    expected: expectedText(d.expectation),
+    notes: "",
+  };
+}
+
+/** Create, edit a manual case, or view a finding-derived case (AC-13). */
 export type EditorMode = "create" | "manual" | "finding";
 
-/** A case with a source finding is read-only apart from name and notes (EC-6, EC-7). */
+/** A case with a source finding is read-only apart from name and notes (AC-13). */
 export function editorMode(c: Pick<EvalCaseDetail, "source_finding_id"> | null): EditorMode {
   if (!c) return "create";
   return c.source_finding_id ? "finding" : "manual";
 }
 
-/** AC-19: a case made in the editor has no source finding and no PR. */
+/** A case made in the editor has no source finding and no PR. */
 export function isCreatedManually(c: Pick<EvalCaseDetail, "source_finding_id" | "input_meta">): boolean {
   return !c.source_finding_id && c.input_meta.pr_number == null;
 }
 
-/** `"12"` → 12; anything that is not a whole number of 1 or more → null (EC-4). */
-export function parseLine(raw: string): number | null {
-  const text = raw.trim();
-  if (!/^\d+$/.test(text)) return null;
-  const n = Number(text);
-  return Number.isSafeInteger(n) && n >= 1 ? n : null;
+// ---------------------------------------------------------------------------
+// Expected output (AC-19..AC-21, EC-6, EC-7, UI-1, UI-2)
+// ---------------------------------------------------------------------------
+
+/** Why the Expected output text is not valid; the UI turns it into "invalid JSON: {reason}". */
+export type ExpectedProblemCode =
+  | "empty"
+  | "tooLarge"
+  | "notJson"
+  | "notArray"
+  | "notOneObject"
+  | "notObject"
+  | "unknownKey"
+  | "file"
+  | "startLine"
+  | "endLine"
+  | "endBeforeStart"
+  | "severity"
+  | "category"
+  | "title";
+
+export interface ExpectedProblem {
+  code: ExpectedProblemCode;
+  /** The offending key (`unknownKey` only). */
+  key?: string;
 }
 
-/** The new-side range the preview highlights, or null while the lines are not valid (AC-8). */
-export function highlightRangeOf(draft: Pick<CaseDraft, "start" | "end">): { start: number; end: number } | null {
-  const start = parseLine(draft.start);
-  const end = parseLine(draft.end);
-  return start !== null && end !== null && end >= start ? { start, end } : null;
+export type ParsedExpected =
+  | { ok: true; expectation: ExpectationInput }
+  | { ok: false; problem: ExpectedProblem };
+
+const fail = (code: ExpectedProblemCode, key?: string): ParsedExpected => ({
+  ok: false,
+  problem: key === undefined ? { code } : { code, key },
+});
+
+const has = (o: object, key: string): boolean => Object.prototype.hasOwnProperty.call(o, key);
+
+/** `JSON.parse` and require an array of exactly one plain object. */
+function readOnlyObject(text: string): { ok: true; item: Record<string, unknown> } | { ok: false; problem: ExpectedProblem } {
+  // The cap is checked before parsing so a huge paste never reaches JSON.parse (UI-2).
+  if (utf8ByteLength(text) > EXPECTED_MAX_BYTES) return { ok: false, problem: { code: "tooLarge" } };
+  if (text.trim() === "") return { ok: false, problem: { code: "empty" } };
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { ok: false, problem: { code: "notJson" } };
+  }
+  if (!Array.isArray(value)) return { ok: false, problem: { code: "notArray" } };
+  if (value.length !== 1) return { ok: false, problem: { code: "notOneObject" } };
+  const item: unknown = value[0];
+  if (typeof item !== "object" || item === null || Array.isArray(item)) {
+    return { ok: false, problem: { code: "notObject" } };
+  }
+  return { ok: true, item: item as Record<string, unknown> };
+}
+
+const isWhole = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
+
+/**
+ * The Expected output text → the expectation of the case (AC-20, UI-1).
+ *
+ * An array of exactly one object whose own keys are among the six of `EXPECTED_KEYS` —
+ * `__proto__` and `constructor` are unknown keys like any other, so they are rejected — and
+ * whose values pass the `EvalExpectationInput` rules. Only those six keys are copied, into a
+ * fresh object; `type` comes from the type switch, never from the text.
+ */
+export function parseExpectedOutput(text: string, type: EvalExpectationType): ParsedExpected {
+  const read = readOnlyObject(text);
+  if (!read.ok) return read;
+  const { item } = read;
+  for (const key of Object.keys(item)) {
+    if (!EXPECTED_KEYS.includes(key)) return fail("unknownKey", key);
+  }
+  const file = has(item, "file") ? item.file : undefined;
+  if (typeof file !== "string" || file.length < 1 || file.length > FILE_MAX_LENGTH) return fail("file");
+  const start = has(item, "start_line") ? item.start_line : undefined;
+  if (!isWhole(start) || start < 1) return fail("startLine");
+  const end = has(item, "end_line") ? item.end_line : undefined;
+  if (!isWhole(end) || end < 1) return fail("endLine");
+  if (end < start) return fail("endBeforeStart");
+  const severity = has(item, "severity") ? item.severity : null;
+  if (severity != null && !SEVERITIES.includes(severity as never)) return fail("severity");
+  const category = has(item, "category") ? item.category : null;
+  if (category != null && !CATEGORIES.includes(category as never)) return fail("category");
+  const title = has(item, "title") ? item.title : null;
+  if (title != null && (typeof title !== "string" || title.length > TITLE_MAX_LENGTH)) return fail("title");
+  return {
+    ok: true,
+    expectation: {
+      type,
+      file,
+      start_line: start,
+      end_line: end,
+      severity: (severity ?? null) as ExpectationInput["severity"],
+      category: (category ?? null) as ExpectationInput["category"],
+      title: (title ?? null) as string | null,
+    },
+  };
+}
+
+/** What the type banner shows while the text is being edited: the location and title of the
+ *  first object when they can be read, else null (the banner then omits them). Lenient on
+ *  purpose — a half-fixed expectation still tells where it points. */
+export interface BannerFacts {
+  file: string;
+  startLine: number;
+  title: string | null;
+}
+
+export function bannerFacts(text: string): BannerFacts | null {
+  const read = readOnlyObject(text);
+  if (!read.ok) return null;
+  const { item } = read;
+  const file = has(item, "file") ? item.file : null;
+  const start = has(item, "start_line") ? item.start_line : null;
+  if (typeof file !== "string" || file === "" || !isWhole(start)) return null;
+  const title = has(item, "title") ? item.title : null;
+  return { file, startLine: start, title: typeof title === "string" && title !== "" ? title : null };
 }
 
 // ---------------------------------------------------------------------------
-// Validation (EC-1, EC-4, EC-5) — a client mirror of the server's rules.
+// Validation (EC-1, EC-5, EC-6, EC-7) — a client mirror of the server's rules.
 // ---------------------------------------------------------------------------
 
 /** `required` is only shown once the field was touched; every other code shows at once. */
-export type FieldProblem =
-  | "required"
-  | "tooLong"
-  | "tooLarge"
-  | "lineInvalid"
-  | "endBeforeStart";
+export type FieldProblem = "required" | "tooLong" | "tooLarge";
 
-export type DraftField = "name" | "title" | "description" | "diff" | "file" | "start" | "end" | "notes";
+export type DraftField = "name" | "title" | "description" | "diff" | "notes";
 
 export type DraftProblems = Partial<Record<DraftField, FieldProblem>>;
 
-/** Problems of the draft. In a finding-derived case only name and notes are editable,
+/** Problems of the text fields. In a finding-derived case only name and notes are editable,
  *  so only they can be wrong (the locked fields hold stored, valid values). */
-export function draftProblems(draft: CaseDraft, mode: EditorMode, file: string): DraftProblems {
+export function draftProblems(draft: CaseDraft, mode: EditorMode): DraftProblems {
   const p: DraftProblems = {};
   const name = draft.name.trim();
   if (name.length === 0) p.name = "required";
@@ -286,17 +348,15 @@ export function draftProblems(draft: CaseDraft, mode: EditorMode, file: string):
   else if (title.length > TITLE_MAX_LENGTH) p.title = "tooLong";
   if (draft.description.length > DESCRIPTION_MAX_LENGTH) p.description = "tooLong";
   if (exceedsDiffLimit(draft.diff)) p.diff = "tooLarge";
-  if (file.length === 0) p.file = "required";
-  else if (file.length > FILE_MAX_LENGTH) p.file = "tooLong";
-
-  const start = parseLine(draft.start);
-  const end = parseLine(draft.end);
-  if (draft.start.trim() === "") p.start = "required";
-  else if (start === null) p.start = "lineInvalid";
-  if (draft.end.trim() === "") p.end = "required";
-  else if (end === null) p.end = "lineInvalid";
-  else if (start !== null && end < start) p.end = "endBeforeStart";
   return p;
+}
+
+/** The Expected output problem that blocks a save, or null. A finding-derived case's
+ *  expectation is locked, so it never blocks. */
+export function expectedProblem(draft: CaseDraft, mode: EditorMode): ExpectedProblem | null {
+  if (mode === "finding") return null;
+  const parsed = parseExpectedOutput(draft.expected, draft.type);
+  return parsed.ok ? null : parsed.problem;
 }
 
 /** Whether a problem may be shown before the user touched the field. */
@@ -310,28 +370,29 @@ export function showsBeforeTouch(problem: FieldProblem): boolean {
 
 const emptyToNull = (text: string): string | null => (text.trim() === "" ? null : text);
 
-/** A draft as `buildCaseUpdate` reads it: trimmed texts, parsed line numbers, the resolved
- *  file, and no severity/category on `must_not_flag` (EC-41). A line that does not parse
- *  stays as typed, so half-typed input still counts as an edit. */
+/** The Expected output as the dirty check and the PATCH compare it: the parsed expectation
+ *  with its keys in a fixed order, so whitespace and key order are no change (EC-8). Text
+ *  that does not parse stays as typed, so half-typed input still counts as an edit. */
+function expectedComparable(draft: Pick<CaseDraft, "expected" | "type">): string {
+  const parsed = parseExpectedOutput(draft.expected, draft.type);
+  return parsed.ok ? JSON.stringify(parsed.expectation) : `raw:${draft.expected}`;
+}
+
+/** A draft as `buildCaseUpdate` reads it: trimmed texts and the canonical expectation. */
 function comparable(draft: CaseDraft) {
-  const mustFind = draft.type === "must_find";
   return {
     name: draft.name.trim(),
     title: draft.title.trim(),
     description: emptyToNull(draft.description),
     diff: draft.diff,
-    file: resolveFile(draft.diff, draft.file).file,
     type: draft.type,
-    start: parseLine(draft.start) ?? draft.start.trim(),
-    end: parseLine(draft.end) ?? draft.end.trim(),
-    severity: mustFind ? draft.severity : "",
-    category: mustFind ? draft.category : "",
+    expected: expectedComparable(draft),
     notes: emptyToNull(draft.notes),
   };
 }
 
-/** Unsaved changes (EC-8). Compared the way `buildCaseUpdate` compares, so an edit that
- *  would send an empty PATCH (trailing space, "5" → "05", a re-picked identical file) is no change. */
+/** Unsaved changes (EC-8, EC-10). Compared the way `buildCaseUpdate` compares, so an edit that
+ *  would send an empty PATCH (trailing space, reformatted or re-ordered JSON) is no change. */
 export function isDirty(draft: CaseDraft, initial: CaseDraft): boolean {
   const a = comparable(draft);
   const b = comparable(initial);
@@ -342,50 +403,55 @@ export function isDirty(draft: CaseDraft, initial: CaseDraft): boolean {
 export function hasUpdate(update: EvalCaseUpdate): boolean {
   return Object.keys(update).length > 0;
 }
-/** Severity and category are only kept for `must_find` (EC-41). */
-function expectationOf(draft: CaseDraft, file: string): EvalCaseInput["expectation"] {
-  const mustFind = draft.type === "must_find";
-  return {
-    type: draft.type,
-    file,
-    start_line: parseLine(draft.start) ?? 0,
-    end_line: parseLine(draft.end) ?? 0,
-    severity: mustFind && draft.severity ? draft.severity : null,
-    category: mustFind && draft.category ? draft.category : null,
-  };
-}
 
-/** `POST …/eval-cases` body (AC-9, AC-45). Only call it for a draft with no problems. */
-export function buildCaseInput(draft: CaseDraft, file: string): EvalCaseInput {
+/** `POST …/eval-cases` and finding-route body (AC-6, AC-25). `expectation` is the parsed
+ *  Expected output; only call it for a draft with no problems. */
+export function buildCaseInput(draft: CaseDraft, expectation: ExpectationInput): EvalCaseInput {
   return {
     name: draft.name.trim(),
     notes: emptyToNull(draft.notes),
     input_diff: draft.diff,
     input_meta: { title: draft.title.trim(), body: emptyToNull(draft.description) },
-    expectation: expectationOf(draft, file),
+    expectation,
   };
 }
 
 /**
- * `PATCH /eval-cases/:id` body: only the top-level keys that changed, so a rename
- * is exactly `{ name }` (AC-14). `input_meta` and `expectation` go out complete when any
- * part of them changed. The server decides between update in place and replace.
+ * `PATCH /eval-cases/:id` body: only the top-level keys that changed, so a rename is
+ * exactly `{ name }`. `input_meta` and `expectation` go out complete when any part of them
+ * changed. The server decides between update in place and replace.
  */
 export function buildCaseUpdate(
   draft: CaseDraft,
   initial: CaseDraft,
   mode: EditorMode,
-  file: string,
+  expectation: ExpectationInput | null,
 ): EvalCaseUpdate {
   const update: EvalCaseUpdate = {};
   if (draft.name.trim() !== initial.name.trim()) update.name = draft.name.trim();
   if (draft.notes !== initial.notes) update.notes = emptyToNull(draft.notes);
   if (mode === "finding") return update;
 
-  const before = buildCaseInput(initial, resolveFile(initial.diff, initial.file).file);
-  const after = buildCaseInput(draft, file);
   if (draft.diff !== initial.diff) update.input_diff = draft.diff;
-  if (JSON.stringify(after.input_meta) !== JSON.stringify(before.input_meta)) update.input_meta = after.input_meta;
-  if (JSON.stringify(after.expectation) !== JSON.stringify(before.expectation)) update.expectation = after.expectation;
+  const meta = (d: CaseDraft) => JSON.stringify({ title: d.title.trim(), body: emptyToNull(d.description) });
+  if (meta(draft) !== meta(initial)) update.input_meta = { title: draft.title.trim(), body: emptyToNull(draft.description) };
+  if (expectation && expectedComparable(draft) !== expectedComparable(initial)) update.expectation = expectation;
   return update;
+}
+
+// ---------------------------------------------------------------------------
+// Owners
+// ---------------------------------------------------------------------------
+
+/** Where an owner's Evals tab lives — the "In eval set" links (AC-5, AC-11, EC-5). */
+export function ownerEvalsTabHref(owner: { kind: "agent" | "skill"; id: string }): string {
+  return `/${owner.kind === "agent" ? "agents" : "skills"}/${owner.id}?tab=evals`;
+}
+
+/** A stable key of an owner, for radio values and React keys. */
+export const ownerKey = (owner: { kind: string; id: string }): string => `${owner.kind}:${owner.id}`;
+
+/** AC-5: the first owner that has no case yet, or null when every owner has one. */
+export function firstFreeOwner<T extends { has_case: boolean }>(owners: readonly T[]): T | null {
+  return owners.find((o) => !o.has_case) ?? null;
 }

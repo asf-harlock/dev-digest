@@ -221,7 +221,36 @@ export const EvalCase = z.object({
 });
 export type EvalCase = z.infer<typeof EvalCase>;
 
-/** Latest finished result of a case; "never run" is `null` on the parent, not a value. */
+export const EvalFindingLabel = z.enum(['tp', 'fp', 'unlabeled']);
+export type EvalFindingLabel = z.infer<typeof EvalFindingLabel>;
+
+/** A validated / grounded / redacted finding the agent produced for a case. */
+export const EvalActualFinding = z.object({
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  title: z.string(),
+  severity: z.string(),
+  category: z.string(),
+  label: EvalFindingLabel,
+});
+export type EvalActualFinding = z.infer<typeof EvalActualFinding>;
+
+/** What a case did for a skill: with-skill arm vs without-skill arm. */
+export const EvalCaseEffect = z.enum([
+  'helped',
+  'hurt',
+  'no_effect_pass',
+  'no_effect_fail',
+  'errored',
+]);
+export type EvalCaseEffect = z.infer<typeof EvalCaseEffect>;
+
+/**
+ * Latest finished result of a case; "never run" is `null` on the parent, not a value.
+ * `findings` / `effect` are `.nullish()`: outcomes persisted before SPEC-10 carry no
+ * findings, and `effect` is only set for a skill-owned case.
+ */
 export const EvalCaseLatestResult = z.object({
   run_id: z.string(),
   state: z.enum(['passed', 'failed', 'errored']),
@@ -230,6 +259,8 @@ export const EvalCaseLatestResult = z.object({
   duration_ms: z.number().int().nullable(),
   cost_usd: z.number().nullable(),
   error_reason: z.string().nullable(),
+  findings: z.array(EvalActualFinding).nullish(),
+  effect: EvalCaseEffect.nullish(),
 });
 export type EvalCaseLatestResult = z.infer<typeof EvalCaseLatestResult>;
 
@@ -264,6 +295,7 @@ export const EvalExpectationInput = z
     end_line: z.number().int().min(1),
     severity: Severity.nullish(),
     category: FindingCategory.nullish(),
+    title: z.string().max(200).nullish(),
   })
   .refine((e) => e.end_line >= e.start_line, {
     message: 'end_line must be >= start_line',
@@ -291,16 +323,6 @@ export type EvalCaseInput = z.infer<typeof EvalCaseInput>;
 /** `PATCH /eval-cases/:id` — every top-level key optional; nested objects are complete when present. */
 export const EvalCaseUpdate = EvalCaseInput.partial();
 export type EvalCaseUpdate = z.infer<typeof EvalCaseUpdate>;
-
-/** What a case did for a skill: with-skill arm vs without-skill arm. */
-export const EvalCaseEffect = z.enum([
-  'helped',
-  'hurt',
-  'no_effect_pass',
-  'no_effect_fail',
-  'errored',
-]);
-export type EvalCaseEffect = z.infer<typeof EvalCaseEffect>;
 
 /** A row of `GET /skills/:id/eval-cases`; `latest_result` is `null` until a skill run exists. */
 export const EvalSkillCaseListItem = z.object({
@@ -337,9 +359,35 @@ export const EvalFindingSkills = z.object({
 });
 export type EvalFindingSkills = z.infer<typeof EvalFindingSkills>;
 
-/** `POST /findings/:id/skill-eval-case` → 201 | 200 `EvalCase`. */
+/**
+ * `GET /findings/:id/eval-case-draft` (SPEC-10) — the editable seed the Case Editor
+ * opens with, plus every owner (the review's agent and its skills) a case can go to.
+ */
+export const EvalCaseDraftOwner = z.object({
+  kind: EvalOwnerKind,
+  id: z.string(),
+  name: z.string(),
+  has_case: z.boolean(),
+  case_id: z.string().nullable(),
+});
+export type EvalCaseDraftOwner = z.infer<typeof EvalCaseDraftOwner>;
+
+export const EvalCaseDraft = z.object({
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  input_meta: EvalCaseMeta,
+  owners: z.array(EvalCaseDraftOwner),
+});
+export type EvalCaseDraft = z.infer<typeof EvalCaseDraft>;
+
+/**
+ * `POST /findings/:id/skill-eval-case` → 201 | 200 `EvalCase`.
+ * `input` (SPEC-10) is the edited case from the Case Editor; absent = the finding's own seed.
+ */
 export const SkillEvalCaseRequest = z.object({
   skill_id: z.string().uuid(),
+  input: EvalCaseInput.optional(),
 });
 export type SkillEvalCaseRequest = z.infer<typeof SkillEvalCaseRequest>;
 
@@ -356,21 +404,7 @@ export const EvalCaseLinks = z.object({
 export type EvalCaseLinks = z.infer<typeof EvalCaseLinks>;
 
 // ---- Eval — per-case outcome ----
-export const EvalFindingLabel = z.enum(['tp', 'fp', 'unlabeled']);
-export type EvalFindingLabel = z.infer<typeof EvalFindingLabel>;
-
-/** A validated / grounded / redacted finding the agent produced for a case. */
-export const EvalActualFinding = z.object({
-  file: z.string(),
-  start_line: z.number().int(),
-  end_line: z.number().int(),
-  title: z.string(),
-  severity: z.string(),
-  category: z.string(),
-  label: EvalFindingLabel,
-});
-export type EvalActualFinding = z.infer<typeof EvalActualFinding>;
-
+// `EvalFindingLabel` / `EvalActualFinding` are declared above `EvalCaseLatestResult`.
 /** `pass`, `expected_count`, `got_count` are null exactly when `status = 'errored'`. */
 export const EvalCaseOutcome = z.object({
   case_id: z.string(),

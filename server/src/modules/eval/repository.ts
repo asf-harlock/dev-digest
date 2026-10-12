@@ -203,7 +203,11 @@ export class EvalRepository {
 
   // ---- case creation context ------------------------------------------------
 
-  /** finding → review → pull → repo (+ the agent, if it still exists), or undefined when not in this workspace. */
+  /**
+   * finding → review → pull → repo (+ the agent's id and name, if it still exists), or undefined
+   * when not in this workspace. SPEC-10 owners source: the agent comes from here, its skills from
+   * `findingSkills`, each owner's case from `getCaseBySourceFinding` / `findingSkills`.
+   */
   async findingContext(
     workspaceId: string,
     findingId: string,
@@ -224,6 +228,7 @@ export class EvalRepository {
         },
         agentId: t.reviews.agentId,
         agentRowId: t.agents.id,
+        agentName: t.agents.name,
         pull: {
           id: t.pullRequests.id,
           number: t.pullRequests.number,
@@ -254,6 +259,7 @@ export class EvalRepository {
       finding: row.finding,
       agentId: row.agentId,
       agentExists: row.agentRowId !== null,
+      agentName: row.agentName,
       pull: row.pull,
       repo: row.repo,
     };

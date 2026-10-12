@@ -51,6 +51,8 @@ export const NOT_FOUND = {
 
 /** Row / payload limits. */
 export const CASE_NAME_MAX = 80;
+/** SPEC-10 AC-4 / UI-6: the Case Editor's seeded name is this prefix + the finding title, cut to `CASE_NAME_MAX` in all. */
+export const DRAFT_NAME_PREFIX = 'From finding: ';
 /** EC-1: 200 KB = 204,800 UTF-8 bytes, checked in the service (after the owner 404, before parsing). */
 export const MAX_DIFF_BYTES = 204_800;
 export const CASE_TITLE_MAX = 200;
@@ -104,6 +106,9 @@ export const PROMPT_DIFF_MAX_LINES = 2000;
 export const DIFF_NEW_FILE_PREFIX = '+++ ';
 export const DIFF_OLD_FILE_PREFIX = '--- ';
 export const DIFF_DEV_NULL = '/dev/null';
+
+/** Message of the 422 `validation_error` for a malformed optional body on a finding route (SPEC-10 AC-6). */
+export const INVALID_CASE_INPUT_MESSAGE = 'Request validation failed';
 
 /** Message for a PATCH with no editable field (422 validation_error). */
 export const EMPTY_UPDATE_MESSAGE = 'Provide at least one field to update';

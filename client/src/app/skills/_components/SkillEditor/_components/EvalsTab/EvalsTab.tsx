@@ -1,7 +1,9 @@
 /* EvalsTab (skill) — the skill's eval set and its runs (SPEC-09: AC-1..AC-4, AC-12, AC-13,
-   AC-16..AC-19, AC-33..AC-35, EC-11, EC-13, EC-29, EC-30). Case list, "+ New eval case",
-   edit/delete through the shared Case Editor and delete dialog, **Run all evals** (opens the
-   run dialog the editor owns), the passing count, the lift line, the Metric trend chart (AC-36, AC-37, EC-30) and the run's live status.
+   AC-16..AC-19, AC-33..AC-35, EC-11, EC-13, EC-29, EC-30; SPEC-10 AC-28, AC-31). The EVAL
+   METRICS label, the four KPI cards of the with-skill arm with their caption, the lift line,
+   the Metric trend chart (AC-36, AC-37, EC-30) and the run's live status; then the case list
+   with its passing pill, edit/delete through the shared Case Editor and delete dialog,
+   **Run all evals** (opens the run dialog the editor owns) and the primary "New eval case".
    The run state comes from `flow` (use-skill-eval-flow.ts), shared with the header button;
    data comes from hooks/skill-eval.ts only. */
 "use client";
@@ -12,6 +14,7 @@ import { Button, EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { CaseEditor } from "@/components/eval-case-editor";
 import { DeleteCaseDialog } from "@/components/delete-case-dialog";
+import { EvalKpiCards } from "@/components/eval-kpi-cards";
 import { EM_DASH } from "@/lib/eval-format";
 import { useSkillEvalCases } from "@/lib/hooks/skill-eval";
 import { runHintKey, type SkillEvalFlow } from "../../use-skill-eval-flow";
@@ -27,7 +30,7 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
   const cases = useSkillEvalCases(skill.id);
   const { overview, block } = flow;
   const latest = overview.data?.latest ?? null;
-  const passing = passingCounts(latest);
+  const passing = passingCounts(latest) ?? { passed: 0, scored: 0 };
   const hintKey = runHintKey(block);
   const hint = hintKey ? t(`evals.runHint.${hintKey}`) : undefined;
   /** The Case Editor: `"new"` for a blank case, else the id of the stored case to open. */
@@ -45,11 +48,35 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
   return (
     <div style={s.wrap}>
       <section style={s.section}>
+        <h2 style={s.metricsLabel}>{te("evalsTab.metricsLabel")}</h2>
+        {overview.isError ? (
+          <div style={s.summaryError} role="alert">
+            {t("evals.overviewError")}
+            <Button kind="ghost" size="sm" onClick={() => overview.refetch()}>
+              {t("evals.retry")}
+            </Button>
+          </div>
+        ) : overview.isLoading || !overview.data ? (
+          <Skeleton height={120} />
+        ) : (
+          <>
+            <EvalKpiCards latest={latest?.with ?? null} previous={overview.data.previous?.with ?? null} />
+            {latest ? (
+              <p style={s.lift}>{t("evals.lift", liftParts(latest))}</p>
+            ) : (
+              <p style={s.lift}>{t("evals.liftNone", { value: EM_DASH })}</p>
+            )}
+            <SkillMetricTrend trend={overview.data.trend} />
+          </>
+        )}
+        <RunStatus flow={flow} casesTotal={overview.data?.cases_total ?? list.length} />
+      </section>
+
+      <section style={s.section}>
         <div style={s.sectionHead}>
           <h2 style={s.sectionTitle}>{t("evals.casesHeading")}</h2>
-          <span style={s.passing}>
-            {passing ? te("evalsTab.passingSummary", passing) : t("evals.noPassing")}
-          </span>
+          <span style={s.pill}>{te("evalsTab.passingSummary", passing)}</span>
+          <span style={s.count}>{te("evalsTab.casesCount", { count: list.length })}</span>
           <span style={s.spacer} />
           {(block === "no_agent" || block === "no_cases") && <span style={s.hint}>{hint}</span>}
           <span title={hint}>
@@ -63,25 +90,10 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
               {t("evals.runAll")}
             </Button>
           </span>
-          <Button kind="secondary" size="sm" icon="Plus" onClick={() => setEditing("new")}>
+          <Button kind="primary" size="sm" icon="Plus" onClick={() => setEditing("new")}>
             {t("evals.newCase")}
           </Button>
         </div>
-
-        {overview.isError ? (
-          <div style={s.summaryError} role="alert">
-            {t("evals.overviewError")}
-            <Button kind="ghost" size="sm" onClick={() => overview.refetch()}>
-              {t("evals.retry")}
-            </Button>
-          </div>
-        ) : latest ? (
-          <p style={s.lift}>{t("evals.lift", liftParts(latest))}</p>
-        ) : (
-          <p style={s.lift}>{t("evals.liftNone", { value: EM_DASH })}</p>
-        )}
-        <RunStatus flow={flow} casesTotal={overview.data?.cases_total ?? list.length} />
-        {overview.data && <SkillMetricTrend trend={overview.data.trend} />}
 
         {cases.isError ? (
           <ErrorState
