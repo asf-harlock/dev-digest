@@ -13,6 +13,7 @@ import type {
   EvalExpectation,
   EvalMetrics,
   EvalRunRecord,
+  EvalRunningCaseRun,
   EvalSkillCarrier,
   EvalSkillCaseResult,
   EvalSkillRunDetail,
@@ -25,6 +26,7 @@ import type {
 import type { EvalCaseRow, EvalRunRow } from '../../db/rows.js';
 import { AppError } from '../../platform/errors.js';
 import {
+  CASE_ERROR_FALLBACK,
   CASE_NAME_MAX,
   CASE_SLUG_FALLBACK,
   CASE_SLUG_MAX,
@@ -37,12 +39,16 @@ import {
 } from './constants.js';
 import { diffUnchanged } from './pasted-diff.js';
 import { classifyEffect } from './arms.js';
+import { errorCaseOutcome } from './scoring.js';
 import type {
   CarrierRow,
+  CaseResultSource,
   EvalRunSummary,
   EvalSkillRunSummary,
   EvalSkillTrendRow,
   FindingCaseContext,
+  FrozenCase,
+  RunningCaseRun,
   SkillForRun,
 } from './types.js';
 
@@ -160,6 +166,60 @@ function findingsOf(outcome: EvalCaseOutcome): EvalCaseLatestResult['findings'] 
   return Array.isArray(outcome.findings) ? outcome.findings : null;
 }
 
+// ---- per-case latest result across run kinds (SPEC-10 AC-46, NFR-17) ----------------------
+
+/** The slice of a stored case a run reviews, frozen at run start (EC-18, EC-26). */
+export function toFrozenCase(
+  row: Pick<EvalCaseRow, 'id' | 'name' | 'inputDiff' | 'inputMeta' | 'expectedOutput'>,
+): FrozenCase {
+  return {
+    id: row.id,
+    name: row.name,
+    inputDiff: row.inputDiff,
+    inputMeta: { title: row.inputMeta.title, body: row.inputMeta.body },
+    expectation: row.expectedOutput,
+  };
+}
+
+/** AC-46: of a case's newest finished SET result and its newest CASE result, the later-started run wins. */
+export function pickLatestSource(
+  setSource: CaseResultSource | undefined,
+  caseSource: CaseResultSource | undefined,
+): CaseResultSource | undefined {
+  if (!setSource) return caseSource;
+  if (!caseSource) return setSource;
+  return caseSource.startedAt.getTime() > setSource.startedAt.getTime() ? caseSource : setSource;
+}
+
+/**
+ * The outcome(s) a source reports for a case. A case run that crashed or was reaped stores no
+ * outcome, only its own `error_reason` - it is still the case's latest result, as an errored one
+ * (EC-21, EC-22). `paired` is the skill-owned shape (both arms).
+ */
+export function sourceOutcomes(
+  row: Pick<EvalCaseRow, 'id' | 'name' | 'expectedOutput'>,
+  source: CaseResultSource,
+  paired: boolean,
+): { with: EvalCaseOutcome; without: EvalCaseOutcome | undefined } {
+  if (source.outcome && (!paired || source.without)) {
+    return { with: source.outcome, without: source.without };
+  }
+  const errored = () =>
+    errorCaseOutcome(
+      row.id,
+      row.name,
+      row.expectedOutput.type,
+      source.runErrorReason ?? CASE_ERROR_FALLBACK,
+      source.runDurationMs ?? 0,
+    );
+  return { with: errored(), without: paired ? errored() : undefined };
+}
+
+/** AC-48: `running_case_run`, or `null` when no single-case run of the owner is running. */
+export function toRunningCaseRun(running: RunningCaseRun | null): EvalRunningCaseRun | null {
+  return running ? { run_id: running.runId, case_id: running.caseId } : null;
+}
+
 export function toCaseListItem(
   row: EvalCaseRow,
   latest: EvalCaseLatestResult | null,
@@ -194,6 +254,7 @@ export function toRunRecord(run: EvalRunSummary, agentName: string | null): Eval
     agent_id: run.agentId,
     agent_name: agentName,
     status: run.status,
+    scope: run.scope,
     started_at: run.ranAt.toISOString(),
     finished_at: run.finishedAt ? run.finishedAt.toISOString() : null,
     agent_version: run.agentVersion,
@@ -246,6 +307,7 @@ export function summaryFromRow(row: AgentRunRow): EvalRunSummary {
     ranAt: row.ranAt,
     finishedAt: row.finishedAt,
     agentVersion: row.agentVersion,
+    scope: row.scope,
     casesTotal: row.caseSet.length,
     casesDone: row.caseResults.length,
     metrics: row.metricParts,
@@ -311,6 +373,7 @@ export function toSkillRunRecord(run: EvalSkillRunSummary, skillName: string): E
       model: run.carrierModel,
     },
     status: run.status,
+    scope: run.scope,
     started_at: run.ranAt.toISOString(),
     finished_at: run.finishedAt ? run.finishedAt.toISOString() : null,
     cases_total: run.casesTotal,
@@ -335,6 +398,7 @@ export function skillSummaryFromRow(row: SkillRunRow): EvalSkillRunSummary {
     carrierVersion: row.carrierVersion,
     carrierModel: row.carrierModel,
     status: row.status,
+    scope: row.scope,
     ranAt: row.ranAt,
     finishedAt: row.finishedAt,
     casesTotal: row.caseSet.length,

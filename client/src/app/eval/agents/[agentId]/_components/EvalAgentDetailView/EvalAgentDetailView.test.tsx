@@ -35,6 +35,7 @@ function overview(over: Partial<EvalOverview> = {}): EvalOverview {
     cases_total: 4,
     finished_runs: 2,
     running_run_id: null,
+    running_case_run: null,
     latest: RUN_NEW,
     previous: RUN_OLD,
     trend: [

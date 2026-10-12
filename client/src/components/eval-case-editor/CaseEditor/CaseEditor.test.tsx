@@ -275,6 +275,21 @@ describe("CaseEditor create (SPEC-09, SPEC-10)", () => {
 });
 
 describe("CaseEditor layout (SPEC-10 AC-23, AC-24, EC-11, NFR-11)", () => {
+  it("NFR-11: the dialog is 1080px wide on a wide screen and never wider than the viewport minus the kit's 28px margins", () => {
+    stubApi(() => undefined);
+    const original = window.innerWidth;
+    try {
+      for (const [viewport, width] of [[1280, 1080], [768, 712], [700, 644], [375, 319]] as const) {
+        window.innerWidth = viewport;
+        renderEditor();
+        expect(screen.getByRole("dialog").style.width).toBe(`${width}px`);
+        cleanup();
+      }
+    } finally {
+      window.innerWidth = original;
+    }
+  });
+
   it("clips the body and both columns, keeps the banner slot outside them and lets each text pane scroll inside itself", () => {
     stubApi(() => undefined);
     renderEditor();
@@ -479,7 +494,8 @@ describe("CaseEditor seeded from a finding (SPEC-10 AC-4..AC-6, AC-12, EC-5)", (
     const { onClose } = renderEditor({ owner: null, seed: seed() });
     fireEvent.click(screen.getByRole("button", { name: "+ Finding skeleton" }));
     expect(JSON.parse((screen.getByLabelText("Expected output") as HTMLTextAreaElement).value)[0]).toMatchObject({ start_line: 1, end_line: 1 });
-    expect(calls).toHaveLength(0);
+    // The editor reads its owner's overview on open (run controls); the click itself sends nothing.
+    expect(calls.filter((c) => c.method !== "GET")).toHaveLength(0);
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     cleanup();
@@ -488,7 +504,7 @@ describe("CaseEditor seeded from a finding (SPEC-10 AC-4..AC-6, AC-12, EC-5)", (
     renderEditor({ owner: null, seed: seed({ ...SEED, name: "" }) });
     fireEvent.click(screen.getByRole("button", { name: "+ Finding skeleton" }));
     expect(screen.queryByText("Enter a name")).not.toBeInTheDocument();
-    expect(calls).toHaveLength(0);
+    expect(calls.filter((c) => c.method !== "GET")).toHaveLength(0);
   });
 
   it("AC-4: a dismissed finding says so in the subtitle and seeds Must not flag", () => {

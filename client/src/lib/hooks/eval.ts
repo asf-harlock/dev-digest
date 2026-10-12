@@ -36,10 +36,14 @@ export const evalKeys = {
   casesAll: ["eval-cases"] as const,
   cases: (agentId: string | null | undefined) => ["eval-cases", agentId] as const,
   case: (caseId: string | null | undefined) => ["eval-case", caseId] as const,
+  /** Prefix of every case-detail query. */
+  caseAll: ["eval-case"] as const,
   /** Prefix of every skill case-list query (SPEC-09). */
   skillCasesAll: ["skill-eval-cases"] as const,
   skillCases: (skillId: string | null | undefined) => ["skill-eval-cases", skillId] as const,
   skillOverview: (skillId: string | null | undefined) => ["skill-eval-overview", skillId] as const,
+  /** Prefix of every skill overview query. */
+  skillOverviewAll: ["skill-eval-overview"] as const,
   /** A skill run's detail; kept apart from `run` so the two detail shapes never share a cache entry. */
   skillRun: (runId: string | null | undefined) => ["skill-eval-run", runId] as const,
   /** Prefix of every finding → skills query (SPEC-09). */
@@ -400,6 +404,54 @@ export function useStartEvalRun(agentId: string | null | undefined) {
   });
 }
 
+/** What `POST /eval-cases/:id/run` came to (SPEC-10 AC-35, EC-18). */
+export type StartCaseRunResult =
+  /** 202 — the run to follow. */
+  | { kind: "started"; run: EvalRunStart }
+  /** 409 `eval_run_in_progress` — another run of the owner is executing (a set run or a run of
+   *  another case). It is not THIS case's run, so it is never followed as one: the overview
+   *  refetch reports it (`running_run_id` / `running_case_run`) and every run control disables. */
+  | { kind: "conflict"; runId: string | null };
+
+/**
+ * `POST /eval-cases/:id/run` → 202 `{id, status: "running"}`. `mutate({ caseId, carrierAgentId? })`;
+ * `carrierAgentId` is sent for a skill-owned case only (the carrier dialog's choice, AC-40).
+ *
+ * Resolves for the 202 and the 409; every other failure (422 `no_agent_linked`, network, 5xx)
+ * throws and is toasted once by the global handler. `isPending` only covers the request: follow
+ * the run with `useEvalRun` / `useSkillEvalRun`. The owner's overview is refreshed either way, so
+ * `running_case_run` / `running_run_id` reflect the server at once (AC-49).
+ */
+export function useStartEvalCaseRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      carrierAgentId,
+    }: {
+      caseId: string;
+      carrierAgentId?: string;
+    }): Promise<StartCaseRunResult> => {
+      try {
+        const run = await api.post<EvalRunStart>(
+          `/eval-cases/${caseId}/run`,
+          carrierAgentId ? { carrier_agent_id: carrierAgentId } : undefined,
+        );
+        return { kind: "started", run };
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409 && err.code === "eval_run_in_progress") {
+          return { kind: "conflict", runId: detailsId(err.details, ["run_id"]) };
+        }
+        throw err;
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["eval-overview"] });
+      qc.invalidateQueries({ queryKey: evalKeys.skillOverviewAll });
+    },
+  });
+}
+
 /** `GET /eval-runs/:id` once, no polling — for opening an already finished run
  *  (run-detail modal). Use `useEvalRun` to follow a run that is executing. */
 export function useEvalRunDetail(runId: string | null | undefined) {
@@ -417,6 +469,10 @@ export const EVAL_RUN_POLL_MS = 2000;
  *  on its next boot, so a timeout is the honest end of the client's wait. */
 export const EVAL_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** A single-case run is a handful of reviews, so the client gives up sooner (SPEC-10 EC-23):
+ *  3 minutes for an agent-owned case (a skill-owned case has its own, in `skill-eval.ts`). */
+export const EVAL_CASE_RUN_TIMEOUT_MS = 3 * 60 * 1000;
+
 export type EvalRunCallbacks = RunPollingCallbacks<EvalAgentRunDetail>;
 
 /**
@@ -426,7 +482,7 @@ export type EvalRunCallbacks = RunPollingCallbacks<EvalAgentRunDetail>;
  * - Polls `GET /eval-runs/:id` every EVAL_RUN_POLL_MS while `status === "running"`
  *   and stops by itself the moment it is anything else (AC-26). The mutation's
  *   `isPending` is never used as the loading state.
- * - After EVAL_RUN_TIMEOUT_MS still running → `timedOut` (EC-15), polling stops.
+ * - After EVAL_RUN_TIMEOUT_MS (`options.timeoutMs` for a single-case run) still running → `timedOut` (EC-15), polling stops.
  * - A failed poll → `pollFailed`, polling stops, no extra toast; `retry()` resumes
  *   with a fresh timeout window (EC-16).
  * - On finish, the agent's overview, case list and the dashboard are invalidated
@@ -437,17 +493,20 @@ export type EvalRunCallbacks = RunPollingCallbacks<EvalAgentRunDetail>;
 export function useEvalRun(
   runId: string | null | undefined,
   callbacks: EvalRunCallbacks = {},
+  options: { timeoutMs?: number } = {},
 ) {
   return useRunPolling<EvalAgentRunDetail>({
     runId,
     queryKey: evalKeys.run(runId),
     fetchRun: (id) => api.get<EvalAgentRunDetail>(`/eval-runs/${id}`),
     pollMs: EVAL_RUN_POLL_MS,
-    timeoutMs: EVAL_RUN_TIMEOUT_MS,
+    timeoutMs: options.timeoutMs ?? EVAL_RUN_TIMEOUT_MS,
     onSettled: (run, qc) => {
       qc.invalidateQueries({ queryKey: evalKeys.overview(run.agent_id) });
       qc.invalidateQueries({ queryKey: evalKeys.cases(run.agent_id) });
       qc.invalidateQueries({ queryKey: evalKeys.dashboard });
+      // A run (of one case or of the set) changes each case's latest result (AC-42).
+      qc.invalidateQueries({ queryKey: evalKeys.caseAll });
     },
     callbacks,
   });

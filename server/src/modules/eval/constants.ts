@@ -110,6 +110,21 @@ export const DIFF_DEV_NULL = '/dev/null';
 /** Message of the 422 `validation_error` for a malformed optional body on a finding route (SPEC-10 AC-6). */
 export const INVALID_CASE_INPUT_MESSAGE = 'Request validation failed';
 
+/** SPEC-10: `eval_runs.scope` values — a run of the whole case set, or of one case. */
+export const RUN_SCOPE = { set: 'set', case: 'case' } as const;
+
+/**
+ * SPEC-10 AC-46: the statuses of a case run that still count as the case's latest result — the run
+ * lists' "finished" (`completed` | `partial`) plus `errored`. A `running` run has no result yet.
+ */
+export const CASE_RUN_RESULT_STATUSES = ['completed', 'partial', 'errored'] as const;
+
+/** Message of the 422 `validation_error` for a malformed optional body on `POST /eval-cases/:id/run` (SPEC-10 AC-35). */
+export const INVALID_CASE_RUN_BODY_MESSAGE = 'Request validation failed';
+
+/** A skill-owned case runs in a carrier agent; the body must name one (SPEC-10 AC-35, AC-40). */
+export const CARRIER_REQUIRED_MESSAGE = 'carrier_agent_id is required to run a skill case';
+
 /** Message for a PATCH with no editable field (422 validation_error). */
 export const EMPTY_UPDATE_MESSAGE = 'Provide at least one field to update';
 

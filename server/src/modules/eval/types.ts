@@ -1,4 +1,10 @@
-import type { EvalExpectation, EvalLift, EvalMetrics } from '@devdigest/shared';
+import type {
+  EvalCaseOutcome,
+  EvalExpectation,
+  EvalLift,
+  EvalMetrics,
+  EvalRunScope,
+} from '@devdigest/shared';
 
 /** Pino-compatible subset: Fastify's `req.log` / `app.log` satisfy it. */
 export interface EvalLogger {
@@ -16,6 +22,8 @@ export interface EvalRunSummary {
   id: string;
   agentId: string;
   status: 'running' | 'completed' | 'partial' | 'errored';
+  /** SPEC-10: `set` for every run list read; a `case` run only reaches a detail read. */
+  scope: EvalRunScope;
   ranAt: Date;
   finishedAt: Date | null;
   agentVersion: number;
@@ -42,6 +50,7 @@ export interface EvalSkillRunSummary {
   carrierVersion: number;
   carrierModel: string;
   status: 'running' | 'completed' | 'partial' | 'errored';
+  scope: EvalRunScope;
   ranAt: Date;
   finishedAt: Date | null;
   casesTotal: number;
@@ -128,3 +137,35 @@ export interface FrozenCase {
   inputMeta: { title: string; body: string | null };
   expectation: EvalExpectation;
 }
+
+/**
+ * One case's newest result and where it came from (SPEC-10 AC-46, NFR-17): the later-started of the
+ * owner's newest finished SET run and the newest finished-or-errored CASE run of that case.
+ */
+export interface CaseResultSource {
+  runId: string;
+  scope: EvalRunScope;
+  startedAt: Date;
+  /** Agent-owned: the case's outcome. Skill-owned: its with-skill arm. */
+  outcome: EvalCaseOutcome | undefined;
+  /** Skill-owned only: the without-skill arm. */
+  without: EvalCaseOutcome | undefined;
+  /**
+   * The run's own failure (a crashed or reaped case run stores no outcome, only `error_reason`), so
+   * an errored case run is still the case's latest result (EC-21, EC-22).
+   */
+  runErrorReason: string | null;
+  runDurationMs: number | null;
+}
+
+/** A single-case run as the overviews report it while it runs (AC-48). */
+export interface RunningCaseRun {
+  runId: string;
+  caseId: string;
+}
+
+/**
+ * What a run reviews (SPEC-10): the owner's whole case set (read at start), or the one case a
+ * case run was started for, frozen from the row `startCaseRun` already read (EC-26).
+ */
+export type RunTarget = { scope: 'set' } | { scope: 'case'; frozen: FrozenCase };

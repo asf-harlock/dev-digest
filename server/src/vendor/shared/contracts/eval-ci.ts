@@ -22,6 +22,10 @@ import { EvalCaseOutcome, EvalCaseEffect, Conformance, Provider, CiFailOn } from
 export const EvalRunStatus = z.enum(['running', 'completed', 'partial', 'errored']);
 export type EvalRunStatus = z.infer<typeof EvalRunStatus>;
 
+/** What a run covered: the whole case set (`set`) or one case (`case`, SPEC-10). */
+export const EvalRunScope = z.enum(['set', 'case']);
+export type EvalRunScope = z.infer<typeof EvalRunScope>;
+
 /** Everything the run froze about the agent at start; survives later agent edits. */
 export const EvalRunSnapshot = z.object({
   provider: Provider,
@@ -66,6 +70,7 @@ export const EvalRunRecord = z.object({
   agent_id: z.string(),
   agent_name: z.string().nullable(),
   status: EvalRunStatus,
+  scope: EvalRunScope,
   started_at: z.string(),
   finished_at: z.string().nullable(),
   agent_version: z.number().int(),
@@ -115,6 +120,7 @@ export const EvalSkillRunRecord = z.object({
   skill_version: z.number().int(),
   carrier: EvalSkillRunCarrier,
   status: EvalRunStatus,
+  scope: EvalRunScope,
   started_at: z.string(),
   finished_at: z.string().nullable(),
   cases_total: z.number().int(),
@@ -207,6 +213,13 @@ export const EvalSkillCarrier = z.object({
 });
 export type EvalSkillCarrier = z.infer<typeof EvalSkillCarrier>;
 
+/** A single-case run that is currently running (SPEC-10). */
+export const EvalRunningCaseRun = z.object({
+  run_id: z.string(),
+  case_id: z.string(),
+});
+export type EvalRunningCaseRun = z.infer<typeof EvalRunningCaseRun>;
+
 /** `GET /skills/:id/eval-overview`. `trend` <= 100 chronological. */
 export const EvalSkillOverview = z.object({
   skill: z.object({
@@ -216,8 +229,10 @@ export const EvalSkillOverview = z.object({
     enabled: z.boolean(),
   }),
   cases_total: z.number().int(),
+  /** A running SET run only; a running single-case run is `running_case_run`. */
   running_run_id: z.string().nullable(),
   carriers: z.array(EvalSkillCarrier),
+  running_case_run: EvalRunningCaseRun.nullable(),
   latest: EvalSkillRunRecord.nullable(),
   previous: EvalSkillRunRecord.nullable(),
   trend: z.array(EvalSkillTrendPoint),
@@ -254,6 +269,7 @@ export const EvalOverview = z.object({
   cases_total: z.number().int(),
   finished_runs: z.number().int(),
   running_run_id: z.string().nullable(),
+  running_case_run: EvalRunningCaseRun.nullable(),
   latest: EvalRunRecord.nullable(),
   previous: EvalRunRecord.nullable(),
   trend: z.array(EvalTrendPoint),

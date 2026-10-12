@@ -4,6 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Modal } from "@devdigest/ui";
 import { useDeleteEvalCase } from "@/lib/hooks/eval";
+import { useFittedModalWidth } from "@/lib/modal-width";
 import { s } from "./styles";
 
 /** Confirmation before `DELETE /eval-cases/:id`. The body names the case; the case
@@ -24,6 +25,7 @@ export function DeleteCaseDialog({
 }) {
   const t = useTranslations("eval");
   const del = useDeleteEvalCase();
+  const width = useFittedModalWidth(460);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,7 +40,7 @@ export function DeleteCaseDialog({
 
   return (
     <Modal
-      width={460}
+      width={width}
       title={t("caseModal.delete.title")}
       onClose={onClose}
       footer={

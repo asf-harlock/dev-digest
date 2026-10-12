@@ -16,8 +16,8 @@ import type {
 import evalMessages from "../../../../../../../messages/en/eval.json";
 import skillsMessages from "../../../../../../../messages/en/skills.json";
 import shellMessages from "../../../../../../../messages/en/shell.json";
+import { RunDialog } from "@/components/carrier-run-dialog";
 import { useSkillEvalFlow } from "../../use-skill-eval-flow";
-import { RunDialog } from "../RunDialog";
 import { EvalsTab } from "./EvalsTab";
 
 afterEach(() => {
@@ -92,6 +92,7 @@ function runRecord(over: Partial<EvalSkillRunRecord> = {}): EvalSkillRunRecord {
     skill_version: 2,
     carrier: { agent_id: "a2", name: "Beta", version: 3, model: "gpt-4.1" },
     status: "completed",
+    scope: "set",
     started_at: "2026-10-01T10:00:00.000Z",
     finished_at: "2026-10-01T10:05:00.000Z",
     cases_total: 4,
@@ -111,6 +112,7 @@ function overviewOf(cases: number, over: Partial<EvalSkillOverview> = {}): EvalS
     skill: { id: "sk1", name: SKILL.name, version: 2, enabled: true },
     cases_total: cases,
     running_run_id: null,
+    running_case_run: null,
     carriers: [],
     latest: null,
     previous: null,
@@ -229,12 +231,13 @@ describe("skill EvalsTab", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
 
-    // Row 1: never run icon, MUST FIND badge, SEVERITY · category tag (SPEC-10 AC-29).
+    // Row 1: never run icon, MUST FIND badge, SEVERITY · category tag (SPEC-10 AC-29), then Run (AC-39).
     expect(within(rows[0]!).getByRole("img", { name: "never run" })).toBeInTheDocument();
     expect(within(rows[0]!).getByText("MUST FIND")).toBeInTheDocument();
     expect(within(rows[0]!).getByText("WARNING · test")).toBeInTheDocument();
     expect(within(rows[0]!).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Open eval case missing-test",
+      "Run case missing-test", // SPEC-10 AC-39: between the tag and Edit
       "Edit case missing-test",
       "Delete case missing-test",
     ]);

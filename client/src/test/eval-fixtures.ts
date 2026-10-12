@@ -31,6 +31,7 @@ export function runRecord(over: Partial<EvalRunRecord> = {}): EvalRunRecord {
     agent_id: "ag1",
     agent_name: "Security Reviewer",
     status: "completed",
+    scope: "set",
     started_at: "2026-09-20T10:00:00.000Z",
     finished_at: "2026-09-20T10:01:00.000Z",
     agent_version: 2,

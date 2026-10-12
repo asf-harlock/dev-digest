@@ -12,7 +12,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
-import { CaseEditor } from "@/components/eval-case-editor";
+import { RunDialog } from "@/components/carrier-run-dialog";
+import { CaseEditor, CaseRunStatus, useCaseRun } from "@/components/eval-case-editor";
 import { DeleteCaseDialog } from "@/components/delete-case-dialog";
 import { EvalKpiCards } from "@/components/eval-kpi-cards";
 import { EM_DASH } from "@/lib/eval-format";
@@ -28,6 +29,9 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
   const t = useTranslations("skills");
   const te = useTranslations("eval");
   const cases = useSkillEvalCases(skill.id);
+  const caseRun = useCaseRun({ kind: "skill", id: skill.id });
+  /** The case the carrier dialog is open for (row **Run**, AC-40), or null. */
+  const [runCaseId, setRunCaseId] = React.useState<string | null>(null);
   const { overview, block } = flow;
   const latest = overview.data?.latest ?? null;
   const passing = passingCounts(latest) ?? { passed: 0, scored: 0 };
@@ -39,6 +43,7 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
 
   const list = cases.data ?? [];
   const closeEditor = React.useCallback(() => setEditing(null), []);
+  const closeRunDialog = React.useCallback(() => setRunCaseId(null), []);
   const closeDelete = React.useCallback(() => setDeleteTarget(null), []);
   const afterDelete = React.useCallback(() => {
     setDeleteTarget(null);
@@ -95,6 +100,8 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
           </Button>
         </div>
 
+        <CaseRunStatus flow={caseRun} />
+
         {cases.isError ? (
           <ErrorState
             title={t("evals.errorTitle")}
@@ -114,6 +121,10 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
         ) : (
           <SkillCaseList
             cases={list}
+            runningCaseId={caseRun.runningCaseId}
+            busy={caseRun.busy}
+            noAgent={caseRun.noAgent}
+            onRun={setRunCaseId}
             onOpen={(caseId) => setEditing({ caseId })}
             onDelete={(id, name) => setDeleteTarget({ id, name })}
           />
@@ -127,6 +138,16 @@ export function EvalsTab({ skill, flow }: { skill: Skill; flow: SkillEvalFlow })
           onClose={closeEditor}
           onRequestDelete={(id, name) => setDeleteTarget({ id, name })}
           escapeEnabled={deleteTarget === null}
+        />
+      )}
+      {runCaseId !== null && overview.data && (
+        <RunDialog
+          skill={skill}
+          overview={overview.data}
+          caseId={runCaseId}
+          confirmDisabled={caseRun.busy}
+          onClose={closeRunDialog}
+          onStarted={(runId) => caseRun.onStarted(runId, runCaseId)}
         />
       )}
       {deleteTarget && (

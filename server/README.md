@@ -169,6 +169,33 @@ Module `modules/eval/`; none of these routes makes an LLM call.
 The body of `POST /findings/:id/eval-case` is parsed by hand (it is optional), so a
 bad body is mapped to `422 validation_error` in the handler rather than by `schema.body`.
 
+## Single-case eval run (SPEC-10)
+
+A case can be run on its own. It is an `eval_runs` row with `scope: "case"` (column
+`eval_runs.scope`, `'set'` for every earlier run) on the same executor as the set run;
+it makes real LLM calls (one review for an agent-owned case, two - with and without the
+skill - for a skill-owned case) and writes nothing to `reviews`, `findings`, `agent_runs`,
+`agent_run_skills` or `run_traces`.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `POST /eval-cases/:id/run` | none for an agent-owned case; `{ carrier_agent_id }` (UUID) for a skill-owned case (`422 validation_error` when missing or malformed) | `202 EvalRunStart` `{ id, status: "running" }` before any review. 404 case or carrier outside the workspace; `422 no_agent_linked` when the carrier is not linked to the skill; `409 eval_run_in_progress` (`details.run_id`) while the owner has ANY run in progress, a set run or a case run alike. A disabled agent still runs. The body is parsed by hand (it is optional), like the finding routes above. |
+| `GET /eval-runs/:id` | — | Also answers a case run: `scope: "case"`, snapshot, one-case `case_set`, per-case result, `cases_done`, `cases_total`. Every run record and detail carries `scope`. |
+| `GET /eval-runs/compare?a&b` | — | `404` when either id is a case run. |
+
+A case run finishes `completed` (the case was scored) or `errored` (with `error_reason`);
+the boot reaper marks one left `running` as `errored` / `interrupted`.
+
+What a case run never changes: every run aggregate of `GET /agents/:id/eval-overview`,
+`GET /skills/:id/eval-overview` and `GET /eval-dashboard` (`latest`, `previous`, `trend`,
+`runs`, `finished_runs`, `sparkline`, `recent_runs`) reads `scope = 'set'` runs only, and
+`running_run_id` is a running SET run only. A running case run is reported as
+`running_case_run: { run_id, case_id } | null` on both overviews.
+
+What a case run does change: each case's `latest_result` in `GET /agents/:id/eval-cases`,
+`GET /skills/:id/eval-cases` and `GET /eval-cases/:id` is the later-started of the owner's
+newest finished set run and the case's newest case run, an `errored` case run included.
+
 ## Review context (non-obvious)
 
 What the reviewer actually sends to the model is assembled in

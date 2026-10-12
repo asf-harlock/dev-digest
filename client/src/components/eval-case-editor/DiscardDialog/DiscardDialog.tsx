@@ -3,6 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Modal } from "@devdigest/ui";
+import { useFittedModalWidth } from "@/lib/modal-width";
 import { useEscapeKey } from "../use-escape-key";
 import { s } from "../styles";
 
@@ -10,10 +11,11 @@ import { s } from "../styles";
  *  the editor open; only the confirm button discards. */
 export function DiscardDialog({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
   const t = useTranslations("eval");
+  const width = useFittedModalWidth(460);
   useEscapeKey(true, onKeep);
   return (
     <Modal
-      width={460}
+      width={width}
       title={t("caseEditor.discard.title")}
       onClose={onKeep}
       footer={

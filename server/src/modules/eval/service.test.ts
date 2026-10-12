@@ -65,6 +65,7 @@ function makeWorld() {
     getCase: async (_ws: string, id: string) => cases.get(id),
     listCases: async () => [...cases.values()],
     latestFinishedSkillResults: async () => undefined,
+    latestResultsByCase: async () => new Map(),
     deleteCase: async (_ws: string, id: string) => cases.delete(id),
     updateCaseInPlace: async (_ws: string, id: string, v: { name?: string; notes?: string | null }) => {
       const row = cases.get(id);

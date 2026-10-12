@@ -1,6 +1,7 @@
 import type {
   EvalCaseDetail,
   EvalCaseDraft,
+  EvalCaseEffect,
   EvalCaseInput,
   EvalCaseUpdate,
   EvalExpectation,
@@ -454,4 +455,54 @@ export const ownerKey = (owner: { kind: string; id: string }): string => `${owne
 /** AC-5: the first owner that has no case yet, or null when every owner has one. */
 export function firstFreeOwner<T extends { has_case: boolean }>(owners: readonly T[]): T | null {
   return owners.find((o) => !o.has_case) ?? null;
+}
+
+/** Who owns a case: the agent or skill whose eval set it belongs to. */
+export interface CaseOwner {
+  kind: "agent" | "skill";
+  id: string;
+}
+
+// ---------------------------------------------------------------------------
+// Running one case (SPEC-10 Phase B)
+// ---------------------------------------------------------------------------
+
+/** Why **Run case** is disabled, in the order the hints apply (AC-34, EC-19): a draft that is
+ *  not stored yet, a stored case with unsaved changes, a run of the owner in progress, then a
+ *  skill with no linked agent. `null` means it can run. */
+export type RunCaseBlock = "draft" | "modified" | "running" | "no_agent" | null;
+
+export function runCaseBlock(input: {
+  stored: boolean;
+  dirty: boolean;
+  busy: boolean;
+  noAgent: boolean;
+}): RunCaseBlock {
+  if (!input.stored) return "draft";
+  if (input.dirty) return "modified";
+  if (input.busy) return "running";
+  if (input.noAgent) return "no_agent";
+  return null;
+}
+
+/** The `eval.caseRun.hints.*` key of a disabled **Run case**. */
+export const RUN_CASE_HINT_KEY = {
+  draft: "draft",
+  modified: "modified",
+  running: "running",
+  no_agent: "noAgent",
+} as const satisfies Record<Exclude<RunCaseBlock, null>, string>;
+
+/** The `{passed}/{total}` of the result banner (AC-43): `1/1` for a passed case, `0/1` for a
+ *  failed one, derived from `state` with no new field; null for an errored case (omitted). */
+export function bannerCount(state: "passed" | "failed" | "errored"): { passed: 1 | 0; total: 1 } | null {
+  if (state === "errored") return null;
+  return { passed: state === "passed" ? 1 : 0, total: 1 };
+}
+
+/** The `eval.caseRun.banner.effectLabels.*` key of a skill case's effect (AC-44). */
+export function effectKey(effect: EvalCaseEffect): "helped" | "hurt" | "noEffectPass" | "noEffectFail" | "errored" {
+  if (effect === "no_effect_pass") return "noEffectPass";
+  if (effect === "no_effect_fail") return "noEffectFail";
+  return effect;
 }

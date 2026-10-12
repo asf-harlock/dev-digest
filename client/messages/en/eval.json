@@ -213,7 +213,9 @@
       "resultPlain": "expected {expected, plural, one {# finding} other {# findings}}, got {got}",
       "resultWithRecall": "expected {expected, plural, one {# finding} other {# findings}}, got {got} · recall {recall}%",
       "badgeMustFind": "MUST FIND",
-      "badgeMustNotFlag": "MUST NOT FLAG"
+      "badgeMustNotFlag": "MUST NOT FLAG",
+      "run": "Run case {name}",
+      "running": "Running case {name}"
     },
     "metricsLabel": "EVAL METRICS",
     "scoringCaption": "Scoring is mechanical — a finding counts when file matches and line ranges overlap. No model call in the scorer.",
@@ -432,6 +434,45 @@
     "tooltip": {
       "agent": "{version} · {date} · Recall {recall} · Precision {precision} · Citation accuracy {citation} · Cost {cost}",
       "skill": "{version} · {date} · {carrier} {carrierVersion} · {model} · With skill: recall {recall}, precision {precision}, citation accuracy {citation} · Lift: recall {liftRecall}, precision {liftPrecision}, citation accuracy {liftCitation} · Cost (both arms) {cost}"
+    }
+  },
+  "caseRun": {
+    "runOnSave": "Run on save",
+    "runCase": "Run case",
+    "starting": "Starting…",
+    "hints": {
+      "draft": "Save the case to run it",
+      "modified": "Save your changes to run it",
+      "running": "A run is in progress",
+      "noAgent": "Link this skill to an agent first"
+    },
+    "banner": {
+      "running": "Running…",
+      "passed": "Last run passed",
+      "failed": "Last run failed",
+      "errored": "Last run errored: {reason}",
+      "erroredNoReason": "Last run errored",
+      "stats": "{passed}/{total} passed · {duration} · {cost}",
+      "statsErrored": "{duration} · {cost}",
+      "effect": "Effect: {effect}",
+      "effectLabels": {
+        "helped": "helped",
+        "hurt": "hurt",
+        "noEffectPass": "no effect · pass",
+        "noEffectFail": "no effect · fail",
+        "errored": "errored"
+      }
+    },
+    "live": {
+      "started": "Case run started",
+      "completed": "Case run completed",
+      "partial": "Case run finished with an errored case",
+      "errored": "Case run failed"
+    },
+    "carrierDialog": {
+      "title": "Run skill eval case",
+      "carrierHelp": "The case is reviewed twice by this agent: once with the skill and once without it.",
+      "confirm": "Run case"
     }
   }
 }

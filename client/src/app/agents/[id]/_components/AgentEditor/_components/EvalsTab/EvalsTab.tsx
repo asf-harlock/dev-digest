@@ -11,7 +11,7 @@ import { useTranslations } from "next-intl";
 import { Button, EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
 import { useAgentEvalCases, useAgentEvalOverview } from "@/lib/hooks/eval";
-import { CaseEditor } from "@/components/eval-case-editor";
+import { CaseEditor, CaseRunStatus, useCaseRun } from "@/components/eval-case-editor";
 import { AgentMetricTrend } from "@/components/metric-trend";
 import { EvalKpiCards } from "@/components/eval-kpi-cards";
 import { DeleteCaseDialog } from "@/components/delete-case-dialog";
@@ -25,6 +25,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
   const t = useTranslations("eval");
   const overview = useAgentEvalOverview(agent.id);
   const cases = useAgentEvalCases(agent.id);
+  const caseRun = useCaseRun({ kind: "agent", id: agent.id });
   /** The Case Editor: `"new"` for a blank case, else the id of the stored case to open. */
   const [editing, setEditing] = React.useState<"new" | { caseId: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null);
@@ -78,12 +79,15 @@ export function EvalsTab({ agent }: { agent: Agent }) {
               agentId={agent.id}
               casesTotal={overview.data.cases_total}
               runningRunId={overview.data.running_run_id}
+              caseRunning={caseRun.runningCaseId !== null}
             />
           )}
           <Button kind="primary" size="sm" icon="Plus" onClick={() => setEditing("new")}>
             {t("caseEditor.newCase")}
           </Button>
         </div>
+
+        <CaseRunStatus flow={caseRun} />
 
         {cases.isError ? (
           <ErrorState
@@ -111,6 +115,9 @@ export function EvalsTab({ agent }: { agent: Agent }) {
         ) : (
           <EvalCaseList
             cases={list}
+            runningCaseId={caseRun.runningCaseId}
+            runDisabled={caseRun.busy}
+            onRun={caseRun.startAgentCase}
             onOpen={(caseId) => setEditing({ caseId })}
             onDelete={(id, name) => setDeleteTarget({ id, name })}
           />

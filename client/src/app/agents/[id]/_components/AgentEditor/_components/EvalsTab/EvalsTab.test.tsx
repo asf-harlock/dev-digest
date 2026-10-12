@@ -42,6 +42,7 @@ function overview(over: Partial<EvalOverview> = {}): EvalOverview {
     cases_total: 2,
     finished_runs: 0,
     running_run_id: null,
+    running_case_run: null,
     latest: null,
     previous: null,
     trend: [],
@@ -316,7 +317,7 @@ describe("EvalsTab (SPEC-08)", () => {
 
     const list = await screen.findByRole("list", { name: "Eval cases" });
     const rowButtons = within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    expect(rowButtons).toEqual(["Open eval case case-a", "Edit case case-a", "Delete case case-a"]);
+    expect(rowButtons).toEqual(["Open eval case case-a", "Run case case-a", "Edit case case-a", "Delete case case-a"]);
     expect(screen.getByRole("button", { name: "New eval case" })).toBeEnabled();
     // AC-28: Run all evals first, then New eval case.
     const header = [screen.getByRole("button", { name: "Run all evals" }), screen.getByRole("button", { name: "New eval case" })];

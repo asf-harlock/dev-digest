@@ -53,9 +53,11 @@ export const s = {
     lineHeight: 1.5,
   } satisfies CSSProperties,
   paneReadOnly: { background: "var(--bg-surface)" } satisfies CSSProperties,
-  /** The result banner slot above the footer buttons (empty in Phase A). Fixed: it sits in the
+  /** The result banner slot above the footer buttons . Fixed: it sits in the
    *  kit footer, outside both columns, so it can never overlap their content (AC-23). */
   bannerSlot: { minWidth: 0 } satisfies CSSProperties,
+  /** The stalled-run message under the banner (EC-23, EC-24). */
+  stalled: { marginTop: 6 } satisfies CSSProperties,
   subtitleBlock: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
   error: { padding: "24px", fontSize: 14, color: "var(--crit)" } satisfies CSSProperties,
   loading: { padding: "18px 24px", display: "flex", flexDirection: "column", gap: 18 } satisfies CSSProperties,
@@ -104,8 +106,10 @@ export const s = {
   textarea: { resize: "none" } satisfies CSSProperties,
   footerWrap: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
   rejection: { fontSize: 13, lineHeight: 1.45, color: "var(--crit)" } satisfies CSSProperties,
-  footer: { display: "flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
-  spacer: { flex: 1 } satisfies CSSProperties,
+  footer: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 } satisfies CSSProperties,
+  spacer: { flex: 1, minWidth: 0, textAlign: "right" } satisfies CSSProperties,
+  /** Why **Run case** is disabled (AC-34), in the free space left of the buttons. */
+  runHint: { fontSize: 12, lineHeight: 1.4, color: "var(--text-secondary)" } satisfies CSSProperties,
   confirmBody: { padding: "18px 24px", fontSize: 14, lineHeight: 1.5, color: "var(--text-secondary)" } satisfies CSSProperties,
   confirmFooter: { display: "flex", justifyContent: "flex-end", gap: 10 } satisfies CSSProperties,
 } as const;

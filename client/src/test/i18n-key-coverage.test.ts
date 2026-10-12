@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const CLIENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = path.join(CLIENT, "src");
 
-/** The SPEC-09 / SPEC-10 surface: shared case editor/row/dialog/state label/KPI cards/trend,
+/** The SPEC-09 / SPEC-10 surface: shared case editor/row/carrier dialog/state label/KPI cards/trend,
  *  both Evals tabs, the skill editor's run flow and the finding card's eval-case control. */
 const ROOTS = [
   "components/eval-case-editor",
@@ -23,7 +23,7 @@ const ROOTS = [
   "components/metric-trend",
   "app/agents/[id]/_components/AgentEditor/_components/EvalsTab",
   "app/skills/_components/SkillEditor/_components/EvalsTab",
-  "app/skills/_components/SkillEditor/_components/RunDialog",
+  "components/carrier-run-dialog",
   "app/skills/_components/SkillEditor/use-skill-eval-flow.ts",
   "app/repos/[repoId]/pulls/[number]/_components/FindingCard/_components/EvalCaseButton",
 ];
@@ -78,10 +78,11 @@ describe("next-intl key coverage (SPEC-09 NFR-6, SPEC-10 NFR-20)", () => {
   const uses = files.flatMap(usesIn);
 
   it("scans the SPEC-09 components and finds their keys", () => {
-    // Re-counted for the SPEC-10 root set: 97 files and 173 `t(...)` uses. The floors sit a
-    // small margin below, so a root dropped from ROOTS by mistake still fails here.
-    expect(files.length).toBeGreaterThan(90);
-    expect(uses.length).toBeGreaterThan(160);
+    // Re-counted for the final SPEC-10 root set (carrier dialog moved to components/): 108 files
+    // and 201 `t(...)` uses. The floors sit a small margin below, so a root dropped from ROOTS by
+    // mistake still fails here.
+    expect(files.length).toBeGreaterThan(100);
+    expect(uses.length).toBeGreaterThan(190);
     // Spot checks that the scanner sees namespaces and the new trend keys.
     expect(uses.some((u) => u.ns === "eval" && u.key === "trend.tooltip.skill")).toBe(true);
     expect(uses.some((u) => u.ns === "skills" && u.key.startsWith("evals.runDialog"))).toBe(true);

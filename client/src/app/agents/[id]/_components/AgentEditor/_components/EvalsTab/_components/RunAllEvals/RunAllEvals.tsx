@@ -16,11 +16,15 @@ export function RunAllEvals({
   agentId,
   casesTotal,
   runningRunId,
+  caseRunning = false,
 }: {
   agentId: string;
   casesTotal: number;
   /** `overview.running_run_id` — a run started elsewhere (another tab) is followed too. */
   runningRunId: string | null;
+  /** A single-case run of the agent is executing (`running_case_run`, or one started here): every
+   *  run of the owner disables **Run all evals** (SPEC-10 AC-49). */
+  caseRunning?: boolean;
 }) {
   const t = useTranslations("eval");
   const start = useStartEvalRun(agentId);
@@ -42,7 +46,7 @@ export function RunAllEvals({
   });
 
   const noCases = casesTotal === 0;
-  const busy = start.isPending || run.isRunning || runningRunId !== null;
+  const busy = start.isPending || run.isRunning || runningRunId !== null || caseRunning;
   const disabled = busy || noCases;
   const hint = noCases ? t("tooltips.noCases") : busy ? t("tooltips.runInProgress") : undefined;
 

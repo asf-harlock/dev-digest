@@ -106,6 +106,11 @@ export const evalRuns = pgTable(
     withoutMetrics: jsonb('without_metrics').$type<EvalMetrics>(),
     withoutResults: jsonb('without_results').$type<EvalCaseOutcome[]>().default([]),
     lift: jsonb('lift').$type<EvalLift>(),
+    // ---- SPEC-10: what the run covered. `set` = the whole case set (every pre-existing row),
+    // `case` = a single-case run. The two single-flight indexes above cover every scope.
+    scope: text('scope', { enum: ['set', 'case'] })
+      .notNull()
+      .default('set'),
   },
   (t) => ({
     agentRanIdx: index('eval_runs_agent_ran_idx').on(t.workspaceId, t.agentId, t.ranAt.desc()),

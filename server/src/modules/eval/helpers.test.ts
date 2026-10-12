@@ -173,6 +173,7 @@ describe('toTrendPoint (EC-36)', () => {
     id: 'r',
     agentId: 'a',
     status: 'completed',
+    scope: 'set',
     ranAt: new Date('2026-01-01T00:00:00Z'),
     finishedAt: new Date('2026-01-01T00:01:00Z'),
     agentVersion: 3,

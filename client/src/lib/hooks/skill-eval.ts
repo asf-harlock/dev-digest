@@ -189,6 +189,9 @@ export const SKILL_EVAL_RUN_POLL_MS = 2000;
 /** …and stop after this long (EC-19). A skill run reviews every case twice. */
 export const SKILL_EVAL_RUN_TIMEOUT_MS = 20 * 60 * 1000;
 
+/** A single-case skill run reviews the case twice: the client gives up after 6 minutes (SPEC-10 EC-23). */
+export const SKILL_EVAL_CASE_RUN_TIMEOUT_MS = 6 * 60 * 1000;
+
 export type SkillEvalRunCallbacks = RunPollingCallbacks<EvalSkillRunDetail>;
 
 /**
@@ -207,6 +210,7 @@ export type SkillEvalRunCallbacks = RunPollingCallbacks<EvalSkillRunDetail>;
 export function useSkillEvalRun(
   runId: string | null | undefined,
   callbacks: SkillEvalRunCallbacks = {},
+  options: { timeoutMs?: number } = {},
 ) {
   return useRunPolling<EvalSkillRunDetail>({
     runId,
@@ -218,10 +222,12 @@ export function useSkillEvalRun(
       return run;
     },
     pollMs: SKILL_EVAL_RUN_POLL_MS,
-    timeoutMs: SKILL_EVAL_RUN_TIMEOUT_MS,
+    timeoutMs: options.timeoutMs ?? SKILL_EVAL_RUN_TIMEOUT_MS,
     onSettled: (run, qc) => {
       qc.invalidateQueries({ queryKey: evalKeys.skillOverview(run.skill_id) });
       qc.invalidateQueries({ queryKey: evalKeys.skillCases(run.skill_id) });
+      // A run (of one case or of the set) changes each case's latest result (AC-42).
+      qc.invalidateQueries({ queryKey: evalKeys.caseAll });
     },
     callbacks,
   });

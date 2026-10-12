@@ -12,10 +12,18 @@ import { s } from "./styles";
  *  row itself is the shared `EvalCaseRow`; this list maps an agent case onto it. */
 export function EvalCaseList({
   cases,
+  runningCaseId,
+  runDisabled,
+  onRun,
   onOpen,
   onDelete,
 }: {
   cases: readonly EvalCaseListItem[];
+  /** The case being run right now (SPEC-10 AC-41), if any. */
+  runningCaseId: string | null;
+  /** Any run of the agent is in progress: every row **Run** is disabled (AC-49). */
+  runDisabled: boolean;
+  onRun: (caseId: string) => void;
   onOpen: (caseId: string) => void;
   onDelete: (caseId: string, name: string) => void;
 }) {
@@ -31,6 +39,12 @@ export function EvalCaseList({
           state={evalCaseState(c.latest_result)}
           result={expectedGot(c.latest_result)}
           errorReason={c.latest_result?.error_reason ?? null}
+          run={{
+            onRun,
+            running: runningCaseId === c.id,
+            disabled: runDisabled,
+            hint: runDisabled ? t("caseRun.hints.running") : undefined,
+          }}
           onOpen={onOpen}
           onDelete={onDelete}
         />

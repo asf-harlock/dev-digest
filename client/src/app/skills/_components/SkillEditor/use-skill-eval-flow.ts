@@ -2,7 +2,8 @@
    behaves: overview, run dialog open state, which run is being followed, and why the two
    run buttons (header "Run on evals" and the tab's "Run all evals") are disabled. It lives
    at SkillEditor level so the header button and the Evals tab share a single state; the
-   data itself comes from hooks/skill-eval.ts (SPEC-09: AC-20, AC-33, AC-34, EC-11, EC-13). */
+   data itself comes from hooks/skill-eval.ts (SPEC-09: AC-20, AC-33, AC-34, EC-11, EC-13;
+   SPEC-10 AC-49: a running single-case run blocks both buttons too). */
 "use client";
 
 import React from "react";
@@ -39,13 +40,15 @@ export function useSkillEvalFlow(skillId: string) {
 
   const data = overview.data;
   const runningRunId = data?.running_run_id ?? null;
+  // A single-case run of the skill blocks the set run too (SPEC-10 AC-49).
+  const runningCaseRun = data?.running_case_run ?? null;
   // A run the server reports as running (another tab, a reload) wins over the one this tab started.
   const followId = runningRunId ?? startedRunId;
   const run = useSkillEvalRun(followId, { onFinished: setFinished });
 
   let block: RunBlock = null;
   if (!data) block = "loading";
-  else if (runningRunId !== null || run.isRunning) block = "running";
+  else if (runningRunId !== null || runningCaseRun !== null || run.isRunning) block = "running";
   else if (data.carriers.length === 0) block = "no_agent";
   else if (data.cases_total === 0) block = "no_cases";
 

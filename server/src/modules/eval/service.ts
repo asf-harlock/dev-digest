@@ -22,12 +22,14 @@ import type { Container } from '../../platform/container.js';
 import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
 import type { CaseOwner, EvalCaseRow, EvalRepository } from './repository.js';
 import {
+  CARRIER_REQUIRED_MESSAGE,
   CASE_ERROR_FALLBACK,
   DASHBOARD_RECENT_RUNS_LIMIT,
   EMPTY_UPDATE_MESSAGE,
   EVAL_ERROR,
   LOG,
   NOT_FOUND,
+  RUN_SCOPE,
   RUNS_LIMIT,
   SPARKLINE_LIMIT,
   TREND_LIMIT,
@@ -50,6 +52,7 @@ import {
   recallOf,
   resolveExpectationTitle,
   slugify,
+  sourceOutcomes,
   summaryFromRow,
   toCaseListItem,
   toCaseRef,
@@ -57,9 +60,11 @@ import {
   toErrorReason,
   toEvalCaseDraft,
   toEvalCaseDto,
+  toFrozenCase,
   toLatestResult,
   toRunDetail,
   toRunRecord,
+  toRunningCaseRun,
   toSkillCarrier,
   toSkillCaseListItem,
   toSkillDetailLatest,
@@ -77,7 +82,7 @@ import { diffLines } from './prompt-diff.js';
 import { diffSkills } from './skills-diff.js';
 import { buildArms, computeLift, pairArms, skillRunCost } from './arms.js';
 import { errorCaseOutcome, runCost, scoreCase, scoreCommon, scoreRun } from './scoring.js';
-import type { EvalLogger, FindingCaseContext, FrozenCase } from './types.js';
+import type { EvalLogger, FindingCaseContext, FrozenCase, RunTarget } from './types.js';
 
 /**
  * SPEC-08 eval service. Orchestration only: persistence is `EvalRepository`,
@@ -88,6 +93,28 @@ import type { EvalLogger, FindingCaseContext, FrozenCase } from './types.js';
  */
 
 const FINISHED_STATUSES: readonly string[] = ['completed', 'partial'];
+
+/** The ids every run log line carries (NFR-12): never any content. `caseId` only on a case run. */
+interface AgentRunLogIds {
+  runId: string;
+  ownerKind: 'agent';
+  agentId: string;
+  agentVersion: number;
+  scope: 'set' | 'case';
+  caseId?: string;
+  cases: number;
+}
+
+interface SkillRunLogIds {
+  runId: string;
+  ownerKind: 'skill';
+  skillId: string;
+  skillVersion: number;
+  carrierAgentId: string;
+  scope: 'set' | 'case';
+  caseId?: string;
+  cases: number;
+}
 
 export class EvalService {
   private repo: EvalRepository;
@@ -319,23 +346,22 @@ export class EvalService {
     return toEvalCaseDto(row);
   }
 
-  /** AC-54, AC-40 — the skill's cases, newest first, each with its result in the skill's latest finished run. */
+  /** AC-54, AC-40, SPEC-10 AC-46 — the skill's cases, newest first, each with its newest result (a set run or a case run). */
   async listSkillCases(workspaceId: string, skillId: string): Promise<EvalSkillCaseListItem[]> {
-    await this.requireOwner(workspaceId, { kind: 'skill', id: skillId });
-    const [rows, latestRun] = await Promise.all([
-      this.repo.listCases(workspaceId, { kind: 'skill', id: skillId }),
-      this.repo.latestFinishedSkillResults(workspaceId, skillId),
-    ]);
-    const withById = new Map((latestRun?.withResults ?? []).map((o) => [o.case_id, o]));
-    const withoutById = new Map((latestRun?.withoutResults ?? []).map((o) => [o.case_id, o]));
-    return rows.map((row) =>
-      toSkillCaseListItem(
-        row,
-        latestRun
-          ? toSkillListLatest(latestRun.runId, withById.get(row.id), withoutById.get(row.id))
-          : null,
-      ),
+    const owner: CaseOwner = { kind: 'skill', id: skillId };
+    await this.requireOwner(workspaceId, owner);
+    const rows = await this.repo.listCases(workspaceId, owner);
+    const latest = await this.repo.latestResultsByCase(
+      workspaceId,
+      owner,
+      rows.map((r) => r.id),
     );
+    return rows.map((row) => {
+      const source = latest.get(row.id);
+      if (!source) return toSkillCaseListItem(row, null);
+      const arms = sourceOutcomes(row, source, true);
+      return toSkillCaseListItem(row, toSkillListLatest(source.runId, arms.with, arms.without));
+    });
   }
 
   /** AC-53 — skills recorded for the run that produced the finding's review, in run order. */
@@ -367,19 +393,23 @@ export class EvalService {
     return rawDiffFromPrFiles(await this.repo.prFiles(ctx.pull.id));
   }
 
-  /** AC-55 — the agent's cases, newest first, each with its result in the agent's latest finished run. */
+  /** AC-55, SPEC-10 AC-46 — the agent's cases, newest first, each with its newest result (a set run or a case run). */
   async listCases(workspaceId: string, agentId: string): Promise<EvalCaseListItem[]> {
     await this.requireAgent(workspaceId, agentId);
-    const [rows, latestRun] = await Promise.all([
-      this.repo.listCases(workspaceId, { kind: 'agent', id: agentId }),
-      this.repo.latestFinishedRunRow(workspaceId, agentId),
-    ]);
-    const outcomes = new Map<string, EvalCaseOutcome>(
-      (latestRun?.caseResults ?? []).map((o) => [o.case_id, o]),
+    const owner: CaseOwner = { kind: 'agent', id: agentId };
+    const rows = await this.repo.listCases(workspaceId, owner);
+    const latest = await this.repo.latestResultsByCase(
+      workspaceId,
+      owner,
+      rows.map((r) => r.id),
     );
-    return rows.map((row) =>
-      toCaseListItem(row, latestRun ? toLatestResult(latestRun.id, outcomes.get(row.id)) : null),
-    );
+    return rows.map((row) => {
+      const source = latest.get(row.id);
+      return toCaseListItem(
+        row,
+        source ? toLatestResult(source.runId, sourceOutcomes(row, source, false).with) : null,
+      );
+    });
   }
 
   /** AC-56, EC-8 — the full case plus `source` (null once the source PR is gone). */
@@ -401,23 +431,19 @@ export class EvalService {
   }
 
   /**
-   * The case's result in its owner's latest finished run. Agent: that run's outcome.
-   * Skill (AC-59): the with-skill arm's state and counts, duration and cost over both arms.
+   * The case's newest result (SPEC-10 AC-46): its owner's newest finished set run or its newest case
+   * run, whichever started later. Agent: that run's outcome. Skill (AC-59): the with-skill arm's
+   * state and counts, duration and cost over both arms.
    */
   private async latestResultOf(workspaceId: string, row: EvalCaseRow) {
+    const owner: CaseOwner = { kind: row.ownerKind, id: row.ownerId };
+    const source = (await this.repo.latestResultsByCase(workspaceId, owner, [row.id])).get(row.id);
+    if (!source) return null;
     if (row.ownerKind === 'skill') {
-      const run = await this.repo.latestFinishedSkillResults(workspaceId, row.ownerId);
-      if (!run) return null;
-      return toSkillDetailLatest(
-        run.runId,
-        run.withResults.find((o) => o.case_id === row.id),
-        run.withoutResults.find((o) => o.case_id === row.id),
-      );
+      const arms = sourceOutcomes(row, source, true);
+      return toSkillDetailLatest(source.runId, arms.with, arms.without);
     }
-    const run = await this.repo.latestFinishedRunRow(workspaceId, row.ownerId);
-    return run
-      ? toLatestResult(run.id, run.caseResults.find((o) => o.case_id === row.id))
-      : null;
+    return toLatestResult(source.runId, sourceOutcomes(row, source, false).with);
   }
 
   /**
@@ -519,9 +545,56 @@ export class EvalService {
     agentId: string,
     logger?: EvalLogger,
   ): Promise<EvalRunStart> {
-    const agent = await this.requireAgent(workspaceId, agentId);
-    const cases = await this.repo.casesForRun(workspaceId, { kind: 'agent', id: agentId });
+    return this.launchAgentRun(workspaceId, agentId, { scope: RUN_SCOPE.set }, logger);
+  }
+
+  /**
+   * SPEC-10 AC-35..AC-38, EC-18..EC-22, EC-26, EC-30. Starts a run of ONE case on the very same
+   * executor as the set run (`launchAgentRun` / `launchSkillRun` with `scope: 'case'` and a one-case
+   * `case_set`) - there is no second run path. 404 case → (agent-owned) the `startRun` checks, or
+   * (skill-owned) 422 when no carrier is named, then the `startSkillRun` checks (404 carrier, 422
+   * `no_agent_linked`). The 202 returns before any review; a second start of the owner - a set run
+   * or a case run - is a 409 `eval_run_in_progress` with `details.run_id`. A disabled owner still runs.
+   */
+  async startCaseRun(
+    workspaceId: string,
+    caseId: string,
+    carrierAgentId: string | undefined,
+    logger?: EvalLogger,
+  ): Promise<EvalRunStart> {
+    const row = await this.repo.getCase(workspaceId, caseId);
+    if (!row) throw new NotFoundError(NOT_FOUND.case);
+    // EC-26: the frozen input is read here, once; later edits, replacement or deletion do not reach the run.
+    const target: RunTarget = { scope: RUN_SCOPE.case, frozen: toFrozenCase(row) };
+    if (row.ownerKind === 'agent') {
+      return this.launchAgentRun(workspaceId, row.ownerId, target, logger);
+    }
+    if (!carrierAgentId) throw new ValidationError(CARRIER_REQUIRED_MESSAGE);
+    return this.launchSkillRun(workspaceId, row.ownerId, carrierAgentId, target, logger);
+  }
+
+  /** The cases a run reviews: the owner's whole set read now, or the one frozen case of a case run. */
+  private async casesOf(
+    workspaceId: string,
+    owner: CaseOwner,
+    target: RunTarget,
+  ): Promise<FrozenCase[]> {
+    const cases =
+      target.scope === RUN_SCOPE.case
+        ? [target.frozen]
+        : await this.repo.casesForRun(workspaceId, owner);
     if (cases.length === 0) throw evalError(EVAL_ERROR.noEvalCases, 422);
+    return cases;
+  }
+
+  private async launchAgentRun(
+    workspaceId: string,
+    agentId: string,
+    target: RunTarget,
+    logger?: EvalLogger,
+  ): Promise<EvalRunStart> {
+    const agent = await this.requireAgent(workspaceId, agentId);
+    const cases = await this.casesOf(workspaceId, { kind: 'agent', id: agentId }, target);
 
     const skills = await this.container.agentsRepo.enabledSkillsForPrompt(agent.id);
     const snapshot: EvalRunSnapshot = {
@@ -538,17 +611,25 @@ export class EvalService {
       agentVersion: agent.version,
       snapshot,
       caseSet: cases.map(toCaseRef),
+      scope: target.scope,
     });
 
     const startedAt = Date.now();
-    logger?.info(
-      { runId, agentId, agentVersion: agent.version, cases: cases.length },
-      LOG.runStarted,
-    );
-    void this.executeRun(workspaceId, runId, agentId, agent.version, snapshot, cases, startedAt, logger).catch(
+    // NFR-12: ids, scope and counts only - never a diff, PR text, prompt, expectation or finding text.
+    const logIds: AgentRunLogIds = {
+      runId,
+      ownerKind: 'agent',
+      agentId,
+      agentVersion: agent.version,
+      scope: target.scope,
+      ...(target.scope === RUN_SCOPE.case ? { caseId: target.frozen.id } : {}),
+      cases: cases.length,
+    };
+    logger?.info(logIds, LOG.runStarted);
+    void this.executeRun(workspaceId, logIds, snapshot, cases, startedAt, logger).catch(
       async (err: unknown) => {
         // Unexpected crash (e.g. DB error mid-run): never leave the run `running`.
-        logger?.error({ runId, agentId, err: toErrorReason(err, CASE_ERROR_FALLBACK) }, LOG.runFailed);
+        logger?.error({ ...logIds, err: toErrorReason(err, CASE_ERROR_FALLBACK) }, LOG.runFailed);
         await this.repo
           .finalizeRun(workspaceId, runId, {
             status: 'errored',
@@ -567,23 +648,22 @@ export class EvalService {
   /** One case at a time (AC-22). Stops quietly when the run row is gone (agent deleted, EC-33). */
   private async executeRun(
     workspaceId: string,
-    runId: string,
-    agentId: string,
-    agentVersion: number,
+    ids: AgentRunLogIds,
     snapshot: EvalRunSnapshot,
     cases: FrozenCase[],
     startedAt: number,
     logger?: EvalLogger,
   ): Promise<void> {
+    const { runId } = ids;
     const outcomes: EvalCaseOutcome[] = [];
     for (const c of cases) {
       if (!(await this.repo.isRunning(workspaceId, runId))) {
-        logger?.info({ runId, agentId }, LOG.runAborted);
+        logger?.info(ids, LOG.runAborted);
         return;
       }
       outcomes.push(await this.reviewCase(snapshot, c));
       if (!(await this.repo.saveProgress(workspaceId, runId, outcomes))) {
-        logger?.info({ runId, agentId }, LOG.runAborted);
+        logger?.info(ids, LOG.runAborted);
         return;
       }
     }
@@ -601,13 +681,10 @@ export class EvalService {
       errorReason: status === 'errored' ? firstErrorReason(outcomes) : null,
     });
     if (!finalized) {
-      logger?.info({ runId, agentId }, LOG.runAborted);
+      logger?.info(ids, LOG.runAborted);
       return;
     }
-    logger?.info(
-      { runId, agentId, agentVersion, cases: cases.length, status, durationMs },
-      LOG.runFinished,
-    );
+    logger?.info({ ...ids, status, durationMs }, LOG.runFinished);
   }
 
   /** Review + score one case; any failure becomes an `errored` outcome (EC-12). */
@@ -654,6 +731,16 @@ export class EvalService {
     carrierAgentId: string,
     logger?: EvalLogger,
   ): Promise<EvalRunStart> {
+    return this.launchSkillRun(workspaceId, skillId, carrierAgentId, { scope: RUN_SCOPE.set }, logger);
+  }
+
+  private async launchSkillRun(
+    workspaceId: string,
+    skillId: string,
+    carrierAgentId: string,
+    target: RunTarget,
+    logger?: EvalLogger,
+  ): Promise<EvalRunStart> {
     const skill = await this.repo.skillForRun(workspaceId, skillId);
     if (!skill) throw new NotFoundError(NOT_FOUND.skill);
     const carrier = await this.requireAgent(workspaceId, carrierAgentId);
@@ -662,8 +749,7 @@ export class EvalService {
     if (!carriers.some((c) => c.agentId === carrier.id)) {
       throw evalError(EVAL_ERROR.noAgentLinked, 422);
     }
-    const cases = await this.repo.casesForRun(workspaceId, { kind: 'skill', id: skillId });
-    if (cases.length === 0) throw evalError(EVAL_ERROR.noEvalCases, 422);
+    const cases = await this.casesOf(workspaceId, { kind: 'skill', id: skillId }, target);
 
     const links = await this.repo.carrierLinks(workspaceId, carrier.id);
     const linkOrder = links.find((l) => l.skillId === skillId)?.order ?? null;
@@ -688,14 +774,18 @@ export class EvalService {
       snapshot: armSnapshot(skillSnapshot, 'with'),
       skillSnapshot,
       caseSet: cases.map(toCaseRef),
+      scope: target.scope,
     });
 
     const startedAt = Date.now();
-    const logIds = {
+    const logIds: SkillRunLogIds = {
       runId,
+      ownerKind: 'skill',
       skillId,
       skillVersion: skill.version,
       carrierAgentId: carrier.id,
+      scope: target.scope,
+      ...(target.scope === RUN_SCOPE.case ? { caseId: target.frozen.id } : {}),
       cases: cases.length,
     };
     logger?.info(logIds, LOG.skillRunStarted);
@@ -730,7 +820,7 @@ export class EvalService {
    */
   private async executeSkillRun(
     workspaceId: string,
-    ids: { runId: string; skillId: string; skillVersion: number; carrierAgentId: string; cases: number },
+    ids: SkillRunLogIds,
     snapshot: EvalSkillRunSnapshot,
     cases: FrozenCase[],
     startedAt: number,
@@ -796,9 +886,10 @@ export class EvalService {
   async skillOverview(workspaceId: string, skillId: string): Promise<EvalSkillOverview> {
     const skill = await this.repo.skillForRun(workspaceId, skillId);
     if (!skill) throw new NotFoundError(NOT_FOUND.skill);
-    const [casesTotal, runningRunId, carriers, finished, trendRows] = await Promise.all([
+    const [casesTotal, runningRunId, runningCase, carriers, finished, trendRows] = await Promise.all([
       this.repo.countCases(workspaceId, { kind: 'skill', id: skillId }),
       this.repo.runningSkillRunId(workspaceId, skillId),
+      this.repo.runningCaseRun(workspaceId, { kind: 'skill', id: skillId }),
       this.repo.carriersForSkill(workspaceId, skillId),
       this.repo.listSkillRunSummaries(workspaceId, skillId, 2),
       this.repo.listSkillTrendRows(workspaceId, skillId, TREND_LIMIT),
@@ -809,6 +900,7 @@ export class EvalService {
       cases_total: casesTotal,
       running_run_id: runningRunId,
       carriers: carriers.map(toSkillCarrier),
+      running_case_run: toRunningCaseRun(runningCase),
       latest: latest ? toSkillRunRecord(latest, skill.name) : null,
       previous: previous ? toSkillRunRecord(previous, skill.name) : null,
       // `trendRows` is newest-first; the chart reads chronologically.
@@ -838,10 +930,11 @@ export class EvalService {
   /** AC-57 */
   async overview(workspaceId: string, agentId: string): Promise<EvalOverview> {
     const agent = await this.requireAgent(workspaceId, agentId);
-    const [casesTotal, finishedRuns, runningRunId, finished, runs] = await Promise.all([
+    const [casesTotal, finishedRuns, runningRunId, runningCase, finished, runs] = await Promise.all([
       this.repo.countCases(workspaceId, { kind: 'agent', id: agentId }),
       this.repo.countFinishedRuns(workspaceId, agentId),
       this.repo.runningRunId(workspaceId, agentId),
+      this.repo.runningCaseRun(workspaceId, { kind: 'agent', id: agentId }),
       this.repo.listRunSummaries(workspaceId, agentId, { finishedOnly: true, limit: TREND_LIMIT }),
       this.repo.listRunSummaries(workspaceId, agentId, { finishedOnly: false, limit: RUNS_LIMIT }),
     ]);
@@ -851,6 +944,7 @@ export class EvalService {
       cases_total: casesTotal,
       finished_runs: finishedRuns,
       running_run_id: runningRunId,
+      running_case_run: toRunningCaseRun(runningCase),
       latest: latest ? toRunRecord(latest, agent.name) : null,
       previous: previous ? toRunRecord(previous, agent.name) : null,
       // `finished` is newest-first; the trend reads chronologically.
@@ -906,7 +1000,15 @@ export class EvalService {
       this.repo.getRunRow(workspaceId, b),
     ]);
     // EC-38: a skill run is not comparable — it does not exist as far as compare is concerned.
-    if (!rowA || !rowB || !isAgentRunRow(rowA) || !isAgentRunRow(rowB)) {
+    // SPEC-10 EC-28: neither does a single-case run.
+    if (
+      !rowA ||
+      !rowB ||
+      !isAgentRunRow(rowA) ||
+      !isAgentRunRow(rowB) ||
+      rowA.scope === RUN_SCOPE.case ||
+      rowB.scope === RUN_SCOPE.case
+    ) {
       throw new NotFoundError(NOT_FOUND.run);
     }
     if (rowA.agentId !== rowB.agentId) throw evalError(EVAL_ERROR.runsNotComparable, 422);

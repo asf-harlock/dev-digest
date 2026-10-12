@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { ValidationError } from '../../platform/errors.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
-import { INVALID_CASE_INPUT_MESSAGE } from './constants.js';
+import { INVALID_CASE_INPUT_MESSAGE, INVALID_CASE_RUN_BODY_MESSAGE } from './constants.js';
 import { EvalService } from './service.js';
 
 /**
@@ -55,6 +55,10 @@ import { EvalService } from './service.js';
  *   GET    /findings/:id/eval-case-draft  → EvalCaseDraft (seed + owners; creates nothing, no LLM call)
  *   POST   /findings/:id/eval-case        → optional EvalCaseInput body (the edited draft)
  *   POST   /findings/:id/skill-eval-case  → optional `input` (EvalCaseInput) next to `skill_id`
+ *   POST   /eval-cases/:id/run            → 202 EvalRunStart (one case, `scope: "case"`; body `{ carrier_agent_id }`
+ *                                           for a skill-owned case, none for an agent-owned one; 409 while the
+ *                                           owner has ANY run in progress)
+ *   GET    /eval-runs/:id                 → also answers a case run (`scope: "case"`); compare answers 404 for one
  *
  * 404 for an id outside the caller's workspace; 409/422 carry `error.code` and ids in `details`.
  */
@@ -236,6 +240,30 @@ export default async function evalRoutes(appBase: FastifyInstance) {
     async (req, reply) => {
       const { workspaceId } = await getContext(app.container, req);
       const started = await service.startRun(workspaceId, req.params.id, req.log);
+      reply.status(202);
+      return started;
+    },
+  );
+
+  // The body is OPTIONAL (an agent-owned case needs none; a skill-owned case names its carrier), so
+  // it is parsed by hand instead of `schema.body` - the established optional-body exception,
+  // `server/INSIGHTS.md` 2026-09-20 (precedent `reviews/routes.ts`, `conventions/routes.ts`).
+  // A present but malformed body is 422. SPEC-10 AC-35.
+  app.post(
+    '/eval-cases/:id/run',
+    { schema: { params: IdParams, response: { 202: EvalRunStart } } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const parsed = SkillEvalRunRequest.safeParse(req.body ?? undefined);
+      if (req.body != null && !parsed.success) {
+        throw new ValidationError(INVALID_CASE_RUN_BODY_MESSAGE, parsed.error.issues);
+      }
+      const started = await service.startCaseRun(
+        workspaceId,
+        req.params.id,
+        parsed.success ? parsed.data.carrier_agent_id : undefined,
+        req.log,
+      );
       reply.status(202);
       return started;
     },
