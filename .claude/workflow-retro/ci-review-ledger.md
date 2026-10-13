@@ -52,3 +52,25 @@ differ from the CI figures on the same PR. They are a separate review, not a re-
 From a `/workflow-retro` `collect.mjs` `metrics.json`: `wall_min`, `active_min`, `agents`, `tokens`.
 `tokens.fresh` = input + cache_write + output; `cache_read` is large, cheap and reported separately — do not add it
 into "tokens spent". Pass `--from` to `collect.mjs` to window a session that did other work.
+
+## Results snapshot — 2026-10-13 (fixture PRs #31 and #32)
+
+Copied from the rows in `ci-review-ledger.jsonl`; the JSONL is the source of truth.
+
+| | #31 clean | #32 CRITICAL |
+|---|---|---|
+| required check `review` / merge state | success / `CLEAN` | failure / `BLOCKED` |
+| findings | 0 | 3 critical (SQL injection, command injection, hardcoded password) |
+| tokens in / out (CI review) | 1 889 / 52 | 2 028 / 1 744 |
+| cost (CI review) | $0.000195 | $0.000456 |
+| wall-clock, PR opened → check finished | 17 s (queue 5 + job 12) | 58 s (queue 6 + job 52) |
+| review time (the model call) | 3.7 s | 43.0 s |
+| conflicts between agents (studio, 2 agents) | 0 groups | 3 groups, all contended: Security Reviewer flagged all three, API Contract Reviewer none |
+
+Agent work that built the change (`type: "build"`, window 14:15–14:49 UTC): 33.9 min wall-clock, 31.6 active,
+4 subagents, 586 299 fresh tokens (input 256 + cache write 505 209 + output 80 834); cache read 18 516 456 is
+reported separately.
+
+Caveats: the build row was taken at 14:49 UTC and excludes later work. Tokens under `conflicts.agents` are the
+studio's own runs (longer prompt, ~3.7–3.9k in) and are not comparable to the CI figures on the same PR. Before
+PR #30 the CI artifact carried no tokens at all.
