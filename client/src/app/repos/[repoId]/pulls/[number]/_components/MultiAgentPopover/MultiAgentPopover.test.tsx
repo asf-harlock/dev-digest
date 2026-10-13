@@ -68,7 +68,8 @@ describe("MultiAgentPopover", () => {
 
     expect(await screen.findByText("8.2s · $0.06")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pick agents to run" })).toBeInTheDocument();
-    // AC-2: enabled checked, disabled unchecked with a label.
+    // AC-2: enabled checked, disabled unchecked. The row is muted and the word "disabled" is
+    // screen-reader only (not drawn), so the state is not carried by colour alone.
     expect(box(/Security Reviewer/)).toBeChecked();
     expect(box(/Style Reviewer/)).toBeChecked();
     expect(box(/Legacy Reviewer/)).not.toBeChecked();

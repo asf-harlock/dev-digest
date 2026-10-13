@@ -7,6 +7,12 @@ export const s = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   } satisfies CSSProperties,
+  agentCompact: {
+    fontSize: 11,
+    lineHeight: 1.3,
+    color: "var(--text-muted)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
   summary: {
     fontSize: 12,
     color: "var(--text-muted)",

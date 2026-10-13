@@ -120,15 +120,17 @@ export function MultiAgentPopover({
                 label={
                   <span style={s.agentLabel}>
                     <Icon.Cpu size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-                    <span style={s.name} title={a.name}>
-                      {a.name}
+                    <span style={s.text}>
+                      <span style={{ ...s.name, ...(a.enabled ? {} : s.nameOff) }} title={a.name}>
+                        {a.name}
+                        {!a.enabled && <span style={s.srOnly}> {t("multiAgent.disabledTag")}</span>}
+                      </span>
+                      <AgentEstimate estimate={byAgent.get(a.id)} compact />
                     </span>
-                    {!a.enabled && <span style={s.tag}>{t("multiAgent.disabledTag")}</span>}
                   </span>
                 }
               />
             </div>
-            <AgentEstimate estimate={byAgent.get(a.id)} />
             <button
               type="button"
               style={s.only}

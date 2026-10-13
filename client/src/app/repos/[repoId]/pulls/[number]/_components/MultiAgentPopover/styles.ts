@@ -71,25 +71,36 @@ export const s = {
     minHeight: 32,
   } satisfies CSSProperties,
   rowMain: { flex: 1, minWidth: 0 } satisfies CSSProperties,
+  // `flex: 1 1 0` (basis 0) keeps the kit checkbox at 16x16: the kit's <button> has the default
+  // flex-shrink of 1, so a wide label shrinks the box into a rectangle.
   agentLabel: {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    flex: "1 1 0",
     minWidth: 0,
-    overflow: "hidden",
     color: "var(--text-primary)",
     fontWeight: 500,
   } satisfies CSSProperties,
-  name: {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+  text: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
     minWidth: 0,
   } satisfies CSSProperties,
-  tag: {
-    fontSize: 11,
-    color: "var(--text-muted)",
-    flexShrink: 0,
+  name: {
+    minWidth: 0,
+    lineHeight: 1.3,
+    overflowWrap: "anywhere",
+  } satisfies CSSProperties,
+  nameOff: { color: "var(--text-muted)" } satisfies CSSProperties,
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
   } satisfies CSSProperties,
   only: {
     display: "inline-flex",
