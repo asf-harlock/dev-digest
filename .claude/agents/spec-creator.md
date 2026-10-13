@@ -162,6 +162,19 @@ missing states, corner cases, cross-module interaction, UX, untrusted inputs
 for every finding, a proposal for every finding, a `high`/`med`/`low`
 priority. More than 10 `high` means the feature is probably two specs — say so.
 
+**Contract and file-scope check — before the report, for every AC or UI row
+that shows, returns or stores a field.** In the Constraints and Findings, name
+for each such value: the contract field that carries it (check both
+`@devdigest/shared` copies), its type and nullability (a row whose parent can
+be deleted has a nullable id), and whether the table needs a new column. Also
+list every file the feature must edit that the root `CLAUDE.md` "Do not touch"
+list covers — `*/src/vendor/**` (a nav entry in `client/src/vendor/ui/nav.ts`
+counts), migrations, lockfiles — and turn each into a question for the user.
+A spec that leaves these out is sent back by `implementation-planner` and
+needs a revision before any code: SPEC-11 needed one for a vendored `nav.ts`
+edit, a column finding that lacked the `FindingRecord` fields, and nullable
+agent ids (see the root `INSIGHTS.md`, 2026-10-02, narrow contracts).
+
 ### Step 4 — approaches (only if more than one is plausible)
 2–4 genuinely distinct approaches (different layer, data flow, build vs
 reuse — not variants of one idea), always including the smallest change and

@@ -156,6 +156,18 @@ from the plan is re-executed.
 - If a finding is wrong (the defect cannot happen, or the fix would break a
   plan item or a CLAUDE.md rule), do not fix it — mark it `disputed` with
   file:line evidence. Never silently skip one.
+- Never fix a layout or sizing defect by replacing a design-kit control
+  (`src/vendor/ui`, `@devdigest/ui`) with your own.
+  `client/docs/component-conventions.md` says a generic input, chart or icon
+  is not written again: it is already in the kit, and `vendor/ui` is read-only.
+  If the kit control is
+  the cause (for example `SelectInput` sizes its `<select>` to the longest
+  option), bound its input instead — truncate the option label, constrain the
+  wrapper — and if that cannot work, reply `disputed` with the measurement
+  rather than re-implementing the control. (SPEC-11 retro: a hand-rolled native
+  `<select>` that fixed a 616 px overflow became an architecture WARNING and
+  collapsed to 0 px at 390 px, which cost one more fix round and two
+  re-reviews.)
 - Run the inner loop (Step 3) on the files you changed. The retry limit
   applies.
 - Reply with ONLY the table from
