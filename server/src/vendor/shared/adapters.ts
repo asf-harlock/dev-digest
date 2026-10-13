@@ -140,6 +140,46 @@ export interface CommitFilesPayload {
   files: CommitFile[];
 }
 
+/** Result of `commitFiles`: `changed=false` means the tree already matched — no commit was made. */
+export interface CommitFilesResult {
+  branch: string;
+  changed: boolean;
+}
+
+/** One GitHub Actions workflow run (the subset the CI refresh reads). */
+export interface WorkflowRun {
+  id: number;
+  run_attempt: number;
+  status: string;
+  conclusion: string | null;
+  head_sha: string;
+  event: string;
+  /** Workflow file path as GitHub reports it (may carry an `@ref` suffix). */
+  path: string;
+  head_repository_full_name: string | null;
+  html_url: string;
+  created_at: string;
+  run_started_at: string | null;
+  updated_at: string;
+  pull_requests: number[];
+}
+
+/** One artifact attached to a workflow run. */
+export interface RunArtifact {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
+}
+
+export interface ListWorkflowRunsOptions {
+  /** Workflow file path, e.g. ".github/workflows/devdigest-review.yml". */
+  workflowPath: string;
+  /** Trigger event filter, e.g. "pull_request". */
+  event: string;
+  perPage: number;
+}
+
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
@@ -156,14 +196,24 @@ export interface GitHubClient {
   /**
    * Commit `files` onto `branch` as ONE atomic commit (Git Data API: blobs →
    * tree → commit → ref). Creates the branch from `base` if missing, else
-   * fast-forwards it. Idempotent: re-publishing just adds a new commit.
+   * fast-forwards it. When the resulting tree equals the parent's tree no commit
+   * is made and `changed` is false. Re-publishing otherwise adds a new commit.
    */
-  commitFiles(repo: RepoRef, payload: CommitFilesPayload): Promise<{ branch: string }>;
+  commitFiles(repo: RepoRef, payload: CommitFilesPayload): Promise<CommitFilesResult>;
   /** The open PR whose head is `branch`, if any (so re-publish reuses it). */
   findOpenPr(repo: RepoRef, branch: string): Promise<{ url: string } | null>;
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
+  /** Newest runs of one workflow file, filtered by trigger event. */
+  listWorkflowRuns(repo: RepoRef, opts: ListWorkflowRunsOptions): Promise<WorkflowRun[]>;
+  /** Artifacts of one run (names, sizes, expiry — no content). */
+  listRunArtifacts(repo: RepoRef, runId: number): Promise<RunArtifact[]>;
+  /**
+   * Download an artifact zip. Rejects with an `AppError` coded `artifact_expired`
+   * (HTTP 410) or `artifact_rejected` (compressed size over the cap).
+   */
+  downloadArtifact(repo: RepoRef, artifactId: number): Promise<Uint8Array>;
 }
 
 // ---------- Git (simple-git, heavy) ----------

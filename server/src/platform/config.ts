@@ -91,6 +91,8 @@ const EnvSchema = z.object({
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
+  // Built `agent-runner/dist` copied into `.devdigest/runner/` by Export to CI (SPEC-11).
+  AGENT_RUNNER_DIST: z.string().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a
   // valid enum member, so coerce '' → undefined to fall through to the default.
@@ -106,6 +108,8 @@ export type AppConfig = {
   webPort: number;
   /** Absolute path where repos are cloned (~/.devdigest/workspace by default). */
   cloneDir: string;
+  /** Absolute path of the built `agent-runner/dist` that Export to CI ships (default `../agent-runner/dist`). */
+  agentRunnerDist: string;
   /** Absolute path to the writable secrets store (BYO keys from the UI). */
   secretsPath: string;
   nodeEnv: 'development' | 'test' | 'production';
@@ -132,11 +136,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const cloneDirRaw =
     parsed.DEVDIGEST_CLONE_DIR ?? join(homedir(), '.devdigest', 'workspace');
   const cloneDir = isAbsolute(cloneDirRaw) ? cloneDirRaw : resolve(process.cwd(), cloneDirRaw);
+  // The API runs from `server/`, so the sibling package is one level up.
+  const runnerDistRaw = parsed.AGENT_RUNNER_DIST ?? join('..', 'agent-runner', 'dist');
+  const agentRunnerDist = isAbsolute(runnerDistRaw)
+    ? runnerDistRaw
+    : resolve(process.cwd(), runnerDistRaw);
   return {
     databaseUrl: parsed.DATABASE_URL,
     apiPort: parsed.API_PORT,
     webPort: parsed.WEB_PORT,
     cloneDir,
+    agentRunnerDist,
     secretsPath: join(homedir(), '.devdigest', 'secrets.json'),
     nodeEnv: parsed.NODE_ENV,
     logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),

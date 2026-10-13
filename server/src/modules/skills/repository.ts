@@ -272,6 +272,8 @@ export class SkillsRepository {
         and(
           eq(t.agentRuns.workspaceId, workspaceId),
           inArray(t.agentRuns.agentId, agentIds),
+          // CI-sourced runs (SPEC-11) carry no skill-run telemetry — local runs only.
+          eq(t.agentRuns.source, 'local'),
           gte(t.agentRuns.ranAt, since),
         ),
       );

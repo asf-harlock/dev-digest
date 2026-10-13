@@ -2,41 +2,83 @@
   "runs": {
     "emptyTitle": "No CI runs yet",
     "emptyBody": "Once you export an agent to CI, every automated review shows up here.",
+    "noMatches": "No CI runs match these filters.",
     "title": "CI Runs",
-    "subtitle": "Agent reviews executed inside CI · not local runs",
-    "autoRefresh": "auto-refresh on",
+    "subtitle": "Results are reported by each repository's own workflow.",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
+    "loading": "Loading CI runs",
+    "loadErrorTitle": "Could not load CI runs",
+    "loadErrorBody": "The stored CI runs could not be read. Try again.",
     "filters": {
-      "last7Days": "Last 7 days",
+      "repo": "Filter by repository",
+      "agent": "Filter by agent",
+      "status": "Filter by status",
       "allAgents": "All agents",
-      "allRepos": "All repos",
+      "allRepos": "All repositories",
       "allStatuses": "All statuses"
     },
     "table": {
-      "timestamp": "Timestamp",
+      "caption": "CI runs, newest first",
+      "repository": "Repository",
       "pullRequest": "Pull request",
-      "source": "Source",
+      "agent": "Agent",
+      "verdict": "Verdict",
       "findings": "Findings",
       "cost": "Cost",
-      "status": "Status"
+      "duration": "Duration",
+      "ranAt": "Run time",
+      "job": "Job"
     },
-    "view": "View",
+    "job": "View",
+    "jobLabel": "Open the workflow run of {agent} in {repo} on GitHub",
+    "prLabel": "Pull request #{number} in {repo} on GitHub",
+    "findingsTitle": "{critical} critical, {warning} warning, {suggestion} suggestion",
+    "verdict": {
+      "approve": "Approve",
+      "requestChanges": "Request changes",
+      "comment": "Comment"
+    },
     "status": {
       "succeeded": "Succeeded",
       "noFindings": "No findings",
       "failed": "Failed",
       "running": "Running"
+    },
+    "failure": {
+      "artifactRejected": "Result rejected",
+      "noArtifact": "No result uploaded",
+      "artifactExpired": "Result expired",
+      "cancelled": "Workflow cancelled",
+      "timedOut": "Workflow timed out",
+      "stale": "Never finished"
+    },
+    "stale": {
+      "title": "Showing stored results.",
+      "retry": "Retry",
+      "reasons": {
+        "generic": "The refresh from GitHub did not complete.",
+        "timeout": "The refresh from GitHub timed out.",
+        "githubPermission": "The GitHub token cannot read workflow runs of a repository.",
+        "githubTokenMissing": "No GitHub token is set. Add one in Settings, API Keys.",
+        "rateLimited": "GitHub rate limit reached. Try again later.",
+        "alreadyRunning": "A refresh is already running."
+      }
     }
   },
   "exportWizard": {
     "title": "Export to CI",
     "subtitle": "Run {agentName} automatically on pull requests",
-    "thisAgent": "this agent",
+    "thisAgent": "another agent",
     "back": "Back",
     "continue": "Continue",
     "install": "Install",
     "installing": "Installing…",
+    "close": "Close",
+    "retry": "Retry",
+    "stepsLabel": "Export steps",
+    "stepOf": "Step {current} of {total}: {label}",
+    "stepDone": "(completed)",
     "steps": {
       "target": "Target",
       "preview": "Preview",
@@ -45,60 +87,151 @@
     },
     "targets": {
       "gha": "GitHub Actions",
-      "circle": "CircleCI",
-      "jenkins": "Jenkins",
-      "cli": "Generic CLI",
-      "ghaDesc": "Runs on pull_request events",
-      "circleDesc": "config.yml job",
-      "jenkinsDesc": "Pipeline stage",
-      "cliDesc": "devdigest review --pr"
+      "ghaDesc": "Runs on pull_request events"
     },
     "recommended": "recommended",
     "repoLabel": "Target repository",
-    "repoHint": "owner/name — the repo to add the workflow to",
-    "repoPlaceholder": "acme/payments-api",
+    "repoHint": "The connected repository to add the workflow to.",
+    "repoLocked": "The repository cannot be changed while updating its CI configuration.",
+    "reposLoading": "Loading repositories…",
+    "noRepos": "No repository is connected yet. Connect one first.",
+    "repoTaken": "{agent} already runs in this repository. A repository can have one installation; open that agent to change it.",
     "filesToCreate": "FILES TO CREATE",
     "generating": "Generating…",
+    "loadingFile": "Loading file…",
+    "fileError": "Could not load this file.",
+    "empty": "empty",
+    "emptyFile": "This file is empty: the repository has no memory to export.",
     "editable": "editable",
+    "edited": "edited",
+    "readOnly": "read-only",
+    "resetEdit": "Reset to generated",
+    "workflowEditorLabel": "Workflow file contents",
+    "warnings": {
+      "provider_not_openrouter": "The bundled runner calls OpenRouter with this agent's model id, even though the agent uses another provider. Check the model id works on OpenRouter.",
+      "memory_truncated": "Only the {count} newest memory entries are exported.",
+      "memory_empty": "The repository has no memory yet, so memory.jsonl is empty."
+    },
     "triggerLabel": "Trigger",
+    "triggers": {
+      "opened": "pull_request:opened",
+      "synchronize": "pull_request:synchronize",
+      "reopened": "pull_request:reopened"
+    },
+    "noTrigger": "Select at least one trigger.",
     "postResultsLabel": "Post results as",
     "postAs": {
-      "githubReview": "GitHub review",
-      "prComment": "PR comment",
+      "github_review": "GitHub review",
+      "pr_comment": "PR comment",
       "none": "None (exit code only)"
     },
-    "blockMergeTitle": "Block merge on findings",
-    "blockMergeDesc": "Requires a GitHub App — not available with PAT in local mode",
+    "blockMergeInfo": "To block merges: set <b>Fail CI on</b> (CI tab) to a value other than Never so the run exits non-zero, then add a <b>required status check</b> named <code>{check}</code> in the repository's branch protection. No GitHub App needed.",
+    "installLabel": "How to install",
     "installCardTitle": "Open a PR with these files",
-    "installCardBody": "DevDigest opens a PR in {repo} titled “Add DevDigest CI review” with the {count} generated files.",
-    "ownerRepo": "owner/repo",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs."
+    "installCardBody": "DevDigest opens a PR in {repo} titled “Add DevDigest CI review” with the {count, plural, one {# generated file} other {# generated files}}.",
+    "zipCardTitle": "Download as zip",
+    "zipCardBody": "Download the {count, plural, one {# file} other {# files}} as a zip and add them to the repository yourself.",
+    "secretNote": "Add the repository secret <code>{key}</code> before the workflow runs.",
+    "secretsLink": "Open the repository's Actions secrets",
+    "secretsLinkLabel": "Open the Actions secrets of {repo} in a new tab",
+    "githubTokenNote": "GITHUB_TOKEN is provided by GitHub; you do not add it.",
+    "viewPr": "View pull request",
+    "done": {
+      "prTitle": "Pull request opened",
+      "prBody": "The workflow and agent files are on a pull request in {repo}. Merge it to start reviewing.",
+      "zipTitle": "Zip downloaded",
+      "zipBody": "{filename} has every file at its repository path. Add them to the repository."
+    },
+    "confirm": {
+      "regenTitle": "Regenerate the workflow?",
+      "regenBody": "This change regenerates the workflow file and discards your manual edit.",
+      "regenConfirm": "Regenerate",
+      "discardTitle": "Discard your edit?",
+      "discardBody": "You edited the workflow file. Closing the dialog discards the edit.",
+      "discardConfirm": "Discard and close",
+      "keep": "Keep editing"
+    },
+    "errors": {
+      "github_token_missing": "No GitHub token is stored, so DevDigest cannot reach the repository.",
+      "openApiKeys": "Add it in Settings → API Keys",
+      "github_permission": "GitHub rejected the write. The token needs Contents, Pull requests and Workflows (write) permissions for a fine-grained token, or the repo and workflow scopes for a classic token.",
+      "runner_bundle_missing": "The runner bundle is not built. Build it, then try again:",
+      "ci_pr_failed": "The files were committed, but opening the pull request failed. Retry to reuse the same branch.",
+      "ci_no_changes": "The repository already contains these files.",
+      "ci_export_running": "An export to this repository is already running. Wait for it to finish.",
+      "ci_repo_taken": "{agent} already runs in this repository. A repository can have one installation.",
+      "rate_limited": "GitHub's rate limit was reached. Try again in a few minutes.",
+      "invalid_workflow": "The edited workflow cannot be used: {message}",
+      "generic": "Something went wrong: {message}"
+    }
   },
   "ciTab": {
-    "heading": "Continuous Integration",
-    "subtitle": "Run this agent automatically on pull requests in a target repo.",
-    "exportToCi": "Export to CI",
-    "publish": "Publish to CI",
-    "update": "Update CI",
-    "noRepo": "Connect a repository first",
-    "empty": "Not deployed to CI yet. Use “Publish to CI” to open a PR that adds the workflow + agent config.",
-    "installed": "installed {date}"
-  },
-  "publishDialog": {
-    "title": "Publish to CI",
-    "subtitle": "Run {agentName} on every pull request in {repo}",
-    "intro": "Opens a pull request in {repo} adding a GitHub Actions workflow + this agent's config under .devdigest/. On every PR the agent reviews the diff.",
-    "filesLabel": "FILES",
-    "generating": "Generating…",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs. GITHUB_TOKEN is provided automatically.",
-    "cancel": "Cancel",
-    "publish": "Publish",
-    "publishing": "Publishing…",
-    "republish": "Re-publish (update)",
-    "doneTitle": "Published",
-    "doneBody": "Opened/updated a pull request in {repo} with the workflow + agent config.",
-    "openPr": "View pull request",
-    "close": "Close"
+    "heading": "CI deployment",
+    "activeBadge": "{count, plural, one {Active in # repo} other {Active in # repos}}",
+    "addToCi": "Add to CI",
+    "updateConfig": "Update CI config",
+    "updateConfigHint": "Update the CI config of {repo}",
+    "addRepository": "Add repository",
+    "emptyTitle": "Not deployed to CI yet",
+    "emptyBody": "Add this agent to CI to review every pull request automatically.",
+    "loadErrorTitle": "Couldn’t load the CI installations",
+    "loadErrorBody": "The CI installations of this agent could not be loaded.",
+    "retry": "Retry",
+    "staleNotice": "Couldn’t refresh the CI results. Showing the stored data.",
+    "installationsLabel": "CI installations",
+    "workflowVersion": "Workflow v{version}",
+    "updateAvailable": "Update available",
+    "noTime": "—",
+    "targets": {
+      "gha": "GitHub Actions",
+      "circle": "CircleCI",
+      "jenkins": "Jenkins",
+      "cli": "Generic CLI"
+    },
+    "status": {
+      "succeeded": "succeeded",
+      "failed": "failed",
+      "noFindings": "no findings",
+      "running": "running",
+      "pendingPr": "Pending PR",
+      "manual": "Manual",
+      "active": "Active"
+    },
+    "failOn": {
+      "label": "Fail CI on",
+      "hint": "In GitHub Actions only: the lowest finding severity that fails the CI check.",
+      "saved": "Fail CI on saved",
+      "options": {
+        "never": "Never",
+        "critical": "Critical",
+        "warning": "Warning +",
+        "any": "Any"
+      }
+    },
+    "history": {
+      "title": "Latest runs in {repo}",
+      "selectHint": "Select a repository to see its latest CI runs.",
+      "empty": "No CI runs yet for this repository.",
+      "errorTitle": "Couldn’t load the CI runs",
+      "columns": {
+        "pullRequest": "Pull request",
+        "status": "Status",
+        "findings": "Findings",
+        "cost": "Cost",
+        "ran": "Run time",
+        "job": "Job"
+      },
+      "findingsTitle": "{critical} critical · {warning} warning · {suggestion} suggestion",
+      "viewJob": "View job",
+      "failureReason": {
+        "artifactRejected": "The result artifact was rejected",
+        "noArtifact": "No result artifact was uploaded",
+        "artifactExpired": "The result artifact expired",
+        "cancelled": "The run was cancelled",
+        "timedOut": "The run timed out",
+        "stale": "The run never completed"
+      }
+    }
   },
   "page": {
     "crumb": "CI Runs"

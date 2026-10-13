@@ -16,6 +16,10 @@ import type {
   PrReviewComment,
   OpenPrPayload,
   CommitFilesPayload,
+  CommitFilesResult,
+  WorkflowRun,
+  RunArtifact,
+  ListWorkflowRunsOptions,
   IssueMeta,
   GitClient,
   ReadFileAtCommitResult,
@@ -34,6 +38,7 @@ import type {
   SecretsProvider,
   SecretKey,
 } from '@devdigest/shared';
+import { AppError } from '../platform/errors.js';
 import { parseUnifiedDiff } from './git/diff-parser.js';
 
 /**
@@ -127,6 +132,14 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** `changed` reported by commitFiles (default true). Set false to simulate an identical tree. */
+  commitChanged?: boolean;
+  /** Workflow runs returned by listWorkflowRuns. */
+  workflowRuns?: WorkflowRun[];
+  /** Artifacts per run id, returned by listRunArtifacts. */
+  artifacts?: Record<number, RunArtifact[]>;
+  /** Artifact zip bytes per artifact id, returned by downloadArtifact. */
+  artifactBytes?: Record<number, Uint8Array>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -222,9 +235,10 @@ export class MockGitHubClient implements GitHubClient {
     return { url: 'https://github.com/mock/mock/pull/1' };
   }
 
-  async commitFiles(_repo: RepoRef, payload: CommitFilesPayload): Promise<{ branch: string }> {
-    this.committed.push(payload);
-    return { branch: payload.branch };
+  async commitFiles(_repo: RepoRef, payload: CommitFilesPayload): Promise<CommitFilesResult> {
+    const changed = this.opts.commitChanged ?? true;
+    if (changed) this.committed.push(payload);
+    return { branch: payload.branch, changed };
   }
 
   async findOpenPr(_repo: RepoRef, branch: string): Promise<{ url: string } | null> {
@@ -238,6 +252,20 @@ export class MockGitHubClient implements GitHubClient {
 
   async currentLogin(): Promise<string> {
     return this.opts.login ?? 'mock-user';
+  }
+
+  async listWorkflowRuns(_repo: RepoRef, _opts: ListWorkflowRunsOptions): Promise<WorkflowRun[]> {
+    return this.opts.workflowRuns ?? [];
+  }
+
+  async listRunArtifacts(_repo: RepoRef, runId: number): Promise<RunArtifact[]> {
+    return this.opts.artifacts?.[runId] ?? [];
+  }
+
+  async downloadArtifact(_repo: RepoRef, artifactId: number): Promise<Uint8Array> {
+    const bytes = this.opts.artifactBytes?.[artifactId];
+    if (!bytes) throw new AppError('artifact_expired', 'The artifact has expired', 410);
+    return bytes;
   }
 }
 

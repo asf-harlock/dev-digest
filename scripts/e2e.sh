@@ -41,6 +41,10 @@ export DATABASE_URL="postgres://${PG_USER}:${PG_PASS}@127.0.0.1:${PG_PORT}/${PG_
 export API_PORT WEB_PORT
 export NEXT_PUBLIC_API_BASE="http://localhost:${API_PORT}"
 export E2E_BASE_URL="http://localhost:${WEB_PORT}"
+# Where the API reads the bundled CI runner from (Export to CI, Preview step). The
+# server's default is the same path; pinned here so the build step below and the
+# API can never disagree. agent-runner/dist is gitignored, so it is built each run.
+export AGENT_RUNNER_DIST="${AGENT_RUNNER_DIST:-$ROOT/agent-runner/dist}"
 
 log()  { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
@@ -48,6 +52,7 @@ warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
 # --- prerequisites -----------------------------------------------------------
 command -v docker >/dev/null || { echo "docker not found"; exit 1; }
 command -v pnpm   >/dev/null || { echo "pnpm not found (npm i -g pnpm)"; exit 1; }
+command -v npm    >/dev/null || { echo "npm not found"; exit 1; }
 command -v agent-browser >/dev/null || \
   warn "agent-browser not found — install once: npm i -g agent-browser && agent-browser install"
 
@@ -107,7 +112,7 @@ log "Postgres healthy"
 install_if_needed() {
   if [ ! -d "$1/node_modules" ]; then
     log "installing deps in $1"
-    (cd "$1" && pnpm install)
+    (cd "$1" && pnpm install --frozen-lockfile)
   fi
 }
 install_if_needed server
@@ -115,6 +120,18 @@ install_if_needed client
 # reviewer-core's RAW source is imported by the API at runtime (tsconfig alias);
 # without its deps the API crashes at boot with ERR_MODULE_NOT_FOUND. It uses npm.
 [ -d reviewer-core/node_modules ] || { log "installing deps in reviewer-core"; (cd reviewer-core && npm ci); }
+
+# --- build the CI runner bundle (agent-runner/dist, gitignored) ---------------
+# Export to CI's Preview step lists/reads the bundle from $AGENT_RUNNER_DIST; without
+# it the API answers 409 runner_bundle_missing and the flow cannot pass the Preview
+# step. ncc inlines reviewer-core and @devdigest/shared (server/src/vendor/shared)
+# as raw source, so their deps (reviewer-core's, and zod from server/node_modules)
+# must be installed first — done above. agent-runner uses npm (package-lock.json);
+# `npm ci` never rewrites the lockfile.
+[ -d agent-runner/node_modules ] || { log "installing deps in agent-runner"; (cd agent-runner && npm ci); }
+log "building the CI runner bundle -> $AGENT_RUNNER_DIST"
+(cd agent-runner && npm run build)
+[ -s "$AGENT_RUNNER_DIST/index.js" ] || { echo "runner build produced no $AGENT_RUNNER_DIST/index.js"; exit 1; }
 
 # --- migrate + seed the ISOLATED db ------------------------------------------
 # Hard guard: never let migrate/seed run against anything but the isolated port.
