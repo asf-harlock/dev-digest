@@ -136,5 +136,7 @@ export const RunSummary = z.object({
   blockers: z.number().int().nullable(),
   /** SPEC-07: fingerprint of the PR context the run used (from its trace); null when none. */
   context_fingerprint: z.string().nullish(),
+  /** SPEC-11: the multi-agent run this run belongs to; null/absent for a single-agent run. */
+  multi_agent_run_id: z.string().nullish(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

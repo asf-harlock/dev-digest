@@ -168,6 +168,8 @@ export function useFindingAction() {
       if (prId) {
         qc.invalidateQueries({ queryKey: ["reviews", prId] });
         qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
+        // The multi-agent results page renders findings from its own snapshot.
+        qc.invalidateQueries({ queryKey: ["multi-agent", prId] });
       }
     },
   });

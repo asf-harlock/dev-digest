@@ -13,9 +13,9 @@ describe("Project Context nav", () => {
 });
 
 describe("Onboarding Tour nav (SPEC-05)", () => {
-  it("AC-1: sits in WORKSPACE between Pull Requests and Project Context", () => {
+  it("AC-1: sits in WORKSPACE between Pull Requests and Project Context (Multi-Agent Review follows, SPEC-11 AC-8)", () => {
     const keys = NAV.find((g) => g.section === "WORKSPACE")?.items.map((i) => i.key);
-    expect(keys).toEqual(["pulls", "onboarding-tour", "context"]);
+    expect(keys).toEqual(["pulls", "onboarding-tour", "context", "multi-agent"]);
     const item = NAV.flatMap((g) => g.items).find((i) => i.key === "onboarding-tour");
     expect(item?.href).toBe("/repos/:repoId/onboarding-tour");
   });
@@ -38,5 +38,20 @@ describe("Eval Dashboard nav (SPEC-08)", () => {
     expect(group?.items.find((i) => i.key === "eval")).toMatchObject({ label: "Eval Dashboard", href: "/eval" });
     expect(activeKeyFor("/eval")).toBe("eval");
     expect(activeKeyFor("/eval/agents/ag1")).toBe("eval");
+  });
+});
+
+describe("Multi-Agent Review nav (SPEC-11)", () => {
+  it("AC-8: the item follows Project Context in WORKSPACE and is active on every /multi-agent path", () => {
+    const workspace = NAV.find((g) => g.section === "WORKSPACE");
+    const keys = workspace?.items.map((i) => i.key) ?? [];
+    expect(keys.indexOf("multi-agent")).toBe(keys.indexOf("context") + 1);
+    expect(workspace?.items.find((i) => i.key === "multi-agent")).toMatchObject({
+      label: "Multi-Agent Review",
+      href: "/repos/:repoId/multi-agent",
+    });
+    expect(activeKeyFor("/repos/r1/multi-agent")).toBe("multi-agent");
+    expect(activeKeyFor("/repos/r1/multi-agent/12")).toBe("multi-agent");
+    expect(activeKeyFor("/repos/r1/pulls/12")).toBe("pulls");
   });
 });

@@ -22,6 +22,8 @@ interface FindingsTabProps {
   /** owner/repo + head sha — used to deep-link a finding's file:line to GitHub. */
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Results page of this PR's multi-agent run, linked from timeline rows that belong to one. */
+  multiAgentHref?: string | null;
   onOpenTrace: (id: string) => void;
   onDelete: (id: string) => void;
   onRunDone: () => void;
@@ -38,6 +40,7 @@ export function FindingsTab({
   cancelMutation,
   repoFullName,
   headSha,
+  multiAgentHref,
   onOpenTrace,
   onDelete,
   onRunDone,
@@ -138,6 +141,7 @@ export function FindingsTab({
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
             currentContextFingerprint={prContext?.fingerprint}
+            multiAgentHref={multiAgentHref}
           />
         </div>
       )}

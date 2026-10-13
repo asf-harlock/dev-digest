@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import { RunCostBadge } from "@/components/run-cost-badge";
@@ -96,6 +97,7 @@ export function RunHistory({
   onGoToReview,
   onDelete,
   currentContextFingerprint,
+  multiAgentHref,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
@@ -109,6 +111,8 @@ export function RunHistory({
   onDelete?: (runId: string) => void;
   /** Current PR-context fingerprint; a run with a different stored one shows the stale note (AC-40). */
   currentContextFingerprint?: string | null;
+  /** Results page of this PR's multi-agent run; a run row with `multi_agent_run_id` links to it (AC-46). */
+  multiAgentHref?: string | null;
 }) {
   const t = useTranslations("prReview");
   // Hover preview anchor in viewport coords, keyed by run (fixed-position card).
@@ -211,6 +215,15 @@ export function RunHistory({
                 >
                   {r.error}
                 </div>
+              )}
+              {r.multi_agent_run_id && multiAgentHref && (
+                <Link
+                  href={multiAgentHref}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, width: "fit-content", fontSize: 12, color: "var(--accent)" }}
+                >
+                  <Icon.Users size={12} />
+                  {t("multiAgent.timeline.link")}
+                </Link>
               )}
               {isContextStale(r.context_fingerprint, currentContextFingerprint) && (
                 <div role="status" style={{ fontSize: 12, color: "var(--warn)" }}>

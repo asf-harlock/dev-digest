@@ -200,3 +200,34 @@ describe("RunHistory — PR-context stale note (SPEC-07 AC-40, EC-21)", () => {
     expect(screen.getByText("Run used different PR context")).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — multi-agent link (SPEC-11 AC-46, EC-22)", () => {
+  const withHref = (runs: RunSummary[], href: string | null | undefined) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <RunHistory runs={runs} onOpenTrace={() => {}} multiAgentHref={href} />
+      </NextIntlClientProvider>,
+    );
+
+  it("AC-46: only a run with a multi_agent_run_id gets the 'Multi-agent run' link to the results page", () => {
+    withHref(
+      [
+        run({ run_id: "run-m", agent_name: "Grouped", multi_agent_run_id: "mar1" }),
+        run({ run_id: "run-s", agent_name: "Single", multi_agent_run_id: null }),
+      ],
+      "/repos/r1/multi-agent/7",
+    );
+    const links = screen.getAllByRole("link", { name: "Multi-agent run" });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/repos/r1/multi-agent/7");
+    expect(links[0]!.closest("div")?.parentElement).toHaveTextContent("Grouped");
+  });
+
+  it("EC-22: a run written before the feature (field absent) shows no link, nor does a row without a target", () => {
+    withHref([run({ run_id: "old" })], "/repos/r1/multi-agent/7");
+    expect(screen.queryByRole("link", { name: "Multi-agent run" })).not.toBeInTheDocument();
+    cleanup();
+    withHref([run({ multi_agent_run_id: "mar1" })], null);
+    expect(screen.queryByRole("link", { name: "Multi-agent run" })).not.toBeInTheDocument();
+  });
+});

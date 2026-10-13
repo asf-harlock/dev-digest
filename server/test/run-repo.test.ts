@@ -28,6 +28,7 @@ function mkRun(over: Partial<AgentRunRow> = {}): AgentRunRow {
     grounding: '2/2 passed',
     score: 87,
     blockers: 1,
+    multiAgentRunId: null,
     ...over,
   };
 }
@@ -52,6 +53,7 @@ describe('toRunSummary', () => {
       score: 87,
       blockers: 1,
       context_fingerprint: null,
+      multi_agent_run_id: null,
     });
   });
 
