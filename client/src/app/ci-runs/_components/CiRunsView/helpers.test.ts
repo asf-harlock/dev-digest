@@ -25,9 +25,10 @@ describe("CiRunsView helpers", () => {
     expect(refreshFailureKey(null, [{ ...failed, status: "refreshed", failure: null }])).toBeNull();
   });
 
-  it("AC-45: GLOBAL sidebar section holds only CI Runs and /ci-runs activates it", () => {
+  it("AC-45: GLOBAL sidebar section has a CI Runs item that opens /ci-runs and /ci-runs activates it", () => {
     const group = NAV.find((g) => g.section === "GLOBAL");
-    expect(group?.items).toEqual([expect.objectContaining({ key: "ci-runs", label: "CI Runs", href: "/ci-runs" })]);
+    // The section is shared with other global pages (e.g. Multi-Agent Review): assert the item, not the whole list.
+    expect(group?.items).toContainEqual(expect.objectContaining({ key: "ci-runs", label: "CI Runs", href: "/ci-runs" }));
     expect(activeKeyFor("/ci-runs")).toBe("ci-runs");
   });
 });

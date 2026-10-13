@@ -7,7 +7,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderHook, cleanup, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useDeleteRun, useDeleteReview } from "./reviews";
+import { useDeleteRun, useDeleteReview, useFindingAction } from "./reviews";
 
 afterEach(() => {
   cleanup();
@@ -53,5 +53,20 @@ describe("useDeleteReview", () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["reviews", "pr1"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["smart-diff", "pr1"] });
+  });
+});
+
+describe("useFindingAction", () => {
+  it("SPEC-11 AC-28: accept/dismiss also refreshes the multi-agent snapshot, reviews and smart-diff of that PR", async () => {
+    mockFetch();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useFindingAction(), { wrapper: wrapper(qc) });
+    await act(() => result.current.mutateAsync({ findingId: "f1", action: "accept", prId: "pr1" }));
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["reviews", "pr1"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["smart-diff", "pr1"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["multi-agent", "pr1"] });
   });
 });

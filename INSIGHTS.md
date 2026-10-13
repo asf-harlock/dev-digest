@@ -171,6 +171,17 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `agent-runner/insights/INSIGHTS.md` that `node dist/index.js` "runs standalone"
   only holds inside the repo.) `scripts/e2e.sh`
 
+- **2026-10-12** — A fresh worktree has NO `reviewer-core/node_modules`, and
+  `server/` reads `reviewer-core/src` through a tsconfig path alias. Symptoms: `check.sh
+  server typecheck` reports 8 errors that are not yours (`reviewer-core/src/llm/*`
+  cannot find `openai`/`zod`, then `Type 'unknown' is not assignable to type 'T'` in the
+  three LLM adapters); `tsx src/server.ts` dies with `ERR_MODULE_NOT_FOUND: Cannot find
+  package 'openai'`; `check.sh core test` fails with `npx canceled … vitest`. A baseline
+  recorded before this fix shows a red typecheck that is only the missing install. Fix:
+  `cd reviewer-core && npm ci` (npm, not pnpm; it leaves the lockfile and git status
+  clean). After it `server typecheck` and `core typecheck` pass.
+  `reviewer-core/src/llm/structured.ts:1-2`
+
 - **2026-10-09** — Under `bypassPermissions`, Agent SDK `allowedTools` only
   auto-approves — it does NOT remove tools; only `tools` does. `workflowTask`
   passed just `allowedTools`, so the "read-only" workflow tier kept Bash/Write/Edit

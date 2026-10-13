@@ -1,4 +1,4 @@
--- SPEC-11 Export to CI. Hand-edited AFTER `pnpm db:generate` (the generated version added
+-- SPEC-12 Export to CI (renumbered 0026 -> 0027 when main added its own 0026). Hand-edited AFTER `pnpm db:generate` (the generated version added
 -- NOT NULL columns without defaults, which fails on a non-empty table):
 -- add columns nullable -> backfill from `agents` / the installation -> SET NOT NULL.
 -- Legacy `ci_runs` without an installation cannot be attributed to a workspace and are deleted.

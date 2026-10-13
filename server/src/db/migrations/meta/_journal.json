@@ -187,8 +187,15 @@
     {
       "idx": 26,
       "version": "7",
-      "when": 1791830269029,
-      "tag": "0026_reflective_secret_warriors",
+      "when": 1791829919664,
+      "tag": "0026_lucky_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791898368456,
+      "tag": "0027_striped_ma_gnuci",
       "breakpoints": true
     }
   ]

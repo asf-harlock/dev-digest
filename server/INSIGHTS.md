@@ -62,6 +62,15 @@ needed none of those and cannot drift.
 
 ## Codebase Patterns
 
+- **2026-10-12** — A routes file below `modules/<m>/` cannot import `fastify`:
+  `http-framework-only-in-routes` exempts only `^src/modules/<name>/routes.ts`, so a sub-slice such as
+  `reviews/multi-agent/routes.ts` fails `pnpm arch` on `import type { FastifyInstance }`. A sub-slice
+  must still live inside `reviews/` (SPEC-11 needs `ReviewRepository` and `ReviewRunExecutor`; a new
+  `modules/multi-agent/` trips `no-cross-module-import`). It passed by taking the type from the
+  sibling (`type App = Parameters<typeof reviewsRoutes>[0]`), which architecture review called an
+  evasion of the rule. The clean fix widens the rule's `pathNot` to `<module>/**/routes.ts`; that is
+  a change to the gate config, so ask the user first. Left open in SPEC-11 (SUGGESTION A3).
+  `server/.dependency-cruiser.cjs`, `server/src/modules/reviews/multi-agent/routes.ts:12`
 
 - **2026-10-11** — `eval_runs` rows are agent-owned OR skill-owned (SPEC-09:
   `owner_kind`, nullable `agent_id`/`agent_version`, `skill_id`, `carrier_agent_id`),

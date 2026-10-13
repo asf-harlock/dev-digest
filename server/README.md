@@ -71,7 +71,7 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
-    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id · /runs/:id/findings · /runs/:id/(events|trace) · /pulls/:id/smart-diff"]
+    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id · /runs/:id/findings · /runs/:id/(events|trace) · /pulls/:id/smart-diff<br/>/pulls/:id/multi-agent-run · /pulls/:id/multi-agent · /multi-agent/estimates"]
   end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id · /agents/:id/context"]
@@ -155,6 +155,32 @@ first document that would take the wrapped block past 16 000 tokens and every on
 after it). `run_traces.trace` gets `specs_read` (attached paths, prompt order) and
 `project_context` (every listed document with its exact sent `text`), also on
 failure or cancel.
+
+## Multi-agent review routes (SPEC-11)
+
+Run several agents on one PR as ONE grouped run. Code: `modules/reviews/multi-agent/`
+(registered as `multiAgent` in `modules/index.ts`). Each agent still goes through the
+unchanged `ReviewRunExecutor`, so each child has the same `agent_runs` row, review,
+findings and `run_traces` document as a single-agent run. No route makes a model call
+except the agents themselves; estimates, groups and notes are computed from stored rows.
+
+| Route | Body / query | Response |
+|-------|--------------|----------|
+| `POST /pulls/:id/multi-agent-run` | `{ agentIds: uuid[] }` (min 1, duplicates collapse to one run). Rate limit 10/min | `200 MultiAgentRun` snapshot, returned before any agent finishes (every column `running`). One transaction creates the `multi_agent_runs` row and one `agent_runs` row per agent (`multi_agent_run_id` set). Agents then start concurrently through a `p-queue` (`MULTI_AGENT_CONCURRENCY = Infinity` in `reviews/constants.ts`). `422` empty/non-uuid `agentIds`; `404` PR, repo or ANY agent outside the workspace (nothing is written); `409` (no `details`) while a child of a multi-agent run of the PR is `running` - a standalone `POST /pulls/:id/review` run does not trigger it. |
+| `GET /pulls/:id/multi-agent` | - | `200 MultiAgentRun` of the PR's latest run (greatest `ran_at`): `columns` ordered by agent name then run id (a deleted agent, `agent_id`/`agent_name` null, last), each with `status` (`running` `done` `failed` `cancelled`), `error`, `score`, `duration_ms`, `cost_usd` and its findings as full `FindingRecord`s; `agent_count`, `total_cost_usd` (sum of known costs, null when none), `total_duration_ms` (max(`ran_at`+`duration_ms`) - min(`ran_at`); `now` replaces the max while a child is `running`); `conflicts`. `404` when the PR has no multi-agent run or all its children were deleted (`DELETE /runs/:id`); no fallback to an earlier run. |
+| `GET /multi-agent/estimates` | - | `{ agents: [{ agent_id, duration_ms, cost_usd, runs_used }] }`, one entry per agent of the workspace: medians (even count = mean of the two middle values) over the agent's last 5 `done` runs on any PR, `source='ci'` included. `cost_usd` ignores null-cost runs; a median over zero values is `null`; `runs_used` counts the `done` runs taken (0 for a new agent). |
+
+`conflicts` (computed at read time, never stored) group the findings of the `done` columns
+only: line-scoped findings of a file by overlapping `[start_line, end_line]`; file-scoped
+ones (kind `secret_leak` `lethal_trifecta` `phantom` `hook`, or a span over 50 lines) per
+file and kind. Each `done` column gets one take per group (its most severe finding, ties by
+smallest id; `verdict: "ignored"` and an empty `note` when it did not flag it; `note` = first
+line of the rationale, at most 160 characters with the ellipsis; `persona` = the agent name).
+A group is `contended` when someone flagged it and a `done` agent did not, or when two agents
+flagged it with different severities. Fewer than 2 `done` columns = `[]`.
+
+Nothing aggregate is stored: the PR-list cost column sums `agent_runs` only, so a multi-agent
+run is never counted twice.
 
 ## Eval case routes from a finding (SPEC-10)
 

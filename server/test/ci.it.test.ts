@@ -40,7 +40,7 @@ const d = hasDocker ? describe : describe.skip;
 if (!hasDocker) console.warn('[ci.it] Docker not available — skipping integration tests.');
 
 const MIGRATIONS = fileURLToPath(new URL('../src/db/migrations', import.meta.url));
-const MIGRATION_0026 = '0026_reflective_secret_warriors';
+const MIGRATION_0027 = '0027_striped_ma_gnuci';
 const config = () => loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
 
 d('SPEC-12 export to CI (Testcontainers pg)', () => {
@@ -79,7 +79,7 @@ d('SPEC-12 export to CI (Testcontainers pg)', () => {
 
   // ============================================================ migration (EC-34, NFR-3)
 
-  describe('migration 0026 on a database with existing rows', () => {
+  describe('migration 0027 on a database with existing rows', () => {
     const base = `legacy_${suffix()}`;
     let admin: ReturnType<typeof postgres>;
     let preDir: string;
@@ -90,13 +90,13 @@ d('SPEC-12 export to CI (Testcontainers pg)', () => {
       return u.toString();
     };
 
-    /** A copy of the migrations folder whose journal stops BEFORE 0026. */
-    function migrationsBefore0026(): string {
+    /** A copy of the migrations folder whose journal stops BEFORE 0027. */
+    function migrationsBefore0027(): string {
       const dir = mkdtempSync(join(tmpdir(), 'ci-mig-'));
       cpSync(MIGRATIONS, dir, { recursive: true });
       const journalPath = join(dir, 'meta', '_journal.json');
       const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: { tag: string }[] };
-      journal.entries = journal.entries.filter((e) => e.tag !== MIGRATION_0026);
+      journal.entries = journal.entries.filter((e) => e.tag !== MIGRATION_0027);
       writeFileSync(journalPath, JSON.stringify(journal));
       return dir;
     }
@@ -112,7 +112,7 @@ d('SPEC-12 export to CI (Testcontainers pg)', () => {
 
     beforeAll(async () => {
       admin = postgres(pg.url, { max: 1 });
-      preDir = migrationsBefore0026();
+      preDir = migrationsBefore0027();
       await admin.unsafe(`CREATE DATABASE ${base}`);
       await withClient(urlFor(base), async (sql) => {
         await sql`CREATE EXTENSION IF NOT EXISTS vector`;
@@ -124,7 +124,7 @@ d('SPEC-12 export to CI (Testcontainers pg)', () => {
       rmSync(preDir, { recursive: true, force: true });
     });
 
-    /** A fresh database cloned from the pre-0026 state. */
+    /** A fresh database cloned from the pre-0027 state. */
     async function legacyDb(): Promise<string> {
       const name = `legacy_${suffix()}`;
       await admin.unsafe(`CREATE DATABASE ${name} TEMPLATE ${base}`);
@@ -144,7 +144,7 @@ d('SPEC-12 export to CI (Testcontainers pg)', () => {
         return { ws: ws!.id as string, agent: agent!.id as string, inst: inst!.id as string };
       });
 
-      await runMigrations(url); // applies ONLY 0026
+      await runMigrations(url); // applies ONLY 0027
 
       await withClient(url, async (sql) => {
         const rows = await sql`select * from ci_installations`;

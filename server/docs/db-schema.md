@@ -70,12 +70,20 @@ Scope these by joining to the parent that has one; do not add a column without a
 | `eval_runs` → `eval_cases`; `ci_installations` → `agents`; `ci_runs` → `ci_installations` | one hop further |
 | `users`, `workspaces` | roots of the tree |
 
+### Multi-agent runs (SPEC-11)
+
+`agent_runs.multi_agent_run_id` (`uuid`, nullable) → `multi_agent_runs.id`, `ON DELETE SET NULL`,
+indexed (`agent_runs_multi_agent_run_idx`); null for a single-agent run. `multi_agent_runs` holds
+only `id`, `workspace_id`, `pr_id`, `ran_at` and is indexed `(pr_id, ran_at)` for "latest run of a
+PR". Totals, status and conflicts are never stored: they are derived from the child `agent_runs`
+at read time, so a PR-list cost sum over `agent_runs` never counts a run twice.
+
 ## Live vs staged
 
 `README.md` states the schema holds **every** lesson's tables; unused ones sit empty.
 Snapshot — tables never referenced as `t.<key>` outside `src/db/`: `memory`, `code_chunks`,
 `eval_cases`, `eval_runs`, `conformance_checks`, `composed_reviews`, `ci_installations`,
-`ci_runs`, `multi_agent_runs`, `installed_plugins`, `digests`. Everything else is used by a
+`ci_runs`, `installed_plugins`, `digests`. `multi_agent_runs` is live since SPEC-11. Everything else is used by a
 module repository, route, `platform/jobs.ts`, an adapter or the seed. This drifts as lessons land — re-check with:
 
 ```sh

@@ -156,5 +156,55 @@
       "agentMissing": "The agent that produced this finding was deleted",
       "generic": "Couldn’t create the eval case."
     }
+  },
+  "multiAgent": {
+    "estimate": {
+      "approx": "≈ {duration} · {cost}",
+      "parallel": "parallel",
+      "partial": "partial"
+    },
+    "disabledTag": "disabled",
+    "popover": {
+      "title": "Pick agents to run",
+      "clear": "Clear",
+      "run": "Run multi-agent review ({count})",
+      "starting": "Starting…",
+      "runOnlyThis": "Run only this",
+      "runOnlyAgent": "Run only {name}",
+      "needTwo": "Select at least 2 agents.",
+      "inProgress": "A multi-agent run is already in progress for this pull request.",
+      "conflict": "A multi-agent run is already in progress for this pull request.",
+      "startFailed": "Couldn’t start the multi-agent run. Try again.",
+      "emptyTitle": "No agents yet",
+      "emptyBody": "Create an agent to run a multi-agent review.",
+      "createAgent": "Create an agent"
+    },
+    "configure": {
+      "crumbRoot": "Multi-Agent Review",
+      "crumb": "Configure run",
+      "title": "Run a Multi-Agent Review",
+      "subtitle": "Pick a pull request and choose which agents to run — they run in parallel and you compare their findings side by side.",
+      "stepPullRequest": "Pull request",
+      "stepAgents": "Agents to run",
+      "selectPr": "Select a pull request…",
+      "prOption": "#{number} · {title}",
+      "noPulls": "This repository has no pull requests yet.",
+      "selectAll": "Select all",
+      "pickPrTitle": "Pick a pull request first",
+      "pickPrBody": "Choose which PR to review above, then select the agents to run on it.",
+      "run": "Run multi-agent review",
+      "runCount": "Run multi-agent review ({count})",
+      "starting": "Starting…",
+      "noFiles": "This pull request has no changed files, so there is nothing to review.",
+      "inProgress": "A multi-agent run is already in progress for this pull request.",
+      "conflict": "A multi-agent run is already in progress for this pull request.",
+      "startFailed": "Couldn’t start the multi-agent run. Try again.",
+      "emptyTitle": "No agents yet",
+      "emptyBody": "Create an agent to run a multi-agent review.",
+      "createAgent": "Create an agent"
+    },
+    "timeline": {
+      "link": "Multi-agent run"
+    }
   }
 }

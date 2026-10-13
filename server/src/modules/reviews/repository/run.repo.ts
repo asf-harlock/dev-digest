@@ -32,6 +32,7 @@ export function toRunSummary(
     score: run.score,
     blockers: run.blockers,
     context_fingerprint: contextFingerprint,
+    multi_agent_run_id: run.multiAgentRunId ?? null,
   };
 }
 

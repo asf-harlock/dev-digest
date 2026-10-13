@@ -141,6 +141,19 @@ In this order, for every module the requirements touch:
 3. That module's `INSIGHTS.md`, specifically the **Decisions** and
    **Open Questions** sections — do not repeat a decision already reversed,
    and surface any open question the plan would need to resolve.
+   **Boundary rules for new files.** Before the plan places a new file in a
+   directory that has no sibling of its kind, read the module's dependency-
+   cruiser config (`server/.dependency-cruiser.cjs`,
+   `client/.dependency-cruiser.cjs`) for the rule that governs that file. Name
+   the allowed placement in "Constraints", or the config change and the user
+   approval it needs. Example: `http-framework-only-in-routes` exempts only
+   `src/modules/<name>/routes.ts`, so `modules/reviews/multi-agent/routes.ts`
+   cannot import `fastify`, while a new `modules/multi-agent/` fails
+   `no-cross-module-import` for the repository it needs (SPEC-11: the
+   implementer worked around the rule and architecture review raised it).
+   Likewise a browser-check step names its data source: existing rows or a
+   `page.route` mock, never "temporary SQL data" in the shared
+   `devdigest-postgres`.
 4. `docs/architecture.md` if the work touches the review pipeline end to end.
 5. The code the requirements touch — enough to judge feasibility and to name
    real files, not guessed ones.

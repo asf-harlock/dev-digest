@@ -1,5 +1,5 @@
 {
-  "id": "7219d30c-0c17-423f-a7a2-1007b9a3f3c5",
+  "id": "5dc174b3-768a-4ba1-bba7-4ccd05dbc385",
   "prevId": "649676de-6788-4bf8-b1b2-b09f53382dfe",
   "version": "7",
   "dialect": "postgresql",
@@ -3130,12 +3130,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "agent_id": {
           "name": "agent_id",
           "type": "uuid",
@@ -3154,126 +3148,16 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "pr_url": {
-          "name": "pr_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "workflow_version": {
-          "name": "workflow_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "agent_version": {
-          "name": "agent_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "post_as": {
-          "name": "post_as",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "triggers": {
-          "name": "triggers",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ci_fail_on": {
-          "name": "ci_fail_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "manifest_slug": {
-          "name": "manifest_slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "installed_at": {
           "name": "installed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "last_refreshed_at": {
-          "name": "last_refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
-      "indexes": {
-        "ci_installations_workspace_repo_uq": {
-          "name": "ci_installations_workspace_repo_uq",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(\"repo\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ci_installations_workspace_agent_idx": {
-          "name": "ci_installations_workspace_agent_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "agent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "ci_installations_workspace_id_workspaces_id_fk": {
-          "name": "ci_installations_workspace_id_workspaces_id_fk",
-          "tableFrom": "ci_installations",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "ci_installations_agent_id_agents_id_fk": {
           "name": "ci_installations_agent_id_agents_id_fk",
           "tableFrom": "ci_installations",
@@ -3305,29 +3189,11 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "ci_installation_id": {
           "name": "ci_installation_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
-        },
-        "repo": {
-          "name": "repo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "agent_name": {
-          "name": "agent_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "pr_number": {
           "name": "pr_number",
@@ -3341,38 +3207,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "github_run_id": {
-          "name": "github_run_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_attempt": {
-          "name": "run_attempt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "head_sha": {
-          "name": "head_sha",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "verdict": {
-          "name": "verdict",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "failure_reason": {
-          "name": "failure_reason",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3383,33 +3219,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "critical": {
-          "name": "critical",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "warning": {
-          "name": "warning",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suggestion": {
-          "name": "suggestion",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "cost_usd": {
           "name": "cost_usd",
           "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_ms": {
-          "name": "duration_ms",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -3424,125 +3236,16 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "agent_run_id": {
-          "name": "agent_run_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ingested_at": {
-          "name": "ingested_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
-      "indexes": {
-        "ci_runs_workspace_run_attempt_uq": {
-          "name": "ci_runs_workspace_run_attempt_uq",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "github_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "run_attempt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ci_runs_workspace_ran_at_idx": {
-          "name": "ci_runs_workspace_ran_at_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "ran_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ci_runs_installation_ran_at_idx": {
-          "name": "ci_runs_installation_ran_at_idx",
-          "columns": [
-            {
-              "expression": "ci_installation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "ran_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "ci_runs_workspace_id_workspaces_id_fk": {
-          "name": "ci_runs_workspace_id_workspaces_id_fk",
-          "tableFrom": "ci_runs",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "ci_runs_ci_installation_id_ci_installations_id_fk": {
           "name": "ci_runs_ci_installation_id_ci_installations_id_fk",
           "tableFrom": "ci_runs",
           "tableTo": "ci_installations",
           "columnsFrom": [
             "ci_installation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "ci_runs_agent_run_id_agent_runs_id_fk": {
-          "name": "ci_runs_agent_run_id_agent_runs_id_fk",
-          "tableFrom": "ci_runs",
-          "tableTo": "agent_runs",
-          "columnsFrom": [
-            "agent_run_id"
           ],
           "columnsTo": [
             "id"
@@ -3753,6 +3456,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "multi_agent_run_id": {
+          "name": "multi_agent_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3782,6 +3491,21 @@
           "columns": [
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_runs_multi_agent_run_idx": {
+          "name": "agent_runs_multi_agent_run_idx",
+          "columns": [
+            {
+              "expression": "multi_agent_run_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3832,6 +3556,19 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "agent_runs_multi_agent_run_id_multi_agent_runs_id_fk": {
+          "name": "agent_runs_multi_agent_run_id_multi_agent_runs_id_fk",
+          "tableFrom": "agent_runs",
+          "tableTo": "multi_agent_runs",
+          "columnsFrom": [
+            "multi_agent_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3871,7 +3608,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "multi_agent_runs_pr_ran_at_idx": {
+          "name": "multi_agent_runs_pr_ran_at_idx",
+          "columns": [
+            {
+              "expression": "pr_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ran_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "multi_agent_runs_workspace_id_workspaces_id_fk": {
           "name": "multi_agent_runs_workspace_id_workspaces_id_fk",
