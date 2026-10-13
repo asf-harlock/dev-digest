@@ -89,6 +89,16 @@ cannot run shell commands. The main session drives the loop:
    paste the row's question, scope, where-to-look and what it unblocks as the
    researcher's task. At most 4 per round, 2 rounds. Skip this step when the
    table says `None`.
+   - **Classify each row `read` or `execute` before launching.** `researcher`
+     is read-only: its guard denies `node`, `pnpm`/`npm`, builds and any
+     command that changes files, so a request like "build X and run it" comes
+     back `Not tested` (SPEC-11: R2 "does the copied runner run standalone?"
+     returned static reading only, `Q-2` stayed open in the spec and a later
+     implementer had to run it). A row that needs to build, install, run a
+     binary or run tests is `execute`: launch it as an `implementer` (or
+     `general-purpose`) working only in the scratchpad, told to leave the repo
+     untouched, in the same message as the `read` researchers. Do not hand it
+     to `researcher`.
    - **A blocking question is `pending R<n>`** → wait for the reports, resume
      `spec-creator` (SendMessage, same agent) with them verbatim, labelled
      `R1`…`Rn`; it returns a revised intake, and only then go to step 3.
@@ -108,3 +118,8 @@ cannot run shell commands. The main session drives the loop:
    <path>`. On errors, resume the agent with the output; repeat until `ok`.
 6. **Hand back.** Give the user the path and the open questions. Approval
    (`Status: approved`) is the user's edit, then `implementation-planner`.
+   If an `implementation-planner` already ran earlier in this session (for
+   example on the user's free text before the spec existed), **resume that same
+   agent** (SendMessage) with the approved spec path instead of launching a new
+   one — it already holds the module and schema files it read (SPEC-11: the
+   second planner re-read 20 files the first had read, 164,402 fresh tokens).

@@ -79,6 +79,24 @@ If there are no requirements at all (just a one-line idea with no stated
 outcome), stop and say so: ask for the spec, and point at `spec-creator` to
 write one. Do not draft requirements to fill the gap.
 
+**Free text without a spec — stop early.** If the only source is the user's
+own words and designs (no `SPEC-NN`, no lesson spec, no IDs) for a feature, the
+repo's root `CLAUDE.md` routes spec writing to `spec-creator`. Read at most 5
+files (root `CLAUDE.md`, the touched module's `CLAUDE.md`, `specs/` listing,
+the `Status` of any spec that already exists), then reply in a few lines:
+"no spec exists — run `spec-creator` first", with at most three questions the
+spec author will need. Do **not** do the full repo sweep and the 20+-row
+requirements review: it gets redone by `spec-creator` (SPEC-11: a full phase-1
+review cost 93,053 fresh tokens and 25 tool calls before the user switched to
+`spec-creator` three minutes in; 21 files were then read again). If the caller
+has told you explicitly to plan from free text anyway, say once that a spec
+would be cheaper, and continue.
+
+**After a spec exists, you are resumed, not relaunched.** When the caller
+resumes you (SendMessage) with a freshly written, approved `SPEC-NN`, treat it
+as your input and run Phase 1 on it: what you already read stays valid and
+need not be re-read; re-read only what the spec newly names.
+
 When the user accepts one of your recommendations and it changes a
 requirement, the plan follows the user's decision and records it under
 `Decisions from Phase 1`. If the source spec is now out of date, say so under
@@ -164,6 +182,17 @@ implementer each and a stop on the user. Include the **keys of every error
 `details` object a client branches on** (e.g. the id of the existing row in a
 409): the client workstream otherwise guesses several spellings and the
 server workstream needs a patch message.
+
+**Error subtypes across layer boundaries.** When a requirement or a default
+branches on a *subtype* of an error (a 404 vs a 403 from GitHub, a unique-key
+conflict vs a timeout, "no rows" vs "forbidden"), the plan must name the field
+that carries that subtype across each layer boundary it crosses (adapter →
+service → route → client) — e.g. `details.status` on the thrown error — and a
+test that proves the branch. A rule written as "404 means no runs yet, 403 is a
+failure" with no carrier is implemented by folding both into one code, and the
+service can no longer tell them apart (SPEC-11: EC-25 / Q6 → the adapter mapped
+403 and 404 to the same `github_permission`; found only by the bug review as
+B2). If the carrier would change a contract, it is a Phase 1 question.
 
 ### Step 4 — recommend improvements
 

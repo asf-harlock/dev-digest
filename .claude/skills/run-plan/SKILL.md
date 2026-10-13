@@ -116,7 +116,11 @@ which phase it is in and resume from there (the user can say "restart").
 tree. Pass 1 of 2: report every Fail. Items that only a test could prove are
 Unverified, and that is expected<, test-writer is disabled>." `plan-verifier`
 has no `Write` tool: **you** save its reply, as returned, to `verify-1.md`
-(never ask it to save a file).
+(never ask it to save a file). Save the whole reply — the per-ID matrix
+included — never a condensed copy: `/workflow-retro` parses these files for
+Pass/Fail counts, and a condensed `verify-2.md` produced a false `fail: 2`
+(SPEC-11). If the reply is too long to paste in one `Write`, split it across
+two writes to the same file rather than summarising.
 
 Fail rows → resume `implementer` with just those rows. Re-check them by
 **resuming the same `plan-verifier`** (`SendMessage`), not by launching a new
@@ -136,7 +140,15 @@ the spec names, and measure rather than eyeball (`getBoundingClientRect` of
 the dialog and its footer, ancestors' `opacity`/`transform`/`overflow`,
 scrollers). Rules: use data that already exists in the local DB; never create
 or decide data without asking, and put back any temporary change exactly as it
-was; never press Save/Create in a flow that writes. A defect becomes a finding
+was; never press Save/Create in a flow that writes. When the user allows
+temporary seed rows, take every enum-like value from the shared contract (check
+it with the contract's `safeParse` before inserting — SPEC-11: a seed
+`verdict` outside the enum made the whole `GET /ci/runs` list answer 500),
+mark the rows so one `DELETE` removes exactly them, and delete them when done.
+Start your own dev servers only on ports that are verified free (other
+worktrees run theirs on 3000/3001/3100/3101), check a process's `cwd` before
+you kill it, and never stop a process by pattern (`pkill -f`) — SPEC-11: that
+stopped another worktree's Next server. A defect becomes a finding
 `M<n>` (CRITICAL when it blocks a spec AC) fixed by the owning implementer in
 Fix mode, then re-measured. Record the viewports and numbers in the run's
 wrap-up — the spec's PR-description requirement needs them. (SPEC-10 retro:
@@ -144,6 +156,13 @@ this found a translucent modal and a dialog wider than the window that no
 reviewer or verifier could see.)
 
 ## Phase 3 — review (parallel, one message)
+
+Phase 3 may be launched in the **same message** as Phase 2's verify #1 when the
+Phase 2b measurements already exist — it saves wall time and the reviewers do
+not depend on the verifier. In that case put the manual-browser numbers and
+every defect you already know is not fixed into the `plan-verifier` prompt, so
+it records them as `Unverified (orch.)`/known rather than as new Fail rows
+(SPEC-11 did this and it worked); otherwise keep the order Phase 2 → 2b → 3.
 
 | Reviewer | When | Prompt |
 |---|---|---|
@@ -176,7 +195,12 @@ Each round N:
    tokens). Launch a fresh agent only if the reviewer cannot be resumed. Verify its own ids and look
    for new problems **only in lines the fix changed**. New findings on
    unchanged code are discarded — that rule is what makes the loop converge.
-   Output → `review-round-(N+1).json`.
+   Output → `review-round-(N+1).json`. **Always write this file**, even when
+   every reviewer answers "no findings" (`"findings": []`), and record each
+   new id with its `decision` as soon as the user answers: it is the only audit
+   trail that the re-review ran and what was decided about a finding that the
+   fix itself introduced (SPEC-11: a new WARNING raised in round 2 and the two
+   clean re-reviews were never written down).
 5. Next round, or exit when nothing is `fix`-open. After round 3 with open
    items: show them to the user and stop the loop; `defer` or continue is
    their call.
