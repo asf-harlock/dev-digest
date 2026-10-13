@@ -13,7 +13,7 @@ export function buildPrBody(repoFullName: string, fileCount: number): string {
     '',
     `- Workflow: \`${WORKFLOW_PATH}\``,
     `- ${fileCount} files, committed on \`${CI_BRANCH}\``,
-    '- Reviews run on pull requests from this repository (forks are skipped).',
+    '- Reviews run on pull requests from this repository (pull requests from other repositories are skipped).',
     '',
     `Before merging, add the repository secret \`${OPENROUTER_SECRET_NAME}\`: https://github.com/${repoFullName}${SECRETS_URL_SUFFIX}`,
     '`GITHUB_TOKEN` is provided by GitHub Actions.',

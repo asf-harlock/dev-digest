@@ -39,8 +39,12 @@ describe('buildWorkflowYaml', () => {
     expect(() => buildWorkflowYaml({ triggers: [], postAs: 'none' })).toThrow();
   });
 
-  it('skips fork pull requests (AC-22)', () => {
-    expect(load().jobs.review.if).toBe('github.event.pull_request.head.repo.fork == false');
+  it('runs only on pull requests from the same repository (AC-22)', () => {
+    expect(load().jobs.review.if).toBe('github.event.pull_request.head.repo.full_name == github.repository');
+  });
+
+  it('does not key the guard on the fork flag, which is true for every PR of a forked repository (AC-22)', () => {
+    expect(load().jobs.review.if).not.toContain('.fork');
   });
 
   it('grants pull-requests: write only when posting (AC-23)', () => {

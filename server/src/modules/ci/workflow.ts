@@ -70,8 +70,10 @@ export function buildWorkflowObject(options: WorkflowOptions): Record<string, un
       [WORKFLOW_JOB_ID]: {
         'runs-on': WORKFLOW_RUNS_ON,
         'timeout-minutes': WORKFLOW_JOB_TIMEOUT_MINUTES,
-        // Skip pull requests from forks: they get no secrets and a read-only token.
-        if: 'github.event.pull_request.head.repo.fork == false',
+        // Run only on pull requests whose head is THIS repository: a pull request from another
+        // repository gets no secrets and a read-only token. Compare repositories, not the `fork`
+        // flag: a repository that is itself a fork has `fork: true` on every one of its own PRs.
+        if: 'github.event.pull_request.head.repo.full_name == github.repository',
         permissions,
         steps: [
           {

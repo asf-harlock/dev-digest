@@ -15,7 +15,7 @@ export const WORKFLOW_JOB_ID = 'review';
 export const WORKFLOW_RUNS_ON = 'ubuntu-latest';
 export const WORKFLOW_JOB_TIMEOUT_MINUTES = 15;
 /** Generator version (integer). Bump when the generated workflow or file layout changes. */
-export const WORKFLOW_VERSION = 1;
+export const WORKFLOW_VERSION = 2;
 /** Mentioned in the workflow header comment only (AC-27) — never referenced as a `uses:`. */
 export const WORKFLOW_HEADER_ACTION_REF = 'devdigest/review-action@v1';
 
