@@ -401,6 +401,23 @@ needed none of those and cannot drift.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-13** — `pnpm db:migrate` fails `column "workspace_id" of relation
+  "ci_installations" already exists` (42701) after pulling a branch whose
+  migration was RENUMBERED (SPEC-12: `0026` → `0027`). Drizzle decides what is
+  pending only by comparing each journal `when` with the NEWEST
+  `drizzle.__drizzle_migrations.created_at` — never by hash or filename. The dev DB
+  had the pre-renumber file recorded (row `created_at 1791830269029`, hash
+  `8642ac92…`, matches no file in the repo), whose `when` is older than `0027`'s
+  `1791898368456`, so `0027` re-ran on a schema that already had its changes.
+  Do NOT edit the migration or the journal. Diff the live schema against the file
+  (columns, FKs, indexes); when identical, record the file as applied:
+  `insert into drizzle.__drizzle_migrations (hash, created_at)` with
+  `shasum -a 256 <file>` and the journal `when`. When it differs, restore from a
+  fresh DB instead (`docker compose down -v`, loses local data). Renumbering an
+  already-applied migration on a branch is what creates this.
+  `server/src/db/migrations/0027_striped_ma_gnuci.sql`,
+  `server/src/db/migrations/meta/_journal.json`
+
 - **2026-10-12** — A JS `Date` interpolated into a raw drizzle `sql` template
   (`` sql`… < ${olderThan}` ``) throws on postgres-js — `TypeError: The "string"
   argument must be of type string or an instance of Buffer…` — instead of being
@@ -447,6 +464,10 @@ needed none of those and cannot drift.
   price table, so costs still render.
 
 ## Session Notes
+
+- **2026-10-13** — `./scripts/dev.sh` migration failure after the SPEC-12
+  `0026` → `0027` renumber; fixed by recording `0027` in
+  `drizzle.__drizzle_migrations` (Recurring Errors & Fixes).
 
 - **2026-10-11** — SPEC-09 server side (migrations 0022–0024, skill eval runner,
   manual cases). Recorded the `eval_runs` owner-filter invariant (Codebase
