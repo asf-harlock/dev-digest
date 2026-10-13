@@ -1,0 +1,17 @@
+Phase 1 (requirements review + questions; do NOT write the plan yet). Requirements: /Users/harlock/Downloads/Sites/devdigest/specs/10-eval-case-editor-run.md (SPEC-10, Status: draft, lint ok). It is cross-module: client/, server/ and BOTH vendor `shared` copies, in two phases (A: finding → modal, owner picker, Evals-tab redesign, layout fix, SkillEvalMenu removal; B: single-case run with `eval_runs.scope`). The plan will be saved to .claude/sdd/SPEC-10/plan.md in phase 2.
+
+Context from the session: the user's decisions (Q1 = A one-element expectation array, Q2 = B scope column, Q3 editable until first Save, Q11 keep the two server routes) are recorded in the spec as defaults the user may revise. The user said "then implementation-planner" after the spec, so they want a plan next; they have NOT yet reviewed the spec text itself. Research already done (R1 eval_runs readers, R2 upstream refs, R3 SkillEvalMenu removal) is folded into the spec (NFR-5, AC-46..48, EC-28, NFR-16, removal checklist) — verify the key file:line claims rather than re-doing the research.
+
+Do: review the spec for ambiguities, contradictions with code, missing ACs, items that cannot be tested as written, and ordering/phasing problems (e.g. which migration, which contract changes must land in both vendor copies in one commit, the verify:l06 file list in server/package.json, the i18n-key-coverage test, FindingsPanel.test mock). Resolve per-file skills via .claude/skills/pr-self-review/reference/routing.json. Recommend improvements. Ask your clarifying questions (numbered, with a recommended default each) and ask whether to execute single-agent or multi-agent. Keep it tight.
+
+---
+## Resume 1
+
+Phase 2: write the Implementation Plan to .claude/sdd/SPEC-10/plan.md.
+
+ANSWERS from the user (real answers, given in this session):
+- Draft-vs-approved: the spec was amended with ALL your recommended defaults (your Q1–Q11 applied) and re-linted ok. Re-read specs/10-eval-case-editor-run.md as it is now (Status: draft, but defaults approved by the user; new IDs: AC-51, EC-31, NFR-17..NFR-20). Use those IDs in the plan; verify what you rely on.
+- Q12: the user explicitly consented to the new migration 0025_* (only via `pnpm db:generate`, never hand-edit migrations/lockfiles) and to editing BOTH vendor/shared copies, one commit per phase.
+- Q13 execution mode: MULTI-AGENT, phases sequential (A then B), each ending green with its own commit; per phase: W1 contracts (both vendor copies; Phase B also schema+migration) → W2 server ∥ W3 client → W4 test-writer → architecture-reviewer ∥ security-reviewer ∥ plan-verifier. Execution is launched by the user with /run-plan, not by you.
+
+Plan requirements: per-workstream file lists, exact gates per package (server/client typecheck, lint, arch, test; verify:l06 with the new eval-case-run.it.test.ts added to server/package.json:17; client i18n-key-coverage roots + thresholds; contract parity test), the skills per file from routing.json, an AC/EC/NFR → workstream traceability table so plan-verifier can check it, the ordering constraints (contracts first, vendor copies in one commit, migration via db:generate in its own step, add-column only), the manual browser check (1280×720 and 768×600) as an explicit step with the local-DB caveat (agent id abf664e6… from the user's screenshots does not exist in the local DB; the verifier needs a seeded agent/finding), and risks. Do not write code. Return the plan path and a short summary.

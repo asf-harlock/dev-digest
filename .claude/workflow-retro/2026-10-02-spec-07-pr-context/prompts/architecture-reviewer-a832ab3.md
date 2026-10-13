@@ -1,0 +1,5 @@
+Review the SPEC-07 PR Context change for architectural-boundary conformance. Scope: `git diff 896f72b668b0728ac05c1035a4785e99e8807798` plus untracked files (`git ls-files --others --exclude-standard`, ignore `.playwright-mcp/`). Plan for intent: `.claude/sdd/SPEC-07/plan.md`; spec `.claude/sdd/SPEC-07/spec.md`. Modules touched: server, client, reviewer-core, e2e.
+
+Points worth checking: `server/src/adapters/git/simple-git.ts` imports PR_CONTEXT constants from `server/src/modules/_shared/context-paths.ts` (adapter → module direction); vendor edits are approved for SPEC-07 hunks only (server and client copies must carry identical SPEC-07 hunks; pre-existing drift is out of scope); `server/src/modules/reviews/service.ts` was edited outside its workstream; `server/src/modules/pulls/{repository,context-service}.ts` layering; client components under `client/src/app/repos/[repoId]/pulls/[number]/_components/` and hooks in `client/src/lib/hooks/pr-context.ts`; reviewer-core ZERO I/O.
+
+Append the JSON findings block (`findings-json`, "reviewer": "architecture") defined in `.claude/skills/run-plan/reference/findings.md`. Keep the prose short.

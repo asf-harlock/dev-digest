@@ -1,0 +1,3 @@
+Re-check only the Fail rows of `.claude/sdd/SPEC-07/verify-1.md` (§ Fail: AC-31, AC-20, AC-7, AC-8, EC-19, EC-20, NFR-3) plus EC-22 (preview route: 404 before 422) against spec `.claude/sdd/SPEC-07/spec.md` and plan `.claude/sdd/SPEC-07/plan.md`. Diff `896f72b668b0728ac05c1035a4785e99e8807798`..working tree (uncommitted, include untracked). An implementer just fixed them; do not trust its report — read the code and the new tests named with those IDs.
+
+Re-run: `./scripts/check.sh server test`, `client test`, and `cd server && pnpm exec vitest run test/pulls-context.it.test.ts` (Docker is up). Return a compact table ID | Status | Evidence and a one-line verdict.

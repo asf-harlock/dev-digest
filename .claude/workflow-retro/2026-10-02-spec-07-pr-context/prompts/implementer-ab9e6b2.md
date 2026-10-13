@@ -1,0 +1,5 @@
+Fix mode. Findings file: `.claude/sdd/SPEC-07/review-round-1.json`, ids: A1. Plan: `.claude/sdd/SPEC-07/plan.md`. All SPEC-07 work is uncommitted in the working tree; you're the only agent running. Do not commit.
+
+A1: `server/src/adapters/git/simple-git.ts:18-21` imports PR_CONTEXT constants from `server/src/modules/_shared/context-paths.ts` (adapter → module direction). Pick the smallest fix that removes the adapter's dependency on `modules/` without changing behaviour — preferably inject the limits (max file bytes, fetch timeout) via the `SimpleGitClient` constructor wired in `server/src/platform/container.ts` from the existing constants, or move the pure constants to a layer both may import and re-export them from `_shared/context-paths.ts`. Don't touch vendor files. Keep `simple-git.test.ts` passing (update its construction if needed).
+
+Gates: `./scripts/check.sh server typecheck`, `server lint`, `server arch`, `server test`. Reply with the Fix-mode table from `.claude/skills/run-plan/reference/findings.md` (id | status fixed/disputed | evidence file:line) plus gate results.

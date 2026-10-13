@@ -1,0 +1,7 @@
+Repo: /Users/harlock/Downloads/Sites/devdigest (DevDigest course starter, `main` is deliberately trimmed — lessons add features back). Read-only research.
+
+Question: Does git history (any branch/ref, including remotes) contain a previous implementation of a product eval pipeline — routes like `eval-runs`, a scorer computing recall/precision/citation_accuracy, an agent `EvalsTab`, Eval Dashboard pages/hooks, `must_find`/`must_not_flag`? If yes: what were its data model (how runs were grouped, versioning), metric definitions (especially the precision denominator — were unmatched findings counted as false positives, or only those overlapping must_not_flag?), and route/contract shapes.
+
+Try: `git log -S 'eval-runs' --all --oneline`, same for `evalRuns`, `EvalDashboard`, `must_not_flag`, `must_find`, `citation_accuracy`, `EvalsTab`; `git log --follow --oneline -- client/messages/en/eval.json` and `server/src/db/schema/eval.ts` and `server/src/vendor/shared/contracts/eval-ci.ts`; `git branch -a`. Also read the current `server/src/vendor/shared/contracts/eval-ci.ts`, `knowledge.ts:160-210` and `client/messages/en/eval.json` and summarize what their field names imply about intended semantics (e.g. per_trace, pass counts, alert).
+
+Report with ref:path or file:line evidence for each claim; say plainly if nothing exists.

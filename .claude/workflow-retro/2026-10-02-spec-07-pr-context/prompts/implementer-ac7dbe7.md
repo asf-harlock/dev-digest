@@ -1,0 +1,11 @@
+SPEC-07 follow-up, AC-2 only. Plan: `.claude/sdd/SPEC-07/plan.md`. Spec: `.claude/sdd/SPEC-07/spec.md` (copy of `specs/07-pr-context.md`; read AC-2 there). All earlier SPEC-07 work is uncommitted in the working tree; you are the only agent running. Do not commit.
+
+The user approved a new migration for this. Implement:
+1. Add a `status` text column to `pr_files` in `server/src/db/schema/pulls.ts` (values `added | modified | removed | renamed`, not null, default `'modified'`). Generate the migration with `cd server && pnpm db:generate` — it must be a NEW file (0018); never edit `0017_happy_james_howlett.sql` or any existing migration, never hand-edit the generated SQL.
+2. Populate it wherever `pr_files` rows are written on PR import/sync — the GitHub file objects already carry `status`. Map GitHub's values to the four allowed ones (e.g. `copied`/`changed` → `modified`; document the mapping).
+3. Extend `PrContextOrigin` to `added | modified | default_branch` in both `{server,client}/src/vendor/shared/contracts/platform.ts` (identical SPEC-07 hunks; vendor edits approved for SPEC-07 only). Remove `changed`.
+4. Server: return the status from `PrContextRepository.changedFilePaths` (or equivalent), and set origin in `server/src/modules/pulls/context-service.ts` (`toEntry`, `preview`) and `buildAttachableList` in `server/src/modules/_shared/pr-context-paths.ts`. A removed file is not attachable (it doesn't exist at head) — confirm against the spec.
+5. Client: render "Added in this PR" / "Modified in this PR" badges (per the spec's exact wording if given) in the Context tab rows and preview drawer, with i18n keys in `client/messages/en/prContext.json`. Update any client code that compared against `'changed'`.
+6. Update existing tests/mocks that reference `'changed'` or build `pr_files` rows.
+
+Gates: `./scripts/check.sh server typecheck`, `server lint`, `server arch`, `server test`, `client typecheck`, `client lint`, `client arch`, `client test`, `core typecheck`. Report briefly: migration filename + its SQL, files changed, GitHub status mapping, gate results.

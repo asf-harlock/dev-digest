@@ -1,0 +1,26 @@
+PHASE 1: requirements review for `specs/08-eval-pipeline.md` (SPEC-08, Eval Pipeline, L06 homework, branch `L06-homework`). Reply in Ukrainian (user's language); IDs, paths, code in English.
+
+Context from the spec session (all decided by the user):
+- The user reviewed the draft and asked to hand it to you for planning. Plan from it as-is (Status: draft is fine — the user chose to proceed). Its open questions Q-1..Q-4 keep their stated defaults unless you find a reason to raise one (Q-1: no seeded fixture eval cases — ≥8 cases made manually from real accept/dismiss decisions; Q-2: strict line-range overlap, no ±5 tolerance; Q-3: keep all runs, detail shows last 50, trend last 30; Q-4: Compare shows model/strategy change lines above the prompt diff).
+- User EXPLICITLY permits editing `server/src/vendor/shared/` and `client/src/vendor/shared/` contracts (both copies, same commit; client copy uses `.optional()` not `.default()`, client imports types only — see root and client INSIGHTS.md).
+- Approach B: own spec/code, using upstream SPEC-12 as a proven reference. Reference implementation exists only on remote ref `upstream/full-functionality` — read with `git show upstream/full-functionality:<path>`, e.g. `specs/12-eval-pipeline.md`, `plans/12-eval-pipeline.md`, `server/src/modules/eval/{scoring,frozen-input,executor,service,routes,constants}.ts`, `server/src/db/schema/eval.ts`, `server/test/eval.it.test.ts`, `server/test/eval-contract-parity.test.ts`, client `client/src/app/eval/**`, `client/src/app/agents/[id]/_components/AgentEditor/_components/EvalsTab/**`, `client/src/lib/hooks/eval.ts`. Use it to judge feasibility and shapes, but the plan implements OUR spec (e.g. our route `POST /agents/:id/eval-runs`, our 409 on duplicate case, our `partial` status) — ignore SPEC-15 skill evals.
+- `verify:l06` does not exist on this branch; NFR-10 defines it (in `server/package.json`). Course hand-in also needs a copy at `specs/eval-pipeline.md` — the main session creates that copy; do not plan it.
+- Migration form (widen `eval_runs` like SPEC-12 vs a separate suite-run table) is left to you per NFR-11 — recommend one. Migrations via `cd server && pnpm db:generate` only.
+- Useful facts already established: `reviewPullRequest` (reviewer-core) needs only systemPrompt/model/diff(UnifiedDiff)/llm; title goes into `task` via `taskLine` (`server/src/modules/reviews/helpers.ts:84-94`), body into prDescription; stored fragment parsed with `parseUnifiedDiff` (`server/src/adapters/git/diff-parser.ts`, must keep `diff --git`/`+++` headers); temperature defaults to 0, no seed; costUsd may be null; agent versioning in `server/src/modules/agents/repository.ts:111-213` snapshots skills as ids only (spec requires resolved skill bodies in the run snapshot).
+
+Follow your Phase 1 output format, including contract coverage and the execution-mode question (single vs multi-agent) — the user has not chosen yet. Stop after Phase 1.
+
+---
+## Resume 1
+
+PHASE 2: user answers are in; write the Implementation Plan (reply in Ukrainian, IDs/paths/code in English).
+
+Decisions:
+- Q1 [AC-8, AC-9] → **separate route**, NOT a FindingRecord change: `GET /pulls/:id/eval-case-links` returning finding_id → case_id map for the PR's findings (workspace-scoped). Do not touch `review-api.ts` FindingRecord. Define its full contract (both vendor/shared copies) in the contract step, and its client hook used by the PR page / FindingCard. (Use the route param form that matches existing pull routes — check server/README.md; if pulls are addressed differently, keep the intent and say which form you chose.)
+- Q2 → **approved as proposed**: read routes `GET /agents/:id/eval-cases`, `GET /eval-cases/:id`, `GET /agents/:id/eval-overview`, `GET /eval-runs/:id`, `GET /eval-dashboard`, `GET /eval-runs/compare?a&b`, with the shapes from your contract-coverage table. Recommendations 1–7 **accepted** (widen eval_runs in place via two-pass `pnpm db:generate < /dev/null`, partial unique index for single-flight; rewrite eval contracts in both copies + update `server/test/contracts.test.ts`; eval module reads db directly, `modules/_shared/skill-render.ts` extracted and used by run-executor; own frozen-diff splitter + `groundFindings` for range check; detached promise not JobRunner, reap stale runs next to the existing reaper; `evalCleanup` port for agent-delete cascade in one transaction; executor prompt-identity test + no-writes-to-reviews test). NQ-1..NQ-7 defaults **accepted**.
+- Q3 [AC-51] → user **explicitly permits** a one-line edit in `client/src/vendor/ui/nav.ts` to add Eval Dashboard under SKILLS LAB.
+- Vendor/shared edits: already permitted by the user (both copies, same commit).
+- Execution mode → **multi-agent**. Make W1 (contracts in both vendor/shared copies + db schema + both generated migrations) complete with every field enumerated before W2/W3/W4 start. Resolve the W3/W4 shared-file ownership (`lib/hooks/eval.ts`, `messages/en/eval.json`) so no file appears in two workstreams — either give them to W1-client-scaffold, or merge W3+W4; pick and justify.
+- Not in plan: the `specs/eval-pipeline.md` copy (main session does it).
+
+Note under Risks that the spec (draft) is now out of date for: the added read routes and `/pulls/:id/eval-case-links`, NQ-1..NQ-7 resolutions — spec-creator will update it.

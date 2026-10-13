@@ -1,0 +1,9 @@
+Execute `.claude/sdd/SPEC-07/plan.md`. Spec: `.claude/sdd/SPEC-07/spec.md` (exact copy of `specs/07-pr-context.md` from branch `docs/spec-07-pr-context`).
+
+You are workstream W2a of a multi-agent run. Steps 8-12 only. Files owned: `server/src/adapters/git/simple-git.ts`, `server/src/adapters/mocks.ts`, `server/src/platform/container.ts` (only if needed to clear the GitClient typecheck error), new `server/src/modules/_shared/pr-context*.ts` files, `server/src/modules/pulls/{routes.ts,repository.ts,context-service.ts}`, `server/README.md`, plus colocated unit tests for the pure helpers you add. Run only the inner loop. Do not commit. W2c (reviewer-core) and W2d (client) are running in parallel on other files — don't touch them.
+
+W1 is already in the working tree (uncommitted): read the contracts there, don't redefine them — `server/src/vendor/shared/adapters.ts` (`GitClient.readFileAtCommit`, `ensureCommit`, `ReadFileAtCommitResult`, `EnsureCommitResult`), `server/src/vendor/shared/contracts/platform.ts` (`PrContext*` schemas), `contracts/trace.ts`, `server/src/modules/_shared/context-paths.ts` (PR_CONTEXT_* constants), `server/src/db/schema/pulls.ts` (`contextPaths`). Server typecheck currently fails only with "SimpleGitClient/MockGitClient does not implement GitClient" (simple-git.ts:30, mocks.ts:257, container.ts:96-97) — your step 8 must clear all of them.
+
+W2b (run-executor, brief, intent) starts after you and calls `resolvePrContext()`; keep its API stable and documented.
+
+Gates: `./scripts/check.sh server typecheck`, `server lint`, `server arch`, `server test` (known pre-existing failures: onboarding-tour.it flakiness, skills stats tests — not yours). Report back briefly: files changed, gate results, and the exact exported signature of `resolvePrContext()` and its result type, plus any helper W2b needs (AC-24 dedupe helper, fingerprint).

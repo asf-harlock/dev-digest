@@ -1,0 +1,6 @@
+Read-only re-review (repo /Users/harlock/Downloads/Sites/devdigest). Do not edit anything. Re-review, round 2. Your previous finding is in `.claude/sdd/SPEC-08/review-round-1.json` (id B1, reviewer "bug"). The fix lives in untracked files, so `git diff` will not show it: read directly `client/src/app/agents/[id]/_components/AgentEditor/_components/EvalsTab/_components/CaseModal/_components/CaseBody/helpers.ts` (new `stripDiffHeaders`, `frozenDiffFile`, lines ~21-37) and its new test `.../CaseBody/helpers.test.ts`, plus how `CaseBody.tsx` consumes them and how `components/diff-viewer` (`parsePatch`, `countPatchLines`) treats the result.
+
+1. Is B1 resolved? Status fixed | still-open, with file:line evidence. Consider: a patch with several hunks, a header-only string with no `@@`, a `\ No newline at end of file` line, CRLF input, a hunk header at line 1.
+2. New problems: report ONLY ones on lines this fix added or changed (helpers.ts stripDiffHeaders/frozenDiffFile and helpers.test.ts). Anything else is out of scope this round.
+
+Append the findings-json block defined in `.claude/skills/run-plan/reference/findings.md` ("reviewer": "bug"); still-open ids keep their title with "(still open: B1)". Empty findings array is valid.

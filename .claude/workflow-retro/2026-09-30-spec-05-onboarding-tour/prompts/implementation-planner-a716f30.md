@@ -1,0 +1,29 @@
+Phase 1 (requirements review + clarifying questions only). Repo: /Users/harlock/Downloads/Sites/devdigest, branch L05-lab. Requirements source: `specs/05-onboarding-tour.md` (SPEC-05, Status: draft, committed in c8734ef; spec lint passes). Do not rewrite the spec — review it, flag gaps/contradictions/risks, recommend improvements, and ask your clarifying questions, including the single-agent vs multi-agent execution-mode question. Read the root CLAUDE.md, each touched module's CLAUDE.md and INSIGHTS.md (server/, client/, e2e/, root), and resolve per-file skills from `.claude/skills/pr-self-review/reference/routing.json`.
+
+Context the user already decided (reflected in the spec; don't re-open unless you find a real conflict):
+- Approach C: deterministic typed 5-section skeleton (architecture, critical_paths, run_locally, reading_path, first_tasks) + one `completeStructured` enrichment call (120 s timeout) + grounding merge (unknown paths dropped, run commands only from deterministic facts) + persisted in the existing `onboarding` table (no workspace_id → scope via repos join) with source/status/index-SHA/mode meta; fire-and-forget generate + client poll (gives up at 200 s), 409 on concurrent generation.
+- New typed contract in BOTH vendor copies of `@devdigest/shared` (server `.default()` vs client `.optional()`, `.nullish()` for persisted jsonb); rewrite staged `Onboarding` contract, `server/src/prompts/onboarding.system.md`, and `client/messages/en/onboarding.json` while keeping the Add-repository screen's existing keys.
+- Ranking toggle before Generate/Regenerate: "Import graph only" (PageRank, tie-break by path) vs "Include recent activity" (`git fetch --shallow-since` on the existing clone for a window, default `HOTNESS_WINDOW_DAYS`=180, bounds 7–730 → 422 otherwise; `pagerank × (1 + hotness)` computed for the tour only — global `file_rank` untouched); disk-growth warning; disabled without a clone; history-fetch failure → honest fallback.
+- Route `/repos/:repoId/onboarding-tour`, precise `activeKeyFor` match (not `/onboarding` = Add repository); nav entry between Pull Requests and Project Context. "Open" → `githubBlobUrl(full_name, index_sha, path)` new tab. Share link removed (Non-goal).
+- "On this page" scroll-spy: `<nav aria-label>`, one `aria-current="true"`, IntersectionObserver top band, click-lock until scrollend, replaceState on spy, reduced-motion instant scroll, collapsed target expands, heading focus via tabindex=-1.
+- e2e runs on the seeded, always-degraded `acme/payments-api` and must never trigger a model call → a new flow asserts the skeleton + status + TOC.
+- The user wants each SDD stage committed separately (spec already committed; the approved plan will be committed next; execution then goes through `/implement`).
+
+---
+## Resume 1
+
+User answers to your requirements review — please now write the Implementation Plan (return it as text; you are read-only, I will save and commit it).
+
+- **Q2: YES** — the user explicitly authorises editing the server copy `server/src/vendor/shared/adapters.ts` (add the history-fetch method to the `GitAdapter` port) plus its mock (`adapters/mocks.ts` or wherever it lives) and the concrete simple-git adapter. Record it under Risks and name the explicit sign-off. Do not touch the client copy of adapters.ts unless the client actually imports the port (say which in the plan).
+- **Execution mode: multi-agent, layered** as you recommended: slice 1 = contracts (both vendor copies, one commit) + adapter port; slice 2 = skeleton + page + TOC scroll-spy + e2e flow (no model call, no ranking toggle); slice 3 = LLM enrichment + grounding merge; slice 4 = activity (hotness) mode. Within a slice, server ∥ client ∥ e2e on disjoint files, then test-writer, then reviewers. Execution goes through `/implement` — don't hand-launch implementers. Give each slice its own gate commands and a suggested Conventional Commit message so each stage commits separately.
+- **Q1, Q3–Q9, Q11, Q12: accept your proposals as written** (precise `/repos/:id/onboarding-tour` match before the includes line, `/onboarding` no longer maps to the tour key, update helpers.test.ts; in-memory per-repo lock + `generating: boolean`; poll stops on `generating=false` OR `generated_at` change, failure writes `last_error` into meta keeping the previous tour; live skeleton with `stored:false`, Generate on degraded repo persists source `skeleton`; reuse the exclusion list at `repo-intel/service.ts:709`, indexed directory = parent dirs of indexed files; model hint from `feature_models['onboarding']` without key/model call; your v1 manifest list, empty state when none; EC-1 reason first + EC-7 Settings link additionally; language effectively `en`; keep Add-repository keys, rewrite tour keys).
+- **Q10: accept** 60 s history + 120 s model, client gives up at 200 s.
+- Q-1 (24k-token budget with the existing token estimator) and Q-7 (history stays deepened) — your defaults accepted.
+- Include all 7 of your recommendations (pure facts collector + grounding merge with hermetic tests, new `onboarding-tour` server module registered in `modules/index.ts`, contract schema tests in both copies, activeKeyFor unit tests, new `e2e/specs/10-onboarding-tour.flow.json` without touching 06, rewritten prompt without `routes_and_apis`/markdown mermaid).
+- Spec stays Status: draft for now (the user hasn't asked to flip it); plan against it as-is.
+- Map every plan step to the SPEC-05 IDs it satisfies (AC/EC/NFR/UI) so plan-verifier can build its traceability matrix, and list per-file skills from routing.json.
+
+---
+## Resume 2
+
+Update: the user moved SPEC-05 to Status: approved (commit ce1e301). Only line 3 changed; content is identical. Reference it as approved in the plan.

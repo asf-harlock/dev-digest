@@ -157,6 +157,19 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Tool & Library Notes
 
+- **2026-10-13** — Build `agent-runner` (ncc) from a tree whose `node_modules` are
+  REAL directories. With symlinked ones (the worktree trick above) ncc writes the
+  resolved absolute path into module comments: 159 occurrences of
+  `/Users/<name>/…` in `.devdigest/runner/index.js`, shipped to every target repo
+  (the committed bundle on `main` has 0). Also: ncc never cleans `dist/` (a stale
+  chunk from the previous build gets copied too, rename `382` → `271` → `300`), and
+  `reviewer-core/node_modules/node_modules` / `server/node_modules/node_modules` are
+  circular symlinks in the primary checkout (since 2026-10-08) that a recursive copy
+  drags along and ncc follows. Use `rm -rf dist && pnpm build`, delete those two
+  links in the COPY, and check `grep -c /Users/ dist/*.js` prints 0 before
+  committing the bundle. `pnpm build` also rewrites `agent-runner/pnpm-lock.yaml`;
+  `git checkout` it.
+
 - **2026-10-12** — The `agent-runner` ncc bundle must be copied into a target repo
   WHOLE: `dist/` is `index.js` (1.6 MB, ESM), `package.json` (`{"type":"module"}`)
   and a lazy chunk `382.index.js`. `index.js` alone parses only through Node's
@@ -297,6 +310,26 @@ the decision stays visible and reversible — and it is why `severityCounts()`
   `.claude/skills/pr-self-review/scripts/hard-rules.sh`
 
 ## Recurring Errors & Fixes
+
+- **2026-10-13** — A generated GitHub Actions job guarded by
+  `github.event.pull_request.head.repo.fork == false` never runs in a repository
+  that is itself a fork: `head.repo.fork` is `true` on every one of its own PRs.
+  The job shows `skipped` with 0 steps — and a skipped REQUIRED check counts as
+  passed, so branch protection would let a CRITICAL through. Run 38403180899
+  (PR #27 on `asf-harlock/dev-digest`). Guard on the repository instead:
+  `head.repo.full_name == github.repository`. After enabling a required check,
+  prove it BLOCKS (a PR with a planted CRITICAL must show `mergeStateStatus
+  BLOCKED`), not only that a clean PR is green.
+  `server/src/modules/ci/workflow.ts:74`
+
+- **2026-10-13** — `pr-self-review` is blind to a git worktree: the PreToolUse hook
+  reads `.claude/pr-self-review/` of the SESSION's checkout, so a fresh passing
+  report written inside a worktree is invisible and `git push` / `gh pr create` /
+  `gh pr merge` are denied on the primary checkout's stale report ("report HEAD …
+  current HEAD …"). Run the skill in the worktree anyway, then push with
+  `# psr-skip` and say so in the PR body; never copy a report across checkouts (it
+  is keyed to the diff hash). Merging is a separate gate: the auto-mode classifier
+  denied `gh pr merge` ("Merge Without Review") until the user said so explicitly.
 
 
 - **2026-09-26** — `pr-self-review`'s `hard-rules.sh` has two false-positive
