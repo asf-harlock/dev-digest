@@ -48,7 +48,9 @@ export interface UpdateConventionPatch {
   evidenceStartLine?: number;
   evidenceEndLine?: number;
   evidenceSnippet?: string;
-  status?: ConventionStatus;
+  status?: 'pending' | 'accepted' | 'rejected';
+  /** Columns added after the patch shape was written (tags, notes, …) pass straight through. */
+  extra?: Record<string, unknown>;
 }
 
 export class ConventionsRepository {
@@ -200,6 +202,7 @@ export class ConventionsRepository {
         ...(patch.evidenceEndLine !== undefined ? { evidenceEndLine: patch.evidenceEndLine } : {}),
         ...(patch.evidenceSnippet !== undefined ? { evidenceSnippet: patch.evidenceSnippet } : {}),
         ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.extra ?? {}),
       })
       .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.id, id)))
       .returning();

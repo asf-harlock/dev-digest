@@ -166,19 +166,22 @@ export class ConventionsService {
     id: string,
     patch: {
       category?: ConventionCandidate['category'];
-      rule?: string;
+      text?: string;
       evidence?: Partial<ConventionCandidate['evidence']>;
-      status?: ConventionCandidate['status'];
+      status: ConventionCandidate['status'];
+      [extra: string]: unknown;
     },
   ): Promise<ConventionCandidate | undefined> {
+    const { category, text, evidence, status, ...extra } = patch;
     const row = await this.repo.update(workspaceId, id, {
-      category: patch.category,
-      rule: patch.rule,
-      evidencePath: patch.evidence?.path,
-      evidenceStartLine: patch.evidence?.start_line,
-      evidenceEndLine: patch.evidence?.end_line,
-      evidenceSnippet: patch.evidence?.snippet,
-      status: patch.status,
+      category,
+      rule: text,
+      evidencePath: evidence?.path,
+      evidenceStartLine: evidence?.start_line,
+      evidenceEndLine: evidence?.end_line,
+      evidenceSnippet: evidence?.preview,
+      status: status === 'dismissed' ? 'rejected' : (status as 'pending' | 'accepted'),
+      extra,
     });
     return row ? toConventionDto(row) : undefined;
   }
