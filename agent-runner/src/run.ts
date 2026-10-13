@@ -142,6 +142,8 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
     const artifact = buildResultArtifact({
       findings: outcome.review.findings,
       costUsd: outcome.costUsd,
+      tokensIn: outcome.tokensIn,
+      tokensOut: outcome.tokensOut,
       durationMs,
       agent: manifest.name,
       prNumber: ctx.prNumber,

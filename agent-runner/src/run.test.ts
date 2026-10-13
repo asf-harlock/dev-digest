@@ -314,6 +314,9 @@ describe('runCi (T8 agent-runner orchestrator)', () => {
     expect(artifact.critical).toBe(1);
     expect(artifact.pr_number).toBe(42);
     expect(artifact.agent).toBe('Security Reviewer');
+    // The stub LLM reports 100 in / 50 out for its one call — the artifact carries the real totals.
+    expect(artifact.tokens_in).toBe(100);
+    expect(artifact.tokens_out).toBe(50);
   });
 
   it('Q5: an LLM/model-call error hard-fails — non-zero exit, error status, nothing posted, no artifact, no synthetic review', async () => {

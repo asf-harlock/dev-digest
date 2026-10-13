@@ -8,6 +8,8 @@ export const RUNNER_VERSION = '1';
 export interface BuildResultArtifactInput {
   findings: Finding[];
   costUsd: number | null;
+  tokensIn: number;
+  tokensOut: number;
   durationMs: number;
   agent: string;
   prNumber: number;
@@ -38,6 +40,8 @@ export function buildResultArtifact(input: BuildResultArtifactInput): CiResultAr
     suggestion: counts.suggestion,
     cost_usd: input.costUsd,
     duration_ms: input.durationMs,
+    tokens_in: input.tokensIn,
+    tokens_out: input.tokensOut,
     agent: input.agent,
     version: RUNNER_VERSION,
     pr_number: input.prNumber,
