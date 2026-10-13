@@ -13,9 +13,9 @@ describe("Project Context nav", () => {
 });
 
 describe("Onboarding Tour nav (SPEC-05)", () => {
-  it("AC-1: sits in WORKSPACE between Pull Requests and Project Context (Multi-Agent Review follows, SPEC-11 AC-8)", () => {
+  it("AC-1: sits in WORKSPACE between Pull Requests and Project Context", () => {
     const keys = NAV.find((g) => g.section === "WORKSPACE")?.items.map((i) => i.key);
-    expect(keys).toEqual(["pulls", "onboarding-tour", "context", "multi-agent"]);
+    expect(keys).toEqual(["pulls", "onboarding-tour", "context"]);
     const item = NAV.flatMap((g) => g.items).find((i) => i.key === "onboarding-tour");
     expect(item?.href).toBe("/repos/:repoId/onboarding-tour");
   });
@@ -42,11 +42,12 @@ describe("Eval Dashboard nav (SPEC-08)", () => {
 });
 
 describe("Multi-Agent Review nav (SPEC-11)", () => {
-  it("AC-8: the item follows Project Context in WORKSPACE and is active on every /multi-agent path", () => {
-    const workspace = NAV.find((g) => g.section === "WORKSPACE");
-    const keys = workspace?.items.map((i) => i.key) ?? [];
-    expect(keys.indexOf("multi-agent")).toBe(keys.indexOf("context") + 1);
-    expect(workspace?.items.find((i) => i.key === "multi-agent")).toMatchObject({
+  it("AC-8: the item is in the GLOBAL group, after Skills Lab, and is active on every /multi-agent path", () => {
+    const sections = NAV.map((g) => g.section);
+    expect(sections.indexOf("GLOBAL")).toBe(sections.indexOf("SKILLS LAB") + 1);
+    const global = NAV.find((g) => g.section === "GLOBAL");
+    expect(NAV.find((g) => g.section === "WORKSPACE")?.items.some((i) => i.key === "multi-agent")).toBe(false);
+    expect(global?.items.find((i) => i.key === "multi-agent")).toMatchObject({
       label: "Multi-Agent Review",
       href: "/repos/:repoId/multi-agent",
     });

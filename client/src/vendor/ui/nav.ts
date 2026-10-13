@@ -25,7 +25,6 @@ export const NAV: NavGroup[] = [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
       { key: "onboarding-tour", label: "Onboarding Tour", icon: "Boxes", href: "/repos/:repoId/onboarding-tour" },
       { key: "context", label: "Project Context", icon: "FileText", href: "/repos/:repoId/context" },
-      { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" },
     ],
   },
   {
@@ -35,6 +34,12 @@ export const NAV: NavGroup[] = [
       { key: "agents", label: "Agents", icon: "Cpu", href: "/agents", gKey: "a" },
       { key: "conventions", label: "Conventions", icon: "FileText", href: "/conventions", gKey: "c" },
       { key: "eval", label: "Eval Dashboard", icon: "Gauge", href: "/eval" },
+    ],
+  },
+  {
+    section: "GLOBAL",
+    items: [
+      { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" },
     ],
   },
 ];
