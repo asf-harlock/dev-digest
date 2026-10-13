@@ -110,7 +110,7 @@ under a similar name (`tracesPassed` vs `traces`) is a miss, not a pass.
 **DB-backed server code is not done until it has run on a real Postgres.**
 A repository or migration that adds a raw `sql\`…\`` fragment, an `onConflict…`
 clause, a `selectDistinctOn`, or a subquery is not proven by a hermetic test
-with a faked repository — that is exactly what the gates cannot see (SPEC-11
+with a faked repository — that is exactly what the gates cannot see (SPEC-12
 retro: `failStaleRunning` interpolated a JS `Date` into a raw `sql` template,
 postgres-js threw, and `POST /ci/refresh` answered 500 after storing its rows;
 only a Docker `*.it.test.ts` found it, after the workstream had reported green).
@@ -140,7 +140,7 @@ standard input without a source — `cat > file` with no heredoc or `< file`,
 `sed`/`awk`/`grep` with no file operand, an interactive prompt. Write files
 with `Write`/`Edit`, and append `< /dev/null` to any command you are not sure
 about. A stuck `cat` keeps you shown as "running" after you have finished
-(SPEC-11 retro: W2a's span was 66 min against 6.6 min of work; `ps` showed a
+(SPEC-12 retro: W2a's span was 66 min against 6.6 min of work; `ps` showed a
 `cat` waiting on stdin for over an hour, and the user had to ask what was going
 on).
 

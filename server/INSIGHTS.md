@@ -396,7 +396,7 @@ needed none of those and cannot drift.
   (`` sql`… < ${olderThan}` ``) throws on postgres-js — `TypeError: The "string"
   argument must be of type string or an instance of Buffer…` — instead of being
   mapped to a timestamp param, so a route that ran fine in hermetic tests answered
-  500 on a real DB. SPEC-11's `CiRepository.failStaleRunning` shipped like that and
+  500 on a real DB. SPEC-12's `CiRepository.failStaleRunning` shipped like that and
   `POST /ci/refresh` returned 500 AFTER storing the rows (installation never
   turned `active`, `last_refreshed_at` stayed null). The faked-repository service
   tests could not see it; only the Docker `*.it.test.ts` did. Compare columns with

@@ -1,4 +1,4 @@
-/* hooks/ci.ts — React Query hooks for Export to CI and CI Runs (specs/11-export-to-ci.md).
+/* hooks/ci.ts — React Query hooks for Export to CI and CI Runs (specs/12-export-to-ci.md).
    Reads are stored rows only (AC-63): `GET /ci/runs` and the installation lists never
    reach GitHub. The ONLY hook that makes the server call GitHub is `useRefreshCi`
    (`POST /ci/refresh`), started by the user (Refresh, force) or by `useAutoRefreshCi`

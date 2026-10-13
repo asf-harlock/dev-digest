@@ -62,7 +62,7 @@ describe('getPullRequest file status mapping (AC-2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// SPEC-11: Actions + Git Data calls behind the GitHub port. Octokit is faked.
+// SPEC-12: Actions + Git Data calls behind the GitHub port. Octokit is faked.
 // ---------------------------------------------------------------------------
 
 const REPO = { owner: 'o', name: 'r' };

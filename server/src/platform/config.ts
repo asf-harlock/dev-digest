@@ -91,7 +91,7 @@ const EnvSchema = z.object({
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
-  // Built `agent-runner/dist` copied into `.devdigest/runner/` by Export to CI (SPEC-11).
+  // Built `agent-runner/dist` copied into `.devdigest/runner/` by Export to CI (SPEC-12).
   AGENT_RUNNER_DIST: z.string().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a

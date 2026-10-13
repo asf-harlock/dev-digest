@@ -15,7 +15,7 @@ import { NO_INSTALLATIONS } from "./constants";
 import { ADD_REPOSITORY_INITIAL, countActive, updateInitial, updateTarget, type WizardInitial } from "./helpers";
 import { s } from "./styles";
 
-/** CI tab — where the agent runs in CI, the latest runs per repository and the Fail CI on policy (SPEC-11, US-3). */
+/** CI tab — where the agent runs in CI, the latest runs per repository and the Fail CI on policy (SPEC-12, US-3). */
 export function CiTab({ agent }: { agent: Agent }) {
   const t = useTranslations("ci");
   const toast = useToast();

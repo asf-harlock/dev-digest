@@ -11,7 +11,7 @@ import type {
 } from '@devdigest/shared';
 
 /**
- * CI data-access (SPEC-11). Owns `ci_installations` and `ci_runs`, reads the
+ * CI data-access (SPEC-12). Owns `ci_installations` and `ci_runs`, reads the
  * agent / skill / memory / repo rows the export needs (`modules/ci` may not
  * import another module, so it reads their tables here), and writes the
  * CI-sourced `agent_runs` row. SQL only — no HTTP, no business rules. Every

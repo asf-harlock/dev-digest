@@ -19,7 +19,7 @@ import { CiRepository } from '../src/modules/ci/repository.js';
 import { WORKFLOW_VERSION } from '../src/modules/ci/constants.js';
 
 /**
- * SPEC-11 AC-65 / NFR-16 — a CI run is not a pull-request run. The three readers a
+ * SPEC-12 AC-65 / NFR-16 — a CI run is not a pull-request run. The three readers a
  * PR user looks at (the PR list rows, the PR timeline, the PR cost) are snapshotted
  * through the HTTP routes, CI data is written — both directly through the
  * repository and by a real refresh — and the snapshots must be byte-identical.

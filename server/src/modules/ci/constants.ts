@@ -1,5 +1,5 @@
 /**
- * SPEC-11 Export to CI — every literal of the `ci` module lives here.
+ * SPEC-12 Export to CI — every literal of the `ci` module lives here.
  */
 import type { CiErrorCode } from '@devdigest/shared';
 

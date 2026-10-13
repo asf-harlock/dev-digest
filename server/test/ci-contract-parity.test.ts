@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /**
- * NFR-4 — the Export-to-CI contracts (SPEC-11) exist in TWO physical copies of
+ * NFR-4 — the Export-to-CI contracts (SPEC-12) exist in TWO physical copies of
  * `@devdigest/shared` (`server/src/vendor/shared` and `client/src/vendor/shared`)
  * and must change in the same commit. They differ in exactly one allowed way:
  * a field with `.default(...)` on the server is `.optional()` in the client copy.
@@ -24,7 +24,7 @@ const SERVER = read('../src/vendor/shared/contracts/eval-ci.ts');
 const CLIENT = read('../../client/src/vendor/shared/contracts/eval-ci.ts');
 
 const START = 'Export-to-CI + CI Runs';
-/** The SPEC-11 contracts start here; the lines above it (`CiTarget`, `CiFile`) predate the spec. */
+/** The SPEC-12 contracts start here; the lines above it (`CiTarget`, `CiFile`) predate the spec. */
 const SPEC_START = 'export const CiExportInput = ';
 const END = 'Conformance (PRD';
 
@@ -83,7 +83,7 @@ function defaultsToOptional(src: string): string {
 const exportsOf = (src: string): string[] =>
   [...new Set([...src.matchAll(/^export (?:const|type) (\w+)/gm)].map((m) => m[1]!))].sort();
 
-/** `[prelude, spec]` — split at the first SPEC-11 contract. */
+/** `[prelude, spec]` — split at the first SPEC-12 contract. */
 function split(src: string): [string, string] {
   const at = src.indexOf(SPEC_START);
   if (at === -1) throw new Error(`marker not found: ${SPEC_START}`);
@@ -100,7 +100,7 @@ describe('NFR-4: Export-to-CI contract parity between the server and client vend
     expect(code(clientPrelude)).toBe(code(serverPrelude));
   });
 
-  it('NFR-4: both copies carry the SPEC-11 contracts', () => {
+  it('NFR-4: both copies carry the SPEC-12 contracts', () => {
     for (const name of [
       'CiExportInput',
       'CiInstallation',
@@ -128,7 +128,7 @@ describe('NFR-4: Export-to-CI contract parity between the server and client vend
     expect(code(clientSpec)).toBe(defaultsToOptional(code(serverSpec)));
   });
 
-  it('NFR-4: the client copy has no `.default(` in the SPEC-11 contracts (a default there would change parsed output)', () => {
+  it('NFR-4: the client copy has no `.default(` in the SPEC-12 contracts (a default there would change parsed output)', () => {
     expect(code(clientSpec)).not.toMatch(/\.default\(/);
   });
 

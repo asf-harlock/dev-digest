@@ -17,7 +17,7 @@ import { IdParams } from '../_shared/schemas.js';
 import { CiService } from './service.js';
 
 /**
- * SPEC-11 — Export to CI. None of these routes makes an LLM call.
+ * SPEC-12 — Export to CI. None of these routes makes an LLM call.
  *   POST /agents/:id/ci/preview            → CiPreview (DB + runner dist only; no GitHub call)
  *   GET  /agents/:id/ci/preview/file       → CiPreviewFileContent (a runner file, read on demand)
  *   POST /agents/:id/export-ci             → 201 CiExport (new installation) | 200 (re-publish)

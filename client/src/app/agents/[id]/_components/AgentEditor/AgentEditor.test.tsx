@@ -59,7 +59,7 @@ describe("A2 Agent Editor — Evals tab (SPEC-08)", () => {
   });
 });
 
-describe("A2 Agent Editor — CI tab (SPEC-11)", () => {
+describe("A2 Agent Editor — CI tab (SPEC-12)", () => {
   it("AC-36: the tab bar lists CI after Evals", () => {
     renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
     const evals = screen.getByRole("button", { name: "Evals" });

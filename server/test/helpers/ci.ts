@@ -9,7 +9,7 @@ import { MockGitHubClient } from '../../src/adapters/mocks.js';
 import type { PgFixture } from './pg.js';
 
 /**
- * Shared fixtures of the SPEC-11 (Export to CI) integration tests: a runner dist on
+ * Shared fixtures of the SPEC-12 (Export to CI) integration tests: a runner dist on
  * disk, rows in the DB, and workflow-run / artifact builders for `MockGitHubClient`.
  */
 

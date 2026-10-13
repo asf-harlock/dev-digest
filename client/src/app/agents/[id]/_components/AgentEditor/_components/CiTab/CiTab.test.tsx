@@ -1,4 +1,4 @@
-/* CiTab.test.tsx — SPEC-11 CI tab of the agent editor (AC-35..AC-44, AC-53, EC-31, EC-33, UI-11).
+/* CiTab.test.tsx — SPEC-12 CI tab of the agent editor (AC-35..AC-44, AC-53, EC-31, EC-33, UI-11).
    The CI hooks and the wizard are mocked; this file checks what the tab renders and asks for. */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
@@ -320,7 +320,7 @@ describe("CiTab — load states", () => {
   });
 });
 
-describe("CiTab — added SPEC-11 coverage", () => {
+describe("CiTab — added SPEC-12 coverage", () => {
   it("AC-37: the badge reads 'Active in 0 repos' while nothing is active, and plural for several", () => {
     mocks.installations.data = [installation({ status: "pending_pr", last_run: null })];
     const { unmount } = renderTab();

@@ -40,7 +40,7 @@ import type {
 } from './repository.js';
 
 /**
- * SPEC-11 — `CiService`, hermetic. The persistence port is an in-memory fake that
+ * SPEC-12 — `CiService`, hermetic. The persistence port is an in-memory fake that
  * mirrors the repository's contract (workspace scoping, one installation per
  * repository, `running` rows replaced once, a completed run stored once); the real
  * SQL is covered by `test/ci*.it.test.ts`. GitHub is a spy on top of

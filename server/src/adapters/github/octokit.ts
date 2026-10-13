@@ -21,11 +21,11 @@ import { withRetry, withTimeout } from '../../platform/resilience.js';
 import { AppError } from '../../platform/errors.js';
 
 const TIMEOUT = 30_000;
-/** One commit = several sequential Git Data calls (SPEC-11 Q-6). */
+/** One commit = several sequential Git Data calls (SPEC-12 Q-6). */
 const COMMIT_TIMEOUT = 120_000;
-/** Compressed artifact cap — checked before the body is buffered (SPEC-11 NFR-9). */
+/** Compressed artifact cap — checked before the body is buffered (SPEC-12 NFR-9). */
 const MAX_ARTIFACT_COMPRESSED_BYTES = 16 * 1024 * 1024;
-/** Longest message text this adapter puts into a classified error (SPEC-11 NFR-12). */
+/** Longest message text this adapter puts into a classified error (SPEC-12 NFR-12). */
 const MAX_ERROR_TEXT = 200;
 
 /**

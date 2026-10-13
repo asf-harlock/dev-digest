@@ -86,7 +86,7 @@ files (root `CLAUDE.md`, the touched module's `CLAUDE.md`, `specs/` listing,
 the `Status` of any spec that already exists), then reply in a few lines:
 "no spec exists — run `spec-creator` first", with at most three questions the
 spec author will need. Do **not** do the full repo sweep and the 20+-row
-requirements review: it gets redone by `spec-creator` (SPEC-11: a full phase-1
+requirements review: it gets redone by `spec-creator` (SPEC-12: a full phase-1
 review cost 93,053 fresh tokens and 25 tool calls before the user switched to
 `spec-creator` three minutes in; 21 files were then read again). If the caller
 has told you explicitly to plan from free text anyway, say once that a spec
@@ -190,7 +190,7 @@ that carries that subtype across each layer boundary it crosses (adapter →
 service → route → client) — e.g. `details.status` on the thrown error — and a
 test that proves the branch. A rule written as "404 means no runs yet, 403 is a
 failure" with no carrier is implemented by folding both into one code, and the
-service can no longer tell them apart (SPEC-11: EC-25 / Q6 → the adapter mapped
+service can no longer tell them apart (SPEC-12: EC-25 / Q6 → the adapter mapped
 403 and 404 to the same `github_permission`; found only by the bug review as
 B2). If the carrier would change a contract, it is a Phase 1 question.
 

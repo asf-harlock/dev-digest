@@ -119,7 +119,7 @@ has no `Write` tool: **you** save its reply, as returned, to `verify-1.md`
 (never ask it to save a file). Save the whole reply — the per-ID matrix
 included — never a condensed copy: `/workflow-retro` parses these files for
 Pass/Fail counts, and a condensed `verify-2.md` produced a false `fail: 2`
-(SPEC-11). If the reply is too long to paste in one `Write`, split it across
+(SPEC-12). If the reply is too long to paste in one `Write`, split it across
 two writes to the same file rather than summarising.
 
 Fail rows → resume `implementer` with just those rows. Re-check them by
@@ -142,12 +142,12 @@ scrollers). Rules: use data that already exists in the local DB; never create
 or decide data without asking, and put back any temporary change exactly as it
 was; never press Save/Create in a flow that writes. When the user allows
 temporary seed rows, take every enum-like value from the shared contract (check
-it with the contract's `safeParse` before inserting — SPEC-11: a seed
+it with the contract's `safeParse` before inserting — SPEC-12: a seed
 `verdict` outside the enum made the whole `GET /ci/runs` list answer 500),
 mark the rows so one `DELETE` removes exactly them, and delete them when done.
 Start your own dev servers only on ports that are verified free (other
 worktrees run theirs on 3000/3001/3100/3101), check a process's `cwd` before
-you kill it, and never stop a process by pattern (`pkill -f`) — SPEC-11: that
+you kill it, and never stop a process by pattern (`pkill -f`) — SPEC-12: that
 stopped another worktree's Next server. A defect becomes a finding
 `M<n>` (CRITICAL when it blocks a spec AC) fixed by the owning implementer in
 Fix mode, then re-measured. Record the viewports and numbers in the run's
@@ -162,7 +162,7 @@ Phase 2b measurements already exist — it saves wall time and the reviewers do
 not depend on the verifier. In that case put the manual-browser numbers and
 every defect you already know is not fixed into the `plan-verifier` prompt, so
 it records them as `Unverified (orch.)`/known rather than as new Fail rows
-(SPEC-11 did this and it worked); otherwise keep the order Phase 2 → 2b → 3.
+(SPEC-12 did this and it worked); otherwise keep the order Phase 2 → 2b → 3.
 
 | Reviewer | When | Prompt |
 |---|---|---|
@@ -199,7 +199,7 @@ Each round N:
    every reviewer answers "no findings" (`"findings": []`), and record each
    new id with its `decision` as soon as the user answers: it is the only audit
    trail that the re-review ran and what was decided about a finding that the
-   fix itself introduced (SPEC-11: a new WARNING raised in round 2 and the two
+   fix itself introduced (SPEC-12: a new WARNING raised in round 2 and the two
    clean re-reviews were never written down).
 5. Next round, or exit when nothing is `fix`-open. After round 3 with open
    items: show them to the user and stop the loop; `defer` or continue is

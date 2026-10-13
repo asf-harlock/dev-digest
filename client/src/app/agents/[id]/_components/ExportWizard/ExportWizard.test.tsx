@@ -1,4 +1,4 @@
-/* ExportWizard.test.tsx — SPEC-11 Export to CI wizard (AC-1..AC-11, AC-14, AC-32, AC-35, EC-1..EC-3,
+/* ExportWizard.test.tsx — SPEC-12 Export to CI wizard (AC-1..AC-11, AC-14, AC-32, AC-35, EC-1..EC-3,
    EC-6, EC-9..EC-13, EC-35, NFR-13). The hooks are the seam and are controlled; this file asserts what
    the user sees and which request the wizard would send. */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
@@ -481,7 +481,7 @@ describe("buttons and clicks", () => {
   });
 });
 
-describe("added SPEC-11 coverage", () => {
+describe("added SPEC-12 coverage", () => {
   it("AC-2: the four steps are listed in the order Target, Preview, Configure, Install", () => {
     renderIt();
     const steps = within(screen.getByRole("list", { name: /steps/i })).getAllByRole("listitem");

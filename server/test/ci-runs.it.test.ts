@@ -25,7 +25,7 @@ import { WORKFLOW_VERSION } from '../src/modules/ci/constants.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
 
 /**
- * SPEC-11 CI runs against a real Postgres: the atomic "completed run + its
+ * SPEC-12 CI runs against a real Postgres: the atomic "completed run + its
  * `agent_runs` row" write (AC-60), idempotent re-ingest (AC-61) and its unique key,
  * `agent_runs(source='ci')` staying out of Skill Stats (AC-64), the 24 h stale rule
  * (EC-28), the run listing, and a refresh driven through the HTTP routes with a
@@ -63,7 +63,7 @@ class CountingGitHub extends CiMockGitHub {
   }
 }
 
-d('SPEC-11 CI runs (Testcontainers pg)', () => {
+d('SPEC-12 CI runs (Testcontainers pg)', () => {
   let pg: PgFixture;
   let workspaceId: string;
   let otherWorkspaceId: string;

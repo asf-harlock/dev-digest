@@ -1,4 +1,4 @@
-/* page.test.tsx — /agents/:id tab routing: `?tab=ci` opens the CI tab (SPEC-11 AC-36). */
+/* page.test.tsx — /agents/:id tab routing: `?tab=ci` opens the CI tab (SPEC-12 AC-36). */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 

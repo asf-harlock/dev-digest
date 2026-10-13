@@ -69,7 +69,7 @@ import { archiveFilename, buildZip } from './zip.js';
 import type { MemoryExportRow } from './memory-export.js';
 
 /**
- * SPEC-11 Export to CI — orchestration. Preview and export build the file set from
+ * SPEC-12 Export to CI — orchestration. Preview and export build the file set from
  * the DB and the built runner; refresh pulls the repository's own workflow runs
  * from GitHub and stores them. No SQL (repository.ts), no HTTP framework
  * (routes.ts), no LLM call (NFR-11); the GitHub token reaches no log, response,

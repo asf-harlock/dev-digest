@@ -197,7 +197,7 @@ What a case run does change: each case's `latest_result` in `GET /agents/:id/eva
 `GET /skills/:id/eval-cases` and `GET /eval-cases/:id` is the later-started of the owner's
 newest finished set run and the case's newest case run, an `errored` case run included.
 
-## Export to CI (SPEC-11)
+## Export to CI (SPEC-12)
 
 Module `modules/ci/`. No route makes an LLM call. Only the GitHub Actions target (`gha`)
 is supported; any other `target` is `422 unsupported_target`. The base branch is always

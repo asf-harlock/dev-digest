@@ -92,7 +92,7 @@ cannot run shell commands. The main session drives the loop:
    - **Classify each row `read` or `execute` before launching.** `researcher`
      is read-only: its guard denies `node`, `pnpm`/`npm`, builds and any
      command that changes files, so a request like "build X and run it" comes
-     back `Not tested` (SPEC-11: R2 "does the copied runner run standalone?"
+     back `Not tested` (SPEC-12: R2 "does the copied runner run standalone?"
      returned static reading only, `Q-2` stayed open in the spec and a later
      implementer had to run it). A row that needs to build, install, run a
      binary or run tests is `execute`: launch it as an `implementer` (or
@@ -121,5 +121,5 @@ cannot run shell commands. The main session drives the loop:
    If an `implementation-planner` already ran earlier in this session (for
    example on the user's free text before the spec existed), **resume that same
    agent** (SendMessage) with the approved spec path instead of launching a new
-   one — it already holds the module and schema files it read (SPEC-11: the
+   one — it already holds the module and schema files it read (SPEC-12: the
    second planner re-read 20 files the first had read, 164,402 fresh tokens).

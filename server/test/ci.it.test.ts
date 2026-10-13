@@ -28,7 +28,7 @@ import { CiRepository, type UpsertInstallationInput } from '../src/modules/ci/re
 import { CI_BRANCH, WORKFLOW_PATH, WORKFLOW_VERSION } from '../src/modules/ci/constants.js';
 
 /**
- * SPEC-11 Export to CI against a real Postgres: the migration on a database that
+ * SPEC-12 Export to CI against a real Postgres: the migration on a database that
  * already holds rows (EC-34, NFR-3), the unique index and its races (NFR-2),
  * workspace scoping of every repository read/write (NFR-1), agent deletion (EC-18)
  * and the export routes end to end. Refresh and the `agent_runs` rows are in
@@ -43,7 +43,7 @@ const MIGRATIONS = fileURLToPath(new URL('../src/db/migrations', import.meta.url
 const MIGRATION_0026 = '0026_reflective_secret_warriors';
 const config = () => loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
 
-d('SPEC-11 export to CI (Testcontainers pg)', () => {
+d('SPEC-12 export to CI (Testcontainers pg)', () => {
   let pg: PgFixture;
   let workspaceId: string;
   const dist = makeRunnerDist();

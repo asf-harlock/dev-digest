@@ -14,7 +14,7 @@ import {
 } from './constants.js';
 
 /**
- * Pure helpers for the `ci` module (SPEC-11). No I/O, no DB, no container.
+ * Pure helpers for the `ci` module (SPEC-12). No I/O, no DB, no container.
  */
 
 // ---------------------------------------------------------------------------
