@@ -157,6 +157,20 @@ the decision stays visible and reversible — and it is why `severityCounts()`
 
 ## Tool & Library Notes
 
+- **2026-10-12** — The `agent-runner` ncc bundle must be copied into a target repo
+  WHOLE: `dist/` is `index.js` (1.6 MB, ESM), `package.json` (`{"type":"module"}`)
+  and a lazy chunk `382.index.js`. `index.js` alone parses only through Node's
+  syntax detection (default on from 20.19 / 22.7) and dies with `Cannot use import
+  statement outside a module` as soon as the target repo's own `package.json` says
+  `"type":"commonjs"`; the sibling `package.json` is what overrides it. Run as
+  `node .devdigest/runner/index.js` (relative path) it works on Node 20, 22 and 26.
+  The build itself needs `server/node_modules` (and `reviewer-core/node_modules`)
+  installed — `server/src/vendor/shared` imports `zod`, resolved from `server/` —
+  otherwise `ncc build` fails with TS2307 "Cannot find module 'zod'". `agent-runner/`
+  is gitignored for `dist/`, so `scripts/e2e.sh` builds it. (The older note in
+  `agent-runner/insights/INSIGHTS.md` that `node dist/index.js` "runs standalone"
+  only holds inside the repo.) `scripts/e2e.sh`
+
 - **2026-10-09** — Under `bypassPermissions`, Agent SDK `allowedTools` only
   auto-approves — it does NOT remove tools; only `tools` does. `workflowTask`
   passed just `allowedTools`, so the "read-only" workflow tier kept Bash/Write/Edit
