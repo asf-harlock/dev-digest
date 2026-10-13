@@ -103,6 +103,7 @@ flowchart TB
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `CONTEXT_GLOBS` | `**/{specs,docs,insights}/**/*.md` | comma-separated globs a Project Context document must match (subset below). Commas inside `{…}` are kept, e.g. `CONTEXT_GLOBS=**/{specs,docs}/**/*.md,notes/*.md` is two globs; unbalanced or nested braces fail startup |
 | `CONTEXT_EXCLUDES` | `node_modules,.git,dist,build,vendor` | comma-separated directory NAMES excluded from scans and attachments |
+| `AGENT_RUNNER_DIST` | `../agent-runner/dist` | built runner copied into `.devdigest/runner/` by Export to CI; build it with `pnpm --dir agent-runner build` (missing/empty → `409 runner_bundle_missing`) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
 
@@ -221,6 +222,36 @@ What a case run never changes: every run aggregate of `GET /agents/:id/eval-over
 What a case run does change: each case's `latest_result` in `GET /agents/:id/eval-cases`,
 `GET /skills/:id/eval-cases` and `GET /eval-cases/:id` is the later-started of the owner's
 newest finished set run and the case's newest case run, an `errored` case run included.
+
+## Export to CI (SPEC-12)
+
+Module `modules/ci/`. No route makes an LLM call. Only the GitHub Actions target (`gha`)
+is supported; any other `target` is `422 unsupported_target`. The base branch is always
+`repos.default_branch` (a client `base` does not exist), files go to branch `devdigest/ci`,
+and the only client-supplied file text is `workflow_yaml` (parsed, <= 64 KiB, written to the
+fixed workflow path); every other file is regenerated on the server.
+
+| Route | Request | Response |
+|-------|---------|----------|
+| `POST /agents/:id/ci/preview` | `CiExportInput` `{ repo, target, action, post_as, triggers, workflow_yaml? }` | `CiPreview` — file list (runner files without contents), `file_count`, `workflow_version`, `warnings` (`provider_not_openrouter` · `memory_truncated` · `memory_empty`). Reads the DB and the runner dist only; never calls GitHub. `404` agent/repo outside the workspace; `409 runner_bundle_missing`; `422` bad `workflow_yaml` / `unsupported_target`. |
+| `GET /agents/:id/ci/preview/file?repo&target&post_as&triggers=<csv>&path` | query | `CiPreviewFileContent` `{ path, contents, size_bytes }` — a runner file (`.devdigest/runner/...`) is read from the dist on demand; any other generated path is returned from the assembled export. `404` for a path that is not in the export. |
+| `POST /agents/:id/export-ci` | `CiExportInput` (`action` is ignored) | `201 CiExport` for a new installation, `200` for a re-publish. Commits to `devdigest/ci`, reuses an open PR or opens one, then records the installation as `pending_pr` (an `active` or `manual` installation is never demoted). Errors: `409 github_token_missing` · `runner_bundle_missing` · `ci_repo_taken` (`details { agent_id, agent_name, installation_id }`, nothing written) · `ci_export_running` · `ci_no_changes` (tree unchanged and no open PR); `502 ci_pr_failed` (`details.branch`, commit succeeded, installation NOT written); `403 github_permission`; `429 rate_limited`. |
+| `POST /agents/:id/export-ci/archive` | `CiExportInput` | `200 application/zip` with `Content-Disposition: attachment; filename="devdigest-ci-<repo-name>.zip"`. Records the installation as `manual` (an `active` one stays `active`). Same `404`/`409`/`422` as above, no GitHub call. |
+| `GET /agents/:id/ci/installations` · `GET /ci/installations` | — | `CiInstallation[]` with `update_available` (`workflow_version < current` or `agent_version < agent.version`) and `last_run`. |
+| `POST /ci/refresh` | `{ force?, installation_id? }` | `CiRefreshResult[]` `{ installation_id, status: refreshed|skipped|failed, added, updated, skipped, failure }`. Pulls the 30 newest runs of the generated workflow per installation (<= 61 GitHub calls each, 5 concurrent artifact downloads, ~50 s deadline). A per-installation debounce of 30 s (`ci_installations.last_refreshed_at`) answers `skipped` unless `force`. A single-installation request, or a refresh in which every installation failed, throws the failure instead: `409 ci_refresh_running` · `403 github_permission` · `429 rate_limited` (`details.reset_at`) · `504 refresh_timeout`; `409 github_token_missing`. Rows stored before a failure stay. |
+| `GET /ci/runs?repo&agent_id&status&installation_id&limit` | query (`limit` <= 200, default 50) | `CiRun[]`, newest first, from stored rows only — GitHub is never called. |
+
+Ingest rules: a run counts only when its `event`, workflow `path` (without any `@ref`) and
+head repository match the installation (UI-10); `skipped` and other conclusions outside
+`success|failure|cancelled|timed_out` are not stored. A queued/in-progress run is a `running`
+row without an `agent_runs` row; a completed one becomes one `ci_runs` row (keyed by GitHub
+run id + attempt) plus one `agent_runs` row (`source='ci'`, `pr_id` NULL), and the first
+completed run turns the installation `active`. Verdict and `blockers` are derived on the
+server from the artifact counts and the installation's `ci_fail_on`; the artifact's own
+`agent` text is ignored. A `listWorkflowRuns` 404 (`details.status`) means "no runs yet" for `pending_pr` and
+`manual` installations and `github_permission` for `active` ones; a 403 is `github_permission` for every status.
+An unexpected error while ingesting fails only that installation (`ingest_failed`, fixed text). Locks (`ci_export_running`,
+`ci_refresh_running`) are in-memory, correct for a single API instance only, like `RunBus`.
 
 ## Review context (non-obvious)
 

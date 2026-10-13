@@ -21,6 +21,16 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-10-12** — A `position: absolute` sr-only span inside an `overflowX: auto`
+  wrapper escapes it unless the wrapper is `position: relative`: the scroller is
+  not its containing block, so the span lands past the viewport edge and widens the
+  whole document. `/ci-runs` measured `document.scrollWidth` 845 at a 768 px window
+  (the CI tab with history: 838) with the table's own scroller working. Give any
+  scroll wrapper that holds sr-only text `position: "relative"`; measure
+  `document.documentElement.scrollWidth` against `innerWidth` at 768 px — jsdom
+  cannot see it (the tests only assert the style is set).
+  `client/src/app/ci-runs/_components/CiRunsTable/styles.ts:9`
+
 - **2026-10-12** — The kit `SelectInput` sizes its `<select>` to the LONGEST option, so a
   select inside a fixed-width frame spills past the border once an option label is long
   (PR #4, 80 characters: select 616 px in a 520 px frame; Playwright `getBoundingClientRect`

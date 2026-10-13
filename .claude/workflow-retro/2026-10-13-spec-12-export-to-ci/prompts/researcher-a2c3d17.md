@@ -1,0 +1,5 @@
+Repo: ~/emdash/worktrees/devdigest-2b9b9360/l07-lab-export-to-ci (DevDigest; read-only). Answer in English with file:line evidence.
+
+Question R3: If a new row is inserted into `agent_runs` with source='ci', status='done' (or 'failed'), pr_id NULL, agent_id set, workspace_id set, cost_usd/duration_ms/findings_count set, and NO related rows in reviews / run_traces / findings — which readers of agent_runs (server, client, mcp) would (a) change a displayed number, (b) include the row in a list, (c) crash or misbehave (e.g. inner join dropping it, non-null assumption on pr_id, boot reaper on status), (d) be unaffected? Also check whether any reader already filters by `source`.
+
+Where to look: `grep -rn "agentRuns\|agent_runs\|RunSummary" server/src client/src mcp/src` (quote globs, zsh); specifically `server/src/modules/pulls/routes.ts`, `server/src/modules/reviews/repository/run.repo.ts`, `server/src/modules/skills/repository.ts`, `server/src/modules/eval/`, agents stats/listing (runs count, accept %, avg cost on agent cards), any boot-time reaper. Output: a table reader (file:line) → effect (a/b/c/d) → one-line note. Concise (≤ 60 lines).

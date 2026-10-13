@@ -34,10 +34,8 @@ test-results/
 # emdash worktree config (local)
 .emdash.json
 
-# workflow-retro: report.md, metrics.json and history.jsonl are committed;
-# the raw per-agent prompts and hand-backs stay local
-.claude/workflow-retro/*/prompts/
-.claude/workflow-retro/*/reports/
+# workflow-retro: report.md, metrics.json, history.jsonl AND the raw per-agent
+# prompts/ and reports/ are all committed (collect.mjs redacts home-dir paths on write)
 
 # LLM eval run output (see .claude/evals/*/README.md)
 .claude/evals/*/workspace/

@@ -107,6 +107,20 @@ path in `client/messages/<locale>/<namespace>.json` before you write "no
 missing keys" in the report, and name the command you ran. A key that exists
 under a similar name (`tracesPassed` vs `traces`) is a miss, not a pass.
 
+**DB-backed server code is not done until it has run on a real Postgres.**
+A repository or migration that adds a raw `sql\`…\`` fragment, an `onConflict…`
+clause, a `selectDistinctOn`, or a subquery is not proven by a hermetic test
+with a faked repository — that is exactly what the gates cannot see (SPEC-12
+retro: `failStaleRunning` interpolated a JS `Date` into a raw `sql` template,
+postgres-js threw, and `POST /ci/refresh` answered 500 after storing its rows;
+only a Docker `*.it.test.ts` found it, after the workstream had reported green).
+In the same workstream, write or extend one `*.it.test.ts` that exercises each
+new fragment and run it with `cd server && pnpm exec vitest run <file>` (this
+counts as inner loop, on your own file). Never interpolate a `Date` into a raw
+`sql` template — use drizzle operators (`lt`, `and`, `isNull`) or pass an ISO
+string with a `::timestamptz` cast. If Docker is not available, say so under
+"Deviations from plan" instead of reporting the SQL as verified.
+
 **Multi-agent runs.** When the caller says you are one of several parallel
 workstreams sharing the working tree, run only the inner loop, on your own
 files. Another workstream's half-finished files can break a package-wide
@@ -120,6 +134,15 @@ workstream is editing the same tree while you work. Never run `git stash`,
 even a two-second stash/pop reverts the other workstream's files under it
 (SPEC-10 retro: W3-A stashed to count a baseline while W2-A was running). To
 compare with the base use `git diff <sha> -- <path>` or `git show <sha>:<path>`.
+
+**Shell commands must not wait on stdin.** Never run a command that reads
+standard input without a source — `cat > file` with no heredoc or `< file`,
+`sed`/`awk`/`grep` with no file operand, an interactive prompt. Write files
+with `Write`/`Edit`, and append `< /dev/null` to any command you are not sure
+about. A stuck `cat` keeps you shown as "running" after you have finished
+(SPEC-12 retro: W2a's span was 66 min against 6.6 min of work; `ps` showed a
+`cat` waiting on stdin for over an hour, and the user had to ask what was going
+on).
 
 **Workstream size.** If the workstream you were given has more than 6 steps or
 would create more than 4 new component folders, say so on the first line of

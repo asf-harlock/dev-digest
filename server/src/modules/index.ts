@@ -15,6 +15,7 @@ import context from './context/routes.js';
 import onboardingTour from './onboarding-tour/routes.js';
 import brief from './brief/routes.js';
 import evalModule from './eval/routes.js';
+import ci from './ci/routes.js';
 
 /**
  * Module registry. Each feature module is a Fastify plugin in
@@ -46,4 +47,5 @@ export const modules: Record<string, FastifyPluginAsync> = {
   onboardingTour,
   brief,
   eval: evalModule,
+  ci,
 };

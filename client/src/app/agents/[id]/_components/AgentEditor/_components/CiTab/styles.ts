@@ -1,0 +1,40 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for CiTab. */
+export const s = {
+  wrap: { maxWidth: 980, display: "flex", flexDirection: "column", gap: 20 } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" } satisfies CSSProperties,
+  title: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
+  spacer: { flex: 1 } satisfies CSSProperties,
+  actions: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } satisfies CSSProperties,
+  list: { display: "flex", flexDirection: "column", gap: 8, margin: 0, padding: 0, listStyle: "none" } satisfies CSSProperties,
+  stale: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    padding: "8px 12px",
+    borderRadius: 8,
+    background: "var(--warn-bg)",
+    color: "var(--text-primary)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  hint: { fontSize: 13, color: "var(--text-secondary)", margin: 0 } satisfies CSSProperties,
+  addRepo: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    padding: "14px 16px",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "var(--border-strong)",
+    borderRadius: 8,
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+} as const;

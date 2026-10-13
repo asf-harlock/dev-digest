@@ -98,6 +98,13 @@ final message in this structure:
 
 ## General rules
 
+- **Shell commands must not wait on stdin.** Never run a command that reads
+  standard input without a source — `cat > file` with no heredoc or `< file`,
+  `sed`/`awk`/`grep` with no file operand, an interactive prompt. Write files
+  with `Write`/`Edit`, and append `< /dev/null` to any command you are not
+  sure about. A stuck `cat` keeps the agent shown as "running" long after it
+  has finished (SPEC-12 retro: one implementer's span was 66 min against 6.6
+  min of work, and the user had to ask what was going on).
 - Out of scope by design: this agent covers `client/` and `server/` only, per
   its own description. `reviewer-core/` (engine unit tests, npm not pnpm) and
   `e2e/` (deterministic flow JSON, no Vitest) are not covered — say so

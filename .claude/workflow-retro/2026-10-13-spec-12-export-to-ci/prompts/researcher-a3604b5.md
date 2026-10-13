@@ -1,0 +1,5 @@
+Repo: ~/emdash/worktrees/devdigest-2b9b9360/l07-lab-export-to-ci (DevDigest, git worktree; read-only, never edit). Answer in English, evidence-backed (commit sha + file:line).
+
+Question R1: Did a prior implementation of Export-to-CI / CI-run ingest exist in git history (a `server/src/modules/ci/` module, an `export-ci` route, a `ci_runs` refresh/ingest, a GitHub Actions workflow template, client CI wizard / CI Runs page), and what exactly did it do: ingest channel (pull via GitHub API vs push endpoint, auth), generated file names/paths, how the runner was referenced/shipped, workflow versioning, one vs many agents per repo, how agent_runs/ci_runs were written?
+
+Where to look: `git log -S 'export-ci' --oneline --all`; `git log -S 'ci_runs' --all`; `git log -S 'devdigest-review.yml' --all`; branches incl. remotes — root INSIGHTS.md says prior implementations live in `upstream/full-functionality` (check `git branch -a`, `git ls-tree -r upstream/full-functionality --name-only | grep -i ci`, `git show upstream/full-functionality:<path>`). If nothing is found, say so explicitly. Keep the report concise (≤ 60 lines).

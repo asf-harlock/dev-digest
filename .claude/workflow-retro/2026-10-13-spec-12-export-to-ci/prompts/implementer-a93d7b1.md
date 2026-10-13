@@ -1,0 +1,11 @@
+Execute `.claude/sdd/SPEC-12/plan.md`. Spec: `specs/12-export-to-ci.md`. You are workstream W1 of a multi-agent run. Steps: 1–3 only (contracts in both vendor copies, DB schema + migration, `yaml` dependency). Files owned: `server/src/vendor/shared/contracts/eval-ci.ts`, `client/src/vendor/shared/contracts/eval-ci.ts`, `server/src/db/schema/ci.ts`, `server/src/db/migrations/**` (the NEW migration + generated meta only; never edit applied/older migrations), `server/package.json`, `server/pnpm-lock.yaml` (only via pnpm). Run only the inner loop (`./scripts/check.sh <pkg> related <files>` / typecheck of touched packages).
+
+Rules: never run `git stash`, `git checkout`, `git reset` or `git clean` — other workstreams edit this tree. Do not touch `agent-runner/`. Do not hand-edit lockfiles.
+
+Permissions granted by the user for this run: edit both vendor copies of the contracts; add a new migration via `pnpm db:generate` and hand-edit that NEW, not-yet-applied file (nullable → backfill → SET NOT NULL, delete ci_runs rows with no installation, duplicate check before the unique index); `cd server && pnpm add yaml@^2.6.1`.
+
+Migration verification: do NOT apply the migration to the developer's main database (`devdigest-postgres` container, main DB) — the orchestrator will ask the user. Instead verify it on a throwaway database: create e.g. `devdigest_w1_scratch` in the same Postgres server (find the connection details in `server/.env*`/docker-compose.yml/`server/drizzle.config.ts`; do not print secrets), apply all migrations up to the previous one, insert pre-existing rows in `ci_installations` and `ci_runs` (with and without an installation), then apply the new migration and confirm no loss/NOT NULL success/duplicate-check behaviour; drop the scratch DB afterwards.
+
+Notes from W0 (gate passed): nothing in W1 depends on runner internals. Client copy of the contract: `.default()` → `.optional()` for new fields (client copy has drifted: no `AgentManifest`; keep drift minimal, add only what the plan lists). Check `server/src/vendor/shared/index.ts` / client equivalents re-export new types.
+
+Return: files changed, gate results, migration file name, scratch-DB verification summary (concise), and anything the next workstreams (W2a/W2b/W3/W4) must know about exact exported names.
