@@ -8,6 +8,9 @@
 //   --out also writes metrics.json, reports/<agent>.md (each agent's final
 //   report) and prompts/<agent>.md (launch prompt + resume messages) there, so
 //   the analysis can open one agent at a time instead of whole transcripts.
+//   Everything written under --out is committed, so all of it is redacted the
+//   same way (see `redact` below): the home directory becomes `~`, the project
+//   slug `<project>`, the per-uid temp dir `$TMPDIR/`.
 import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -578,15 +581,18 @@ const result = {
 };
 
 const out = opt('--out');
-// metrics.json is committed: the home directory becomes `~`, and the two
-// other forms that carry the username — the slugified project dir under
-// ~/.claude/projects and the per-uid temp dir — are shortened too.
-const metricsText = () =>
-  JSON.stringify(result, null, 2)
+// Everything under --out is committed (metrics.json, reports/, prompts/): the
+// home directory becomes `~`, and the two other forms that carry the username —
+// the slugified project dir under ~/.claude/projects and the per-uid temp dir —
+// are shortened too. Secrets and customer data are NOT detected here: the
+// caller still scans the written files before committing (SKILL.md, Step 4).
+const redact = (text) =>
+  String(text ?? '')
     .replaceAll(homedir(), '~')
     .replaceAll(process.cwd().replace(/[/.]/g, '-'), '<project>')
     .replaceAll(homedir().replace(/[/.]/g, '-'), '<home>') // a slug cut short by trunc()
     .replace(/\/private\/tmp\/claude-\d+\//g, '$TMPDIR/');
+const metricsText = () => redact(JSON.stringify(result, null, 2));
 if (out) {
   mkdirSync(join(out, 'reports'), { recursive: true });
   mkdirSync(join(out, 'prompts'), { recursive: true });
@@ -594,12 +600,12 @@ if (out) {
   for (const a of agents)
     writeFileSync(
       join(out, 'reports', `${a.meta.agentType ?? 'agent'}-${a.id.slice(0, 7)}.md`),
-      a.finalReport,
+      redact(a.finalReport),
     );
   for (const a of agents)
     writeFileSync(
       join(out, 'prompts', `${a.meta.agentType ?? 'agent'}-${a.id.slice(0, 7)}.md`),
-      [a.prompt, ...a.resumeMessages.map((m, i) => `\n\n---\n## Resume ${i + 1}\n\n${m}`)].join(''),
+      redact([a.prompt, ...a.resumeMessages.map((m, i) => `\n\n---\n## Resume ${i + 1}\n\n${m}`)].join('')),
     );
 }
 // ---------- history ----------

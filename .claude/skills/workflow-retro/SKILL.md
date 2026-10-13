@@ -51,8 +51,8 @@ The output directory holds:
 |---|---|---|
 | `metrics.json` | session span, totals, orchestrator, per-agent metrics and `flags`, launch order, timeline, duplication, `topology`, `quality`, `history` | committed |
 | `report.md` | your judgement (Step 4) | committed |
-| `reports/<type>-<id7>.md` | every hand-back of that agent, in order | committed (after redaction, Step 4) |
-| `prompts/<type>-<id7>.md` | its launch prompt, then every resume message | committed (after redaction, Step 4) |
+| `reports/<type>-<id7>.md` | every hand-back of that agent, in order | committed (paths redacted on write) |
+| `prompts/<type>-<id7>.md` | its launch prompt, then every resume message | committed (paths redacted on write) |
 | `../history.jsonl` | the ledger — one row per retro (shared by all runs); re-running a retro replaces its row | committed |
 
 Read `metrics.json` whole. Open `reports/` and `prompts/` **one agent at a
@@ -90,9 +90,12 @@ What the fields mean, and their limits:
   phase, verify rounds with Pass/Fail/Blocked/Unverified counts, review rounds
   with findings by severity), `resumes`, `errorsByKind`
   (`denied` / `exit` / `missing-path` / `other`).
-- `metrics.json` is redacted on write (home dir, project slug, per-uid temp
-  dir); stdout is not. When `report.md` quotes a path, write it as `~/…` or
-  `<project>` — never the username.
+- Everything `collect.mjs` writes under `--out` — `metrics.json`, `prompts/`,
+  `reports/` — is redacted on write (home dir → `~`, project slug → `<project>`,
+  per-uid temp dir → `$TMPDIR/`); stdout is not. Only paths are redacted: the
+  bare username can still appear in quoted command output (an `ls -l` owner
+  column), and secrets and customer data are not detected. When `report.md`
+  quotes a path, write it as `~/…` or `<project>` — never the username.
 - `history.previous` holds the last ≤ 5 earlier retros. Compare only runs of
   the same kind (same `agentTypes`); say "no comparable run" otherwise.
 - The numbers include this retro's own first call; say so in one line.
@@ -132,10 +135,9 @@ Write `report.md` next to `metrics.json` with the template in
 `reference/rubric.md`, in the user's language (identifiers stay English).
 Leave `report.md`, `metrics.json`, `history.jsonl`, `prompts/` and `reports/`
 for the user to commit with the run's branch — they are the evidence that the
-retro ran. `collect.mjs` redacts only `metrics.json`; `prompts/` and `reports/`
-are written raw, so before they are committed replace the home directory with
-`~` in them (`sed -i '' "s#$HOME#~#g" prompts/* reports/*`) and scan them for
-secrets and customer data (tokens, keys, emails, private repo contents).
+retro ran. `collect.mjs` already redacts the home directory in all of them, but
+it does not detect secrets or customer data: scan `prompts/` and `reports/`
+before they are committed (tokens, keys, emails, private repo contents).
 Reply with: the path, a 5-line summary (agents, fresh tokens, active time,
 the biggest problem, the top proposal), and the question which proposals to
 apply. If the run also taught something about the code, say that

@@ -35,7 +35,7 @@ test-results/
 .emdash.json
 
 # workflow-retro: report.md, metrics.json, history.jsonl AND the raw per-agent
-# prompts/ and reports/ are all committed (home-dir paths redacted to `~` first)
+# prompts/ and reports/ are all committed (collect.mjs redacts home-dir paths on write)
 
 # LLM eval run output (see .claude/evals/*/README.md)
 .claude/evals/*/workspace/
