@@ -12,7 +12,8 @@ import { AppError, NotFoundError } from '../../platform/errors.js';
 /**
  * The built `agent-runner/dist` directory, copied whole into `.devdigest/runner/`
  * (AC-31, EC-3). The directory is read from disk; its path comes from config
- * (`agentRunnerDist`) and is passed in, so this module never reads `process.env`.
+ * (`agentRunnerDist`) and is passed in, so this module never reads the
+ * environment itself.
  *
  * The runner needs more than `index.js`: `package.json` (`{"type":"module"}`,
  * without it the runner fails in target repos that are `"type":"commonjs"`)
