@@ -14,7 +14,7 @@
 // Needs: `gh` logged in, Node >= 22. Field meanings: .claude/workflow-retro/ci-review-ledger.md
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -87,7 +87,8 @@ async function studioConflicts(prNumber) {
     const agents = [];
     for (const c of snap.columns) {
       const run = await studioJson(`/runs/${c.run_id}`);
-      const trace = await fetch(`${studio}/runs/${c.run_id}/trace`).then((r) => r.text());
+      const traceRes = await fetch(`${studio}/runs/${c.run_id}/trace`);
+      const trace = traceRes.ok ? await traceRes.text() : null;
       agents.push({
         name: c.agent_name,
         status: c.status,
@@ -96,12 +97,16 @@ async function studioConflicts(prNumber) {
         tokens_in: run.tokens_in ?? null,
         tokens_out: run.tokens_out ?? null,
         findings: c.findings.length,
-        saw_diff: !EMPTY_DIFF.test(trace),
+        // null = the trace could not be read: unknown, and treated as "not proven" below.
+        saw_diff: trace === null ? null : !EMPTY_DIFF.test(trace),
       });
     }
     const done = agents.filter((a) => a.status === 'done');
     if (done.length < 2) return { measured: false, reason: 'fewer than 2 agents finished', run_id: snap.id, agents };
-    if (done.some((a) => !a.saw_diff)) {
+    if (done.some((a) => a.saw_diff === null)) {
+      return { measured: false, reason: 'a run trace could not be read, so it is unproven that the agent saw the diff', run_id: snap.id, agents };
+    }
+    if (done.some((a) => a.saw_diff === false)) {
       return { measured: false, reason: 'an agent reviewed an empty diff (studio clone lacks the PR head; fetch it and re-run)', run_id: snap.id, agents };
     }
     return {
@@ -118,6 +123,21 @@ async function studioConflicts(prNumber) {
   }
 }
 
+/** The artifact comes from a workflow run of the PR's own branch: check it before it becomes a committed number. */
+const isCount = (v) => Number.isInteger(v) && v >= 0 && v < 1e9;
+function checkArtifact(a) {
+  if (!a || typeof a !== 'object') return 'artifact is not an object';
+  const counts = ['findings_count', 'duration_ms'];
+  for (const k of counts) if (!isCount(a[k])) return `artifact field ${k} is not a plausible count`;
+  for (const k of ['critical', 'warning', 'suggestion', 'tokens_in', 'tokens_out']) {
+    if (a[k] != null && !isCount(a[k])) return `artifact field ${k} is not a plausible count`;
+  }
+  if (a.cost_usd != null && !(Number.isFinite(a.cost_usd) && a.cost_usd >= 0 && a.cost_usd < 1000)) {
+    return 'artifact field cost_usd is not a plausible amount';
+  }
+  return null;
+}
+
 async function prRow(spec) {
   const [num, kind = null] = spec.split(':');
   const n = Number(num);
@@ -128,6 +148,9 @@ async function prRow(spec) {
 
   const run = ghJson(['run', 'view', String(runs[0].databaseId), '-R', repo, '--json', 'jobs,attempt,url']);
   const job = run.jobs[0];
+  if (!job || job.status !== 'completed' || !job.completedAt || !job.conclusion) {
+    throw new Error(`PR #${n}: the review job has not finished (status ${job?.status ?? 'missing'}); record it after the check completes`);
+  }
 
   let artifact = null;
   let artifactNote = null;
@@ -135,8 +158,12 @@ async function prRow(spec) {
   try {
     gh(['run', 'download', String(runs[0].databaseId), '-R', repo, '-n', ARTIFACT, '-D', dir]);
     artifact = JSON.parse(readFileSync(join(dir, 'devdigest-result.json'), 'utf8'));
+    artifactNote = checkArtifact(artifact);
+    if (artifactNote) artifact = null;
   } catch {
-    artifactNote = 'no devdigest-result artifact (the runner failed before writing it, or it expired)';
+    artifactNote = 'no readable devdigest-result artifact (the runner failed before writing it, or it expired)';
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 
   return {
@@ -157,7 +184,7 @@ async function prRow(spec) {
     tokens_in: artifact?.tokens_in ?? null,
     tokens_out: artifact?.tokens_out ?? null,
     findings: artifact
-      ? { total: artifact.findings_count, critical: artifact.critical ?? 0, warning: artifact.warning ?? 0, suggestion: artifact.suggestion ?? 0 }
+      ? { total: artifact.findings_count, critical: artifact.critical ?? null, warning: artifact.warning ?? null, suggestion: artifact.suggestion ?? null }
       : null,
     agent: artifact?.agent ?? null,
     runner_version: artifact?.version ?? null,
@@ -195,6 +222,12 @@ const key = (r) => (r.type === 'build' ? `build:${r.session}` : `pr:${r.pr}:${r.
 const existing = existsSync(out)
   ? readFileSync(out, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
   : [];
+for (const r of rows) {
+  const prev = existing.find((e) => key(e) === key(r));
+  if (r.type === 'ci-review' && !r.conflicts?.measured && prev?.conflicts?.measured) {
+    r.conflicts = prev.conflicts; // keep the earlier measurement; this run did not (or could not) redo it
+  }
+}
 const replaced = new Set(rows.map(key));
 const merged = [...existing.filter((r) => !replaced.has(key(r))), ...rows];
 mkdirSync(dirname(out), { recursive: true });
