@@ -40,3 +40,19 @@ describe("Eval Dashboard nav (SPEC-08)", () => {
     expect(activeKeyFor("/eval/agents/ag1")).toBe("eval");
   });
 });
+
+describe("Multi-Agent Review nav (SPEC-11)", () => {
+  it("AC-8: the item is in the GLOBAL group, after Skills Lab, and is active on every /multi-agent path", () => {
+    const sections = NAV.map((g) => g.section);
+    expect(sections.indexOf("GLOBAL")).toBe(sections.indexOf("SKILLS LAB") + 1);
+    const global = NAV.find((g) => g.section === "GLOBAL");
+    expect(NAV.find((g) => g.section === "WORKSPACE")?.items.some((i) => i.key === "multi-agent")).toBe(false);
+    expect(global?.items.find((i) => i.key === "multi-agent")).toMatchObject({
+      label: "Multi-Agent Review",
+      href: "/repos/:repoId/multi-agent",
+    });
+    expect(activeKeyFor("/repos/r1/multi-agent")).toBe("multi-agent");
+    expect(activeKeyFor("/repos/r1/multi-agent/12")).toBe("multi-agent");
+    expect(activeKeyFor("/repos/r1/pulls/12")).toBe("pulls");
+  });
+});

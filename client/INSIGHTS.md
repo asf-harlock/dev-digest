@@ -21,6 +21,17 @@ Entry format: `.claude/skills/engineering-insights/reference/entry-format.md`.
 
 ## What Doesn't Work
 
+- **2026-10-12** — The kit `SelectInput` sizes its `<select>` to the LONGEST option, so a
+  select inside a fixed-width frame spills past the border once an option label is long
+  (PR #4, 80 characters: select 616 px in a 520 px frame; Playwright `getBoundingClientRect`
+  shows it, the DOM looks fine). `vendor/ui` is read-only, so the first fix was a
+  hand-rolled native `<select>`; architecture review rejected it (WARNING: a generic
+  control must come from the kit, `component-conventions.md`) and, unseen in unit tests, it
+  also collapsed to 0 px inside a flex wrapper at 390 px. What worked: keep the kit select
+  and cut the option LABEL (`truncateTitle`, `PR_TITLE_MAX_CHARS = 52`), which bounds the
+  width (measured 470 px in 520 px). The kit option takes only `{value, label}`, so the full
+  title is not available on hover. `ConfigureRunView/helpers.ts`, `constants.ts`
+
 - **2026-10-12** — A modal rendered INSIDE a finding card comes out translucent and
   slides under the sticky PR header. A decided (accepted/dismissed) `FindingCard` has
   `opacity: 0.6` + `overflow: hidden` (`FindingCard/styles.ts:16`), which is also a

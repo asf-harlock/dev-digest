@@ -1,19 +1,27 @@
 {
   "viewTrace": "View trace",
+  "viewTraceFor": "View trace of {agent}",
   "finding": {
     "trifecta": "trifecta"
   },
   "column": {
     "noFindings": "No findings.",
-    "findingsCount": "{count, plural, one {# finding} other {# findings}}"
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}",
+    "score": "Score {score}",
+    "findingsLabel": "Findings of {agent}",
+    "dismissed": "dismissed"
   },
   "conflicts": {
     "title": "Where agents disagree",
     "onlyConflicts": "Show only conflicts",
     "empty": "No conflicts — the agents agree on every flagged location.",
-    "didNotFlag": "did not flag"
+    "didNotFlag": "did not flag",
+    "needsTwo": "Comparison needs at least 2 completed agents",
+    "comparing": "Comparing {done} of {total} agents",
+    "dismissed": "dismissed"
   },
   "tabs": {
+    "listLabel": "Agents",
     "noSummary": "No summary."
   },
   "trace": {
@@ -119,31 +127,47 @@
   "severity": {
     "critical": "Critical",
     "warning": "Warning",
-    "suggestion": "Suggestion"
+    "suggestion": "Suggestion",
+    "info": "Info"
   },
   "page": {
     "title": "Multi-Agent Review",
-    "subtitle": "this PR through every enabled agent in parallel",
-    "selectPr": "Select PR",
-    "prItem": "#{number} · {title}",
+    "crumb": "Multi-Agent Review",
+    "subtitle": "{count, plural, one {# selected agent} other {# selected agents}} · parallel",
+    "configure": "Configure run",
+    "meta": "{count, plural, one {# agent} other {# agents}} · parallel · {duration} total · {cost}",
+    "viewLabel": "Results view",
     "view": {
-      "columns": "columns",
-      "tabs": "tabs"
+      "columns": "Columns",
+      "tabs": "Tabs"
     },
-    "runAll": "Run all agents",
-    "running": "Running…",
-    "meta": "{count} agents · fan-out via p-queue · {duration}s total · {cost}",
-    "noAgents": {
-      "title": "Enable agents to run reviews",
-      "body": "Multi-agent review runs the PR through every enabled agent in parallel. You have no agents enabled yet.",
-      "cta": "Go to Agents"
-    },
+    "loading": "Loading the multi-agent run…",
     "noRun": {
       "title": "No multi-agent run yet",
-      "bodyReady": "Run all enabled agents on this PR to see N columns + conflicts.",
-      "bodySelect": "Select a PR to begin.",
-      "cta": "Run all agents"
+      "body": "Pick several agents and run them on this PR together to compare their findings side by side.",
+      "cta": "Configure run"
     },
-    "crumb": "Multi-Agent Review"
+    "noPr": {
+      "title": "Pull request not found",
+      "body": "PR #{number} is not in this repository."
+    },
+    "error": {
+      "title": "Couldn't load the multi-agent run",
+      "body": "The latest status could not be fetched. Try again.",
+      "retry": "Retry"
+    },
+    "stale": {
+      "title": "Status is not up to date",
+      "body": "Some agents have been running for a long time and the page stopped checking.",
+      "refresh": "Refresh"
+    },
+    "announce": "{agent}: {status}"
+  },
+  "deletedAgent": "Deleted agent",
+  "status": {
+    "done": "Done",
+    "running": "Running",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
   }
 }

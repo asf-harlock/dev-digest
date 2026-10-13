@@ -32,12 +32,17 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
+  /** SPEC-11: the multi-agent run this run was started by; null for a single-agent run.
+      Deleting the group row detaches the runs rather than deleting them. */
+  multiAgentRunId: uuid('multi_agent_run_id').references(() => multiAgentRuns.id, { onDelete: 'set null' }),
 }, (t) => ({
   // Live-run polling and the PR-list cost rollup both filter pr_id + status
   // (run.repo.ts, pulls/routes.ts).
   prStatusIdx: index('agent_runs_pr_status_idx').on(t.prId, t.status),
   // The boot reaper scans status='running' across every PR.
   statusIdx: index('agent_runs_status_idx').on(t.status),
+  // SPEC-11: the children of one multi-agent run (FKs are not auto-indexed in Postgres).
+  multiAgentRunIdx: index('agent_runs_multi_agent_run_idx').on(t.multiAgentRunId),
 }));
 
 /** Whole trace of one run as a SINGLE jsonb document. */
@@ -79,4 +84,7 @@ export const multiAgentRuns = pgTable('multi_agent_runs', {
     .notNull()
     .references(() => pullRequests.id, { onDelete: 'cascade' }),
   ranAt: timestamp('ran_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => ({
+  // SPEC-11: "latest multi-agent run of a PR" = max(ran_at) per pr_id.
+  prRanAtIdx: index('multi_agent_runs_pr_ran_at_idx').on(t.prId, t.ranAt),
+}));

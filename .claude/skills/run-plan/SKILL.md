@@ -56,19 +56,34 @@ which phase it is in and resume from there (the user can say "restart").
    `approved`, ask whether to continue.
 2. Branch. On `main` → ask for a branch name (default `sdd/SPEC-NN-<name>`)
    and create it; homework never lands on `main`. Record `base_sha = HEAD`.
-3. Baseline. For every package the plan's Test plan names, run
-   `./scripts/check.sh <pkg> test` on the clean tree now, plus any Docker-backed
-   suite the plan lists (`cd server && pnpm exec vitest run .it.test`, only with
-   Docker up). Record the failing test names as `baseline_failures` in
-   `state.json` (`[]` = green). Later "pre-existing failure" claims must match
-   this list; a failure that is not in it belongs to this run.
+3. Baseline. First check the install: a package whose gates need a sibling's
+   dependencies must find them (`server/` reads `reviewer-core/src`, so
+   `reviewer-core/node_modules` must exist; if it is missing, run
+   `cd reviewer-core && npm ci` — it leaves the lockfile and git status
+   clean). Then, for every package the plan's Test plan names, run EVERY gate
+   the plan lists on the clean tree now — `./scripts/check.sh <pkg> typecheck`,
+   `lint`, `arch` and `test`, not only `test` — plus any Docker-backed suite
+   the plan lists (`cd server && pnpm exec vitest run .it.test`, only with
+   Docker up). Record each failing gate and test name as `baseline_failures` in
+   `state.json` (`[]` = green) and put that list in every implementer prompt.
+   Later "pre-existing failure" claims must match this list; a failure that
+   is not in it belongs to this run. (SPEC-11 retro: the baseline ran only
+   `test`, so W1 and W2 each met the same 8 `server typecheck` errors from a
+   missing `reviewer-core/node_modules` and could not tell them from their own;
+   4 of the run's 9 failing `check.sh` calls were baseline or environment.)
 4. Tests. If the plan's Execution table has a `test-writer` row and `--tests`
-   was not given, ask the user once — "Run the test-writer? Recommended: it
-   proves the plan's ACs and, for a multi-phase plan, writing tests per phase
-   avoids a back-fill and a pile of Unverified rows (SPEC-10 retro: skipping W4
-   in Phase A left 8 Unverified)." Do not wait for the answer to start
-   Phase 1 (see "A pending question…"). Record the answer as `tests` in
-   `state.json`; `--tests` means `tests: true` without asking.
+   was not given, ask the user once with `AskUserQuestion` — not as plain text,
+   which nobody answers — "Run the test-writer? Recommended: it proves the
+   plan's ACs and, for a multi-phase plan, writing tests per phase avoids a
+   back-fill and a pile of Unverified rows (SPEC-10 retro: skipping W4 in
+   Phase A left 8 Unverified)." Do not wait for the answer to start Phase 1
+   (see "A pending question…"). Record the answer as `tests` in `state.json`;
+   `--tests` means `tests: true` without asking. While the question is still
+   unanswered when the server workstream finishes, start the server
+   `test-writer` anyway: the plan has a W4 row, and a test-writer that is not
+   wanted is cheaper than a wait (SPEC-11 retro: W2 finished 18:37, the server
+   test-writer started 18:45 after the question was asked as text and then
+   asked again).
 5. Write `state.json` with `phase: "implement"`.
 
 ## Phase 1 — implement
@@ -80,7 +95,8 @@ which phase it is in and resume from there (the user can say "restart").
   them go **in one message** so they run in parallel. Each prompt adds:
   "You are workstream W<n> of a multi-agent run. Files owned: `<list>`. Run
   only the inner loop." Workstreams whose agent is `test-writer` run only when
-  `tests` is true (`--tests` or the Phase 0 answer); any reviewer rows are
+  `tests` is true (`--tests`, the Phase 0 answer, or an unanswered question
+  with a W4 row in the plan, see Phase 0 step 4); any reviewer rows are
   ignored (Phase 3 owns review). Split the test brief by layer: the server
   tests depend only on the server workstream(s), so launch that test-writer as
   soon as they finish, in the same message as — or while — the client
@@ -116,7 +132,10 @@ which phase it is in and resume from there (the user can say "restart").
 tree. Pass 1 of 2: report every Fail. Items that only a test could prove are
 Unverified, and that is expected<, test-writer is disabled>." `plan-verifier`
 has no `Write` tool: **you** save its reply, as returned, to `verify-1.md`
-(never ask it to save a file).
+(never ask it to save a file). Save the whole matrix, never a condensed
+version: the ledger counts Pass/Fail/Blocked/Unverified rows from these files,
+and a summary reads as `0/0/0/0` (SPEC-11 retro: both files were saved
+condensed, so `quality.sdd.verify` lost every count).
 
 Fail rows → resume `implementer` with just those rows. Re-check them by
 **resuming the same `plan-verifier`** (`SendMessage`), not by launching a new
@@ -136,7 +155,21 @@ the spec names, and measure rather than eyeball (`getBoundingClientRect` of
 the dialog and its footer, ancestors' `opacity`/`transform`/`overflow`,
 scrollers). Rules: use data that already exists in the local DB; never create
 or decide data without asking, and put back any temporary change exactly as it
-was; never press Save/Create in a flow that writes. A defect becomes a finding
+was; never press Save/Create in a flow that writes. The local Postgres
+container (`devdigest-postgres`) is shared with other checkouts and worktrees,
+so never insert or update rows in it to fake a state (auto mode denies it as
+"Modify Shared Resources", SPEC-11 retro, 18:58): when a state does not exist
+in the data — a run, a conflict, a failed agent — intercept the one read
+endpoint with a Playwright `page.route(...)` fulfilled with a body that
+satisfies the contract, and say in the wrap-up that the numbers come from a
+mock. If the plan's browser step asks for "temporary SQL data", use the mock
+instead. Playwright MCP reads and writes files only under the worktree root
+and `.playwright-mcp/`: put scripts there, and give screenshots a `filename`
+with that directory (a bare name lands in the repo root). Start the dev
+servers with `run_in_background` (a server started with `nohup` inside a tool
+call stops with it) and on free ports when 3000/3001 belong to another
+checkout (`API_PORT`, `WEB_PORT`, `NEXT_PUBLIC_API_BASE`; the API also needs
+`DATABASE_URL`). Stop them when the check ends. A defect becomes a finding
 `M<n>` (CRITICAL when it blocks a spec AC) fixed by the owning implementer in
 Fix mode, then re-measured. Record the viewports and numbers in the run's
 wrap-up — the spec's PR-description requirement needs them. (SPEC-10 retro:
@@ -190,7 +223,13 @@ that was non-Pass in verify #1, (b) every row whose evidence files changed since
 (fix rounds, test-writer follow-ups) and (c) any new non-Pass; every other row
 collapses to one `Pass (unchanged since verify-1)` count per group. A row may be
 called "carried" only when verify #1 had it non-Pass — it must quote verify #1's
-status. Save the reply as returned, not a summary. Show the verdict line and
+status. Also give it the verdicts of the Phase 3/4 reviewers that bear on its
+`Unverified` rows (the `review-round-N.json` paths and the ids) so it can
+close what a reviewer already settled with file:line evidence (SPEC-11 retro:
+the bug reviewer had cleared the empty `catch {}` in `RunReviewDropdown.kick`
+at `providers.tsx:41-43`, yet verify #2 left it `Unverified`); it quotes the
+reviewer's evidence and never renders that verdict itself. Save the reply as
+returned, whole, not a summary (see Phase 2). Show the verdict line and
 any non-Pass rows. It recommends `Status: implemented` — that edit is the
 user's.
 

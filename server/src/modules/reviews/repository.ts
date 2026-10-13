@@ -19,6 +19,12 @@ export type { FindingRow, PullRow, ReviewRow };
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';
 import * as pullRepo from './repository/pull.repo.js';
+import * as multiAgentRepo from './repository/multi-agent.repo.js';
+import type {
+  DoneRunSample,
+  LatestMultiAgentRunRows,
+} from './repository/multi-agent.repo.js';
+export type { DoneRunSample, LatestMultiAgentRunRows };
 import type { UpsertIntentMeta } from './repository/pull.repo.js';
 
 export class ReviewRepository {
@@ -208,5 +214,32 @@ export class ReviewRepository {
    *  order). No-op when `skillIds` is empty. */
   recordRunSkills(runId: string, skillIds: string[]): Promise<void> {
     return runRepo.recordRunSkills(this.db, runId, skillIds);
+  }
+
+  // ---- multi-agent runs (SPEC-11) -----------------------------------------
+
+  /** One transaction: the `multi_agent_runs` row + one `running` `agent_runs`
+   *  row per agent. Returns each child's runId, in input order. */
+  createMultiAgentRun(values: {
+    workspaceId: string;
+    prId: string;
+    agents: { agentId: string; provider: string | null; model: string | null }[];
+  }): Promise<{ multiAgentRunId: string; runs: { runId: string; agentId: string }[] }> {
+    return multiAgentRepo.createMultiAgentRun(this.db, values);
+  }
+
+  /** True when the PR has a `running` child of a multi-agent run (single-agent runs excluded). */
+  hasRunningMultiAgentChild(workspaceId: string, prId: string): Promise<boolean> {
+    return multiAgentRepo.hasRunningMultiAgentChild(this.db, workspaceId, prId);
+  }
+
+  /** The PR's latest multi-agent run with its child runs, reviews and findings. */
+  latestMultiAgentRun(workspaceId: string, prId: string): Promise<LatestMultiAgentRunRows | undefined> {
+    return multiAgentRepo.latestMultiAgentRun(this.db, workspaceId, prId);
+  }
+
+  /** The last `limit` `done` runs of every agent of the workspace (estimates input). */
+  lastDoneRunsPerAgent(workspaceId: string, limit: number): Promise<DoneRunSample[]> {
+    return multiAgentRepo.lastDoneRunsPerAgent(this.db, workspaceId, limit);
   }
 }
