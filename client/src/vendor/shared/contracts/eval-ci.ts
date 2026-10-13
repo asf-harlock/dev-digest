@@ -587,6 +587,9 @@ export const CiResultArtifact = z.object({
   suggestion: z.number().int().nullish(),
   cost_usd: z.number().nullable(),
   duration_ms: z.number().int().nullish(),
+  /** Model tokens the run consumed. Optional: artifacts from an older runner bundle omit them. */
+  tokens_in: z.number().int().nonnegative().nullish(),
+  tokens_out: z.number().int().nonnegative().nullish(),
   agent: z.string(),
   version: z.string().nullish(),
   pr_number: z.number().int().nullish(),
